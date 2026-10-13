@@ -1,4 +1,4 @@
-# Barber VIP — actualización de interfaz y fidelización
+# Barber VIP — actualización de interfaz y fidelización giyh
 
 Aplicación web/PWA para barberos. La interfaz vive en `index.html`; los cambios privilegiados se realizan en API de Vercel con Firebase Admin. Esta versión conserva los proyectos y credenciales que ya existen.
 

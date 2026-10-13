@@ -1,0 +1,191 @@
+const { admin } = require('../lib/admin');
+const { send, method, body, text } = require('../lib/http');
+const { requireBarber, subscription } = require('../lib/security');
+
+const RETENTION_DAYS = 60;
+const HISTORY_LIMIT = 100;
+const ARGENTINA_OFFSET = '-03:00';
+
+async function getCount(query) {
+  const result = await query.count().get();
+  return result.data().count || 0;
+}
+function validDateInput(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+  const d = new Date(`${value}T00:00:00${ARGENTINA_OFFSET}`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+function startOfDay(value) { return new Date(`${value}T00:00:00${ARGENTINA_OFFSET}`); }
+function nextDay(date) { return new Date(date.getTime() + 86400000); }
+function argentinaDateParts(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Mendoza', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+}
+function argentinaDateString(now = new Date()) {
+  const parts = argentinaDateParts(now);
+  const year = parts.find(p => p.type === 'year').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const day = parts.find(p => p.type === 'day').value;
+  return `${year}-${month}-${day}`;
+}
+function argentinaMonthStart(now = new Date()) {
+  const parts = argentinaDateParts(now);
+  const year = parts.find(p => p.type === 'year').value;
+  const month = parts.find(p => p.type === 'month').value;
+  return new Date(`${year}-${month}-01T00:00:00${ARGENTINA_OFFSET}`);
+}
+function nextMonthStart(d) {
+  const date = new Date(d.getTime());
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  return new Date(Date.UTC(year, month + 1, 1, 3, 0, 0));
+}
+async function purgeOldCuts(cutCollection, cutoff, max = 350) {
+  const old = await cutCollection.where('createdAt', '<', admin().firestore.Timestamp.fromDate(cutoff)).orderBy('createdAt', 'asc').limit(max).get();
+  if (old.empty) return 0;
+  const batch = admin().firestore().batch();
+  old.docs.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  return old.size;
+}
+function iso(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function defaultProgram(barber) {
+  const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];
+  return programs.find(p=>p.id===barber.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0]||{id:'program-246',name:'Ciclo clásico',rewards:[{cut:2,discount:30,label:'30% OFF'},{cut:4,discount:50,label:'50% OFF'},{cut:6,discount:70,label:'70% OFF'}]};
+}
+function programForCustomer(customer,barber){const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
+function normalizeRewards(program){return [...(Array.isArray(program.rewards)?program.rewards:[])].map(r=>({cut:Number(r.cut),discount:Number(r.discount),label:text(r.label,50)||`${Number(r.discount)}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>0&&Number.isInteger(r.discount)&&r.discount>0).sort((a,b)=>a.cut-b.cut);}
+module.exports = async function handler(req, res) {
+  if (!method(req, res, ['GET', 'POST'])) return;
+  try {
+    const ctx = await requireBarber(req, res);
+    if (!ctx) return;
+    const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
+    const cutCollection = barberRef.collection('cuts');
+    const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400000);
+    // Opportunistic cleanup keeps this barber's history tidy even if the daily cron misses a run.
+    try { await purgeOldCuts(cutCollection, cutoff); } catch (cleanupError) { console.warn('cut retention cleanup:', cleanupError.message); }
+
+    if (req.method === 'GET') {
+      const from = text(req.query && req.query.from, 10);
+      const to = text(req.query && req.query.to, 10);
+      if ((from && !validDateInput(from)) || (to && !validDateInput(to))) {
+        return send(res, 400, { ok: false, error: 'Una de las fechas seleccionadas no es válida.' });
+      }
+      if (from && to && from > to) return send(res, 400, { ok: false, error: 'La fecha «Desde» no puede ser posterior a «Hasta».' });
+
+      const fallbackTo = argentinaDateString();
+      const fallbackFromDate = new Date(`${fallbackTo}T00:00:00${ARGENTINA_OFFSET}`);
+      fallbackFromDate.setTime(fallbackFromDate.getTime() - (RETENTION_DAYS - 1) * 86400000);
+      const rangeFrom = startOfDay(from || fallbackFromDate.toISOString().slice(0,10));
+      const rangeTo = nextDay(startOfDay(to || fallbackTo));
+      const rangeTsFrom = admin().firestore.Timestamp.fromDate(rangeFrom);
+      const rangeTsTo = admin().firestore.Timestamp.fromDate(rangeTo);
+      const rangeQuery = cutCollection.where('createdAt', '>=', rangeTsFrom).where('createdAt', '<', rangeTsTo);
+      const countRange = await getCount(rangeQuery);
+
+      const monthStart = argentinaMonthStart();
+      const monthEnd = nextMonthStart(monthStart);
+      const countMonth = await getCount(cutCollection
+        .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
+        .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
+      const countTotal = await getCount(cutCollection);
+      let history = [];
+      if (String(req.query && req.query.history || '1') !== '0') {
+        const snap = await rangeQuery.orderBy('createdAt', 'desc').limit(HISTORY_LIMIT).get();
+        history = snap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            type: data.type || 'cut',
+            customerId: data.customerId || null,
+            customerName: text(data.customerName || data.label || '', 70),
+            cycleCut: Number.isFinite(Number(data.cycleCut)) ? Number(data.cycleCut) : null,
+            cycleLength: Number(data.cycleLength||6), rewardLabel: text(data.rewardLabel||'',50), programName: text(data.programName||'',60),
+            createdAt: iso(data.createdAt)
+          };
+        });
+      }
+      return send(res, 200, { ok: true, countRange, countMonth, countTotal, from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
+    }
+
+    const data = body(req);
+    const action = text(data.action, 20);
+    const currentBarber = (await barberRef.get()).data() || {};
+    const subscriptionState = subscription(currentBarber);
+    if (action === 'walk-in') {
+      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para sumar cortes, primero renová Barber VIP desde Configuración.' });
+      const customerName = text(data.customerName, 70) || 'Cliente de paso';
+      const cutRef = cutCollection.doc();
+      const now = admin().firestore.FieldValue.serverTimestamp();
+      await cutRef.set({ id: cutRef.id, type: 'walk-in', customerId: null, customerName, cycleCut: null, createdAt: now });
+      return send(res, 200, { ok: true, id: cutRef.id, customerName, message: 'Corte rápido registrado.' });
+    }
+
+    const customerId = text(data.customerId, 100);
+    if (!customerId) return send(res, 400, { ok: false, error: 'Elegí un cliente.' });
+    const customerRef = barberRef.collection('customers').doc(customerId);
+
+    if (action === 'add') {
+      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para sumar cortes, primero renová Barber VIP desde Configuración.' });
+      let resultCustomer = null;
+      await ctx.db.runTransaction(async transaction => {
+        const customerSnap = await transaction.get(customerRef);
+        if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
+        const customer = customerSnap.data();
+        const totalCuts = Number(customer.totalCuts || 0) + 1;
+        const program = programForCustomer(customer,currentBarber);
+        const rewards = normalizeRewards(program);
+        if (!rewards.length) throw new Error('Este cliente no tiene un programa de premios válido. Revisá Configuración.');
+        const cycleMax = Math.max(...rewards.map(r=>r.cut));
+        const legacyCount = Math.max(0, Number(customer.totalCuts || 0)) % cycleMax;
+        const cycleBefore = customer.cycleVersion === 2 ? Math.min(cycleMax-1, Math.max(0, Number(customer.cycleCuts || 0))) : legacyCount;
+        const cycleNext = cycleBefore + 1;
+        const earned = rewards.find(r=>r.cut===cycleNext);
+        const availableRewards = Array.isArray(customer.availableRewards) ? [...customer.availableRewards] : [];
+        if (earned) availableRewards.push({ ...earned, programId:program.id, programName:program.name||'Programa de premios', earnedAt: new Date().toISOString(), rewardId: `${cutRefId(customerId)}-${Date.now()}` });
+        const cycleCuts = cycleNext >= cycleMax ? 0 : cycleNext;
+        const rewardReady = availableRewards.length > 0;
+        const now = admin().firestore.FieldValue.serverTimestamp();
+        transaction.update(customerRef, { totalCuts, cycleCuts, cycleVersion: 2, availableRewards, rewardReady, lastCutAt: now, updatedAt: now });
+        const cutRef = cutCollection.doc();
+        transaction.set(cutRef, { id: cutRef.id, customerId, customerName: text(customer.fullName || '', 100), createdAt: now, type: 'cut', cycleCut: cycleNext, cycleLength:cycleMax, rewardLabel:earned?.label||'', programId:program.id, programName:program.name||'' });
+        resultCustomer = { ...customer, totalCuts, cycleCuts, cycleVersion: 2, loyaltyProgramId:customer.loyaltyProgramId||program.id, availableRewards, rewardReady, lastCutAt: new Date().toISOString() };
+      });
+      return send(res, 200, { ok: true, customer: resultCustomer });
+    }
+
+    if (action === 'redeem') {
+      let resultCustomer = null;
+      await ctx.db.runTransaction(async transaction => {
+        const customerSnap = await transaction.get(customerRef);
+        if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
+        const customer = customerSnap.data();
+        const availableRewards = Array.isArray(customer.availableRewards) ? [...customer.availableRewards] : [];
+        if (!availableRewards.length && customer.rewardReady) availableRewards.push({ cut: 2, discount: 30, label: '30% OFF' });
+        if (!availableRewards.length) throw new Error('Este cliente todavía no tiene un descuento listo para canjear.');
+        const now = admin().firestore.FieldValue.serverTimestamp();
+        const redeemed = availableRewards.shift();
+        transaction.update(customerRef, { availableRewards, rewardReady: availableRewards.length > 0, updatedAt: now });
+        const redemptionRef = barberRef.collection('redemptions').doc();
+        transaction.set(redemptionRef, { customerId, reward: redeemed.label || `${redeemed.discount}% OFF`, discount: redeemed.discount || null, cycleCut: redeemed.cut || null, createdAt: now });
+        resultCustomer = { ...customer, availableRewards, rewardReady: availableRewards.length > 0 };
+      });
+      return send(res, 200, { ok: true, customer: resultCustomer });
+    }
+    return send(res, 400, { ok: false, error: 'Acción de corte desconocida.' });
+  } catch (error) {
+    console.error('cuts error', error);
+    if (error.message && /cliente|descuento|premio|fecha|corte|cuenta|programa|fidelización/.test(error.message)) return send(res, 400, { ok: false, error: error.message });
+    return send(res, 500, { ok: false, error: 'No se pudo registrar el corte. Probá de nuevo.' });
+  }
+};
+
+function cutRefId(customerId) {
+  return String(customerId || 'client').slice(0, 12);
+}

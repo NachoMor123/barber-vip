@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isBarber(barberId) {
+      return signedIn() && request.auth.uid == barberId;
+    }
+    function isActiveCustomer(barberId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/barbers/$(barberId)/customers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/barbers/$(barberId)/customers/$(request.auth.uid)).data.active == true;
+    }
+
+    // Los perfiles internos y los cambios se administran desde las API del servidor.
+    match /userProfiles/{uid} {
+      allow read, write: if false;
+    }
+
+    match /barbers/{barberId} {
+      // Clientes de esa barbería solo pueden leer el perfil público de la barbería.
+      allow get: if isBarber(barberId) || isActiveCustomer(barberId);
+      allow list, create, update, delete: if false;
+
+      match /customers/{customerId} {
+        allow get: if isBarber(barberId) || (signedIn() && request.auth.uid == customerId && resource.data.active == true);
+        allow list: if isBarber(barberId);
+        allow create, update, delete: if false;
+      }
+
+      match /cuts/{cutId} {
+        allow read: if isBarber(barberId);
+        allow write: if false;
+      }
+
+      match /redemptions/{redemptionId} {
+        allow read, write: if false;
+      }
+
+      match /payments/{paymentId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

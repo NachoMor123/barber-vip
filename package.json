@@ -1,0 +1,10 @@
+{
+  "name": "barber-vip",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Barber VIP — fidelización y gestión de clientes para barberías",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "firebase-admin": "^13.5.0"
+  }
+}

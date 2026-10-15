@@ -201,7 +201,7 @@
     function validWhatsapp(input){ const n=whatsappNumber(input); return /^549\d{10}$/.test(n); }
     const DEFAULT_LOYALTY_PROGRAM = {id:'program-246',name:'Ciclo clásico',rewards:[{cut:2,discount:30,label:'30% OFF'},{cut:4,discount:50,label:'50% OFF'},{cut:6,discount:70,label:'70% OFF'}],audience:'all',customerIds:[]};
     const CYCLE_REWARDS = DEFAULT_LOYALTY_PROGRAM.rewards;
-    const SUBSCRIPTION_PRICE_ARS = 2500;
+    const SUBSCRIPTION_PRICE_ARS = 5000;
     const nameInitials = name => String(name||'BV').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'BV';
     const toast = (message,type='') => { const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=message; $('#toasts').appendChild(el); setTimeout(()=>el.remove(),4500); };
     const applyTheme = theme => { const accent=theme && /^#[0-9a-f]{6}$/i.test(theme.accent||'') ? theme.accent : '#b69cff'; document.documentElement.style.setProperty('--accent',accent); document.documentElement.style.setProperty('--accent2',accent); document.body.dataset.density=theme?.density||'comfortable'; };

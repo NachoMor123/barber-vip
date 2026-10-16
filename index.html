@@ -310,6 +310,48 @@
     @media(prefers-reduced-motion:reduce){.nav-btn,.customer-nav-btn,.btn,.quick-action,.pip-fab{transition:none!important}}
   </style>
 
+
+  <style id="barber-vip-final-interface-pass">
+    :root{--bg:#02040a;--panel:#050810;--panel2:#070c17;--text:#f7faff;--muted:#afbdd4;--line:rgba(67,137,255,.66);--accent:#3478ff;--accent2:#7bc0ff;--shadow:0 24px 72px rgba(0,0,0,.58)}
+    html,body{background:#02040a!important;color:#f7faff!important}
+    body{background:radial-gradient(ellipse at 0% 0%,rgba(21,67,170,.11),transparent 37%),radial-gradient(ellipse at 100% 70%,rgba(18,63,150,.055),transparent 35%),#02040a!important}
+    /* Keep card interiors almost as dark as the page, while making the electric-blue edge do the work. */
+    .panel,.metric-card,.history-panel,.subscription-banner,.client-row,.client-info-card,.reward-progress-card,.customer-promo-card,.admin-promo-card,.barber-profile-hero,.customer-hero,.choice-panel,.login-card,.modal-card,.side-subscription,.subscription-card,.loyalty-program-card,.quick-cut-card,.settings-profile-summary,.access-card,.density-settings-card,.reminder-settings-card,.subscription-settings-card,.promotion-card,.customer-screen .client-info-card,.customer-screen .reward-progress-card,.customer-screen .customer-promo-card,.customer-screen .barber-profile-hero,.customer-screen .customer-hero{
+      background:linear-gradient(145deg,#04070e,#02040a 92%)!important;
+      border:1.5px solid rgba(59,137,255,.82)!important;
+      box-shadow:inset 0 1px rgba(255,255,255,.022),0 13px 36px rgba(0,0,0,.46),0 0 19px rgba(37,105,255,.09)!important;
+    }
+    .panel:hover,.metric-card:hover,.client-row:hover,.quick-action:hover,.customer-screen .client-info-card:hover{border-color:rgba(91,159,255,.98)!important;box-shadow:inset 0 1px rgba(255,255,255,.03),0 16px 40px rgba(0,0,0,.50),0 0 25px rgba(39,107,255,.15)!important}
+    .mobile-nav,.customer-screen .customer-nav{background:rgba(2,4,10,.97)!important;border-color:rgba(62,132,255,.65)!important;box-shadow:0 -9px 28px rgba(0,0,0,.46),0 0 22px rgba(38,104,255,.06)!important}
+    .nav-btn,.customer-nav-btn{color:#b8c8e1!important}
+    .nav-btn.active,.mobile-nav .nav-btn.active,.customer-screen .customer-nav-btn.active{border-color:rgba(82,151,255,.9)!important;background:linear-gradient(145deg,rgba(25,81,205,.2),rgba(5,11,23,.85))!important;box-shadow:inset 0 0 0 1px rgba(82,151,255,.18),0 0 18px rgba(38,103,255,.13)!important;color:#fff!important}
+    .btn-primary,.customer-cta{background:linear-gradient(105deg,#1558ed,#398cff 66%,#80c4ff)!important;color:#020611!important;border:1px solid rgba(117,181,255,.92)!important;box-shadow:0 8px 26px rgba(26,98,255,.23),0 0 22px rgba(34,108,255,.17)!important}
+    .btn-primary:hover,.customer-cta:hover{filter:brightness(1.1);transform:translateY(-1px)}
+    .btn-soft,.btn-ghost,.quick-action,.role-choice{background:linear-gradient(145deg,rgba(6,15,32,.98),rgba(3,6,13,.99))!important;border-color:rgba(62,132,255,.66)!important;color:#eaf2ff!important}
+    .page-head .page-desc,.customer-screen p,.metric-caption,.client-meta{color:#b5c3db!important}
+    .page-title,.panel h2,.panel h3,.customer-screen h1,.customer-screen h2{color:#f8faff!important}
+    .page-eyebrow,.eyebrow,.text-link,.quick-action span,.metric-icon{color:#70abff!important;text-shadow:0 0 16px rgba(47,118,255,.22)}
+    .metric-icon,.row-icon,.brand-icon,.choice-icon,.role-symbol,.confirm-logout-icon{background:linear-gradient(145deg,rgba(27,76,188,.2),rgba(3,9,20,.9))!important;border-color:rgba(81,149,255,.72)!important;color:#a9ceff!important;box-shadow:0 0 17px rgba(38,105,255,.11)!important}
+    .page-head .page-actions{display:grid!important;grid-template-columns:minmax(0,1fr)!important;place-items:stretch!important;justify-content:stretch!important;max-width:none!important;gap:9px!important}
+    .page-head .page-actions .btn{display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;min-height:53px!important;padding:14px 18px!important;justify-content:center!important;text-align:center!important;font-size:13px!important;box-sizing:border-box!important}
+    /* Main CTA: below its heading, centered, full width of the content area on every screen. */
+    .main-area > .page-head{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:0!important;width:100%!important;padding-right:0!important;margin-top:0!important}
+    .main-area > .page-head > div:first-child{width:100%!important;min-width:0!important}
+    .main-area > .page-head .page-actions{display:grid!important;grid-template-columns:minmax(0,1fr)!important;place-items:stretch!important;width:100%!important;max-width:none!important;margin:14px 0 0!important;flex:0 0 auto!important;gap:9px!important}
+    .main-area > .page-head .page-actions:empty{display:none!important}
+    .main-area > .page-head .page-actions .btn{width:100%!important;max-width:none!important;margin:0!important;justify-content:center!important;text-align:center!important}
+    .client-row:not(.reminder-client-row) .client-name-line>.status-chip{display:none!important}
+    .autofill-decoys{position:absolute!important;left:-10000px!important;top:auto!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important}
+    .install-nudge-backdrop{position:fixed!important;inset:0!important;z-index:9999!important;display:grid!important;place-items:center!important;padding:18px!important;background:rgba(1,3,8,.96)!important;backdrop-filter:blur(16px)!important}
+    .install-nudge{width:min(440px,100%)!important;max-height:calc(100dvh - 36px)!important;overflow:auto!important;text-align:left!important;border-color:rgba(76,145,255,.82)!important;background:linear-gradient(145deg,#060b17,#02040a)!important;box-shadow:0 24px 80px rgba(0,0,0,.72),0 0 34px rgba(31,100,255,.14)!important}
+    .install-waiting{display:flex;align-items:center;gap:12px;padding:13px;margin:12px 0;border:1px solid rgba(71,139,255,.66);border-radius:13px;background:rgba(23,75,180,.12);color:#dceaff;font-size:12px}
+    .install-spinner{width:18px;height:18px;border:2px solid rgba(126,185,255,.25);border-top-color:#69aaff;border-radius:50%;animation:install-spin .8s linear infinite;flex-shrink:0}
+    @keyframes install-spin{to{transform:rotate(360deg)}}
+    .history-entry .history-cycle{color:#a8ceff!important;border-color:rgba(78,145,255,.75)!important;background:rgba(23,78,199,.13)!important}
+    @media(max-width:520px){.main-area>.page-head{padding-right:0!important}.main-area>.page-head .page-actions .btn{min-height:54px!important}.install-nudge{padding:22px!important}}
+    @media(prefers-reduced-motion:reduce){.install-spinner{animation:none!important}.btn-primary:hover,.customer-cta:hover{transform:none!important}}
+  </style>
+
 </head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -339,6 +381,7 @@
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
+    let installPhase = 'prompt'; // prompt | waiting | installed
     const BRAND_ACCENT = '#3478ff';
 
     const logo = `<span class="brand-icon"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="8" cy="23" r="4.2" stroke="var(--accent)" stroke-width="2.4"/><circle cx="8" cy="9" r="4.2" stroke="var(--accent)" stroke-width="2.4"/><path d="M11.5 11.5 25 25M11.5 20.5 25 7" stroke="#f4efff" stroke-width="2.4" stroke-linecap="round"/><path d="m17.8 14.2 3-3" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/></svg></span>`;
@@ -426,19 +469,20 @@
       const status=String(c.reminderStatus||'');const count=Math.max(0,Number(c.reminderCount||0));
       // Backward compatibility: an old 'closed' contact with attempts remains in follow-up.
       const followup=['followup','final-followup'].includes(status)||(status==='closed'&&count>0);
-      const overdue=days!==null&&days>interval+prefs.threshold&&!followup;
-      return {days,interval,threshold:prefs.threshold,overdue,followup,count,maxMessages:prefs.maxMessages,limitReached:followup&&count>=prefs.maxMessages};
+      const paused=c.remindersPaused===true;
+      const overdue=days!==null&&days>interval+prefs.threshold&&!followup&&!paused;
+      return {days,interval,threshold:prefs.threshold,overdue,followup,paused,count,maxMessages:prefs.maxMessages,limitReached:followup&&count>=prefs.maxMessages};
     }
     function filteredCustomers({remindersOnly=false,followupOnly=false}={}) {
       let list=state.customers.filter(c=>c.active!==false);
-      if(followupOnly) list=list.filter(c=>reminderInfo(c).followup);
-      else if(remindersOnly) list=list.filter(c=>reminderInfo(c).overdue);
+      if(followupOnly) list=list.filter(c=>!c.remindersPaused&&reminderInfo(c).followup);
+      else if(remindersOnly) list=list.filter(c=>!c.remindersPaused&&reminderInfo(c).overdue);
       const q=normalizeName(state.query); if(q) list=list.filter(c=>normalizeName(c.fullName).includes(q)||String(c.whatsapp||'').includes(q));
       switch(state.sort){case 'cuts-asc':list.sort((a,b)=>(a.totalCuts||0)-(b.totalCuts||0));break;case 'seen-desc':list.sort((a,b)=>(asDate(b.lastSeenAt)?.getTime()||0)-(asDate(a.lastSeenAt)?.getTime()||0));break;case 'seen-asc':list.sort((a,b)=>(asDate(a.lastSeenAt)?.getTime()||0)-(asDate(b.lastSeenAt)?.getTime()||0));break;case 'name-asc':list.sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));break;default:list.sort((a,b)=>(b.totalCuts||0)-(a.totalCuts||0));}
       return list;
     }
 
-    function clientStatus(c) { const r=reminderInfo(c); if(r.followup)return ['En seguimiento','warn']; if(r.overdue)return ['Para contactar','danger']; if(availableRewards(c).length)return ['Descuento disponible','good']; if(r.days===null)return ['Sin visitas','warn']; return ['Al día','good']; }
+    function clientStatus(c) { const r=reminderInfo(c); if(r.paused)return ['Recordatorios pausados','warn']; if(r.followup)return ['En seguimiento','warn']; if(r.overdue)return ['Para contactar','danger']; if(availableRewards(c).length)return ['Descuento disponible','good']; if(r.days===null)return ['Sin visitas','warn']; return ['Al día','good']; }
     function loyaltyPrograms(barber=state.barber){const programs=Array.isArray(barber?.loyaltyPrograms)?barber.loyaltyPrograms.filter(p=>Array.isArray(p.rewards)&&p.rewards.length):[];const chosen=programs.find(p=>p.id===barber?.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];return [chosen?({...chosen,audience:'all',customerIds:[]}):DEFAULT_LOYALTY_PROGRAM];}
     function programForCustomer(c,barber=state.barber){return loyaltyPrograms(barber)[0]||DEFAULT_LOYALTY_PROGRAM;}
     function rewardsForCustomer(c,barber=state.barber){return [...(programForCustomer(c,barber).rewards||CYCLE_REWARDS)].map(r=>({...r,cut:Number(r.cut),discount:Number(r.discount),label:r.label||`${Number(r.discount)}% OFF`})).sort((a,b)=>a.cut-b.cut);}
@@ -471,8 +515,8 @@
       const status=clientStatus(c),info=reminderInfo(c),recent=relativeTime(c.lastSeenAt),lastCut=relativeTime(c.lastCutAt),pct=progress(c),cycle=cycleSummary(c),ready=cycle.ready,cycleMax=cycleLength(c);const prepared=!!state.reminderPrepared[c.uid];
       const rewardLine=ready.length?`Disponible: ${ready.map(r=>escapeHtml(r.label||`${r.discount}% OFF`)).join(', ')}`:`${cycle.left} corte${cycle.left===1?'':'s'} para ${cycle.next.label}`;
       const followupContact=prepared?'Volver a WhatsApp':`WhatsApp · intento ${info.count+1}/${info.maxMessages} ↗`;
-      const reminderActions=`<div class="reminder-action-row">${followup&&info.limitReached?`<span class="status-chip warn">Límite alcanzado · se reactiva con un nuevo corte</span>`:`<button class="btn btn-primary btn-mini" data-action="contact-reminder" data-id="${escapeHtml(c.uid)}">${followup?followupContact:(prepared?'Volver a WhatsApp':'Contactar por WhatsApp')+' ↗'}</button>`}${prepared?`<button class="btn btn-success btn-mini" data-action="confirm-reminder" data-id="${escapeHtml(c.uid)}">✓ Confirmar envío</button>`:''}</div>`;
-      return `<article class="client-row ${reminder?'reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong><span class="status-chip ${reminder?(followup?'good':'danger'):status[1]==='danger'?'danger':status[1]==='warn'?'warn':''}">${escapeHtml(reminder?(followup?'En seguimiento':`${info.days??'—'} días sin venir`):status[0])}</span></div><div class="client-meta"><span>✂ <b>${Number(c.totalCuts||0)}</b> cortes totales</span><span>Último corte: <b>${escapeHtml(lastCut)}</b></span>${reminder?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:`<span>Actividad: <b>${escapeHtml(recent)}</b></span>`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${cycleCount(c)}/${cycleMax} · ${rewardLine}</div>${reminder?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar un nuevo corte.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Corte</button>${ready.length?`<button class="btn btn-success btn-mini" data-action="redeem" data-id="${escapeHtml(c.uid)}">Canjear descuento</button>`:''}<button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button></div></article>`;
+      const reminderActions=`<div class="reminder-action-row">${followup&&info.limitReached?`<span class="status-chip warn">Límite alcanzado · se reactiva con un nuevo corte</span>`:`<button class="btn btn-primary btn-mini" data-action="contact-reminder" data-id="${escapeHtml(c.uid)}">${followup?followupContact:(prepared?'Volver a WhatsApp':'Contactar por WhatsApp')+' ↗'}</button>`}${prepared?`<button class="btn btn-success btn-mini" data-action="confirm-reminder" data-id="${escapeHtml(c.uid)}">✓ Confirmar envío</button>`:''}<button class="btn btn-ghost btn-mini" data-action="pause-reminders" data-id="${escapeHtml(c.uid)}">⏸ Pausar</button></div>`;
+      return `<article class="client-row ${reminder?'reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong><span class="status-chip ${reminder?(followup?'good':'danger'):status[1]==='danger'?'danger':status[1]==='warn'?'warn':''}">${escapeHtml(reminder?(followup?'En seguimiento':`${info.days??'—'} días sin venir`):status[0])}</span></div><div class="client-meta"><span>✂ <b>${Number(c.totalCuts||0)}</b> cortes totales</span><span>Último corte: <b>${escapeHtml(lastCut)}</b></span>${reminder?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:`<span>Actividad: <b>${escapeHtml(recent)}</b></span>${info.paused?'<span>⏸ Recordatorios pausados</span>':''}`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${cycleCount(c)}/${cycleMax} · ${rewardLine}</div>${reminder?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar un nuevo corte.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`${c.remindersPaused?`<button class="btn btn-soft btn-mini" data-action="resume-reminders" data-id="${escapeHtml(c.uid)}">↻ Reactivar recordatorios</button>`:''}<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Corte</button>${ready.length?`<button class="btn btn-success btn-mini" data-action="redeem" data-id="${escapeHtml(c.uid)}">Canjear descuento</button>`:''}<button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button></div></article>`;
     }
 
         function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
@@ -510,8 +554,8 @@
       return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, cortes y descuentos del ciclo.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más cortes totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos cortes totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} clientes</span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
     function remindersView() {
-      const followup=state.reminderTab==='followup';const list=filteredCustomers({remindersOnly:!followup,followupOnly:followup});const pendingCount=state.customers.filter(c=>c.active!==false&&reminderInfo(c).overdue).length;const followupCount=state.customers.filter(c=>c.active!==false&&reminderInfo(c).followup).length;
-      return `${sectionHeading('FIDELIZACIÓN','Recordatorios','Contactá cuando corresponda y confirmá el envío para pasar a seguimiento.','<button class="btn btn-ghost" data-action="nav" data-section="clients">Ver clientes</button>')}<div class="reminder-summary-strip"><span>⏳ <strong>${pendingCount}</strong> por contactar</span><span>📩 <strong>${followupCount}</strong> en seguimiento</span><small>El seguimiento permanece hasta que registres un nuevo corte. WhatsApp no confirma el envío: vos lo confirmás desde acá.</small></div><div class="reminder-tabs"><button class="reminder-tab ${!followup?'active':''}" data-action="reminder-tab" data-tab="pending">⏳ Por contactar <b>${pendingCount}</b></button><button class="reminder-tab ${followup?'active':''}" data-action="reminder-tab" data-tab="followup">📩 Seguimiento <b>${followupCount}</b></button></div><div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕ Buscar cliente…" value="${escapeHtml(state.query)}"><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más cortes totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos cortes totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} ${followup?'en seguimiento':'por contactar'}</span></div><div id="customerResults">${customerResultsMarkup(list,true,followup)}</div>`;
+      const followup=state.reminderTab==='followup';const list=filteredCustomers({remindersOnly:!followup,followupOnly:followup});const pendingCount=state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).overdue).length;const followupCount=state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).followup).length;
+      return `${sectionHeading('FIDELIZACIÓN','Recordatorios','Contactá cuando corresponda y confirmá el envío para pasar a seguimiento.','<button class="btn btn-primary" data-action="nav" data-section="clients">👥 Ver clientes</button>')}<div class="reminder-summary-strip"><span>⏳ <strong>${pendingCount}</strong> por contactar</span><span>📩 <strong>${followupCount}</strong> en seguimiento</span><small>El seguimiento permanece hasta que registres un nuevo corte. WhatsApp no confirma el envío: vos lo confirmás desde acá.</small></div><div class="reminder-tabs"><button class="reminder-tab ${!followup?'active':''}" data-action="reminder-tab" data-tab="pending">⏳ Por contactar <b>${pendingCount}</b></button><button class="reminder-tab ${followup?'active':''}" data-action="reminder-tab" data-tab="followup">📩 Seguimiento <b>${followupCount}</b></button></div><div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕ Buscar cliente…" value="${escapeHtml(state.query)}"><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más cortes totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos cortes totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} ${followup?'en seguimiento':'por contactar'}</span></div><div id="customerResults">${customerResultsMarkup(list,true,followup)}</div>`;
     }
 
         const WEEKDAYS=[['mon','Lunes'],['tue','Martes'],['wed','Miércoles'],['thu','Jueves'],['fri','Viernes'],['sat','Sábado'],['sun','Domingo']];
@@ -558,7 +602,7 @@
     }
     async function loadPromotions(){try{const d=await api('/api/promotions');state.promotions=d.promotions||[];}catch(e){console.warn('promotions',e.message);state.promotions=[];}}
     function adminShell() {
-      const active=state.customers.filter(c=>c.active!==false).length; const overdue=state.customers.filter(c=>c.active!==false&&reminderInfo(c).overdue).length;
+      const active=state.customers.filter(c=>c.active!==false).length; const overdue=state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).overdue).length;
       const names={home:'Inicio',clients:'Clientes',reminders:'Recordatorios',promotions:'Promociones',settings:'Configuración'};
       return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU BARBERÍA</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes',active?String(active):'')}${navItem('reminders','◷','Recordatorios',overdue?String(overdue):'')}${navItem('promotions','✦','Promociones')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="side-subscription"><div class="status-label">ESTADO DE CUENTA</div><strong>${escapeHtml(subStatus().label)}</strong><small>${subStatus().expiresAt?`Vence el ${escapeHtml(dateLabel(subStatus().expiresAt))}`:'Configurá la fecha de vencimiento desde Firebase.'}</small><button class="btn btn-soft btn-mini" style="width:100%;margin-top:12px" data-action="pay">Gestionar plan ↗</button></div><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():state.section==='reminders'?remindersView():state.section==='promotions'?promotionsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes',active?String(active):'')}${navItem('reminders','◷','Recordar',overdue?String(overdue):'')}${navItem('promotions','✦','Promos')}${navItem('settings','⚙','Ajustes')}</nav><button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>`;
     }
@@ -583,7 +627,7 @@
       const followup=state.reminderTab==='followup';
       const list=filteredCustomers({remindersOnly:!followup,followupOnly:followup});
       const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup(list,true,followup);
-      const tabs=$$('.reminder-tab');if(tabs[0])tabs.innerHTML=`⏳ Por contactar <b>${state.customers.filter(c=>c.active!==false&&reminderInfo(c).overdue).length}</b>`;if(tabs[1])tabs.innerHTML=`📩 Seguimiento <b>${state.customers.filter(c=>c.active!==false&&reminderInfo(c).followup).length}</b>`;
+      const tabs=$$('.reminder-tab');if(tabs[0])tabs.innerHTML=`⏳ Por contactar <b>${state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).overdue).length}</b>`;if(tabs[1])tabs.innerHTML=`📩 Seguimiento <b>${state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).followup).length}</b>`;
       const count=$('.result-count');if(count)count.textContent=`${list.length} ${followup?'en seguimiento':'por contactar'}`;
     }
     function syncReminderClock(){
@@ -599,6 +643,7 @@
       else { syncReminderClock(); renderCustomer(); }
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
+      maybeShowInstallPrompt();
     }
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
@@ -658,7 +703,7 @@
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle"><div class="modal-header"><div><h2 id="customerModalTitle">${c?'Editar cliente':'Crear cliente'}</h2><p>${c?'Actualizá los datos del cliente.':'Creá su acceso a Barber VIP.'}</p></div><button class="close-modal" type="button" data-action="close-modal">×</button></div><form id="customerForm" data-id="${escapeHtml(c?.uid||'')}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other"><div class="field-grid"><div class="form-field span-2"><label for="clientFullName">Nombre y apellido *</label><input id="clientFullName" name="client_fullname_entry" autocomplete="off" aria-autocomplete="none" autocapitalize="words" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.fullName||'')}" placeholder="Joaquín Ortiz" required maxlength="100"></div><div class="form-field span-2"><label for="clientPassword">${c?'Cambiar contraseña (opcional)':'Contraseña inicial *'}</label><div class="password-control"><input id="clientPassword" name="client_new_access_secret" type="password" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" autocorrect="off" placeholder="${c?'Dejar vacío para no cambiarla':'Mínimo 6 caracteres'}" ${c?'':'required'} minlength="6"><button type="button" class="password-visibility customer-password-toggle" data-action="toggle-password" data-target="clientPassword" aria-label="Mostrar contraseña">Ver</button></div><span class="field-hint">El cliente inicia sesión con su nombre, esta contraseña y el código de tu barbería.</span></div><div class="form-field span-2"><label for="clientWhatsapp">Número de WhatsApp *</label><input id="clientWhatsapp" name="client_whatsapp_entry" type="tel" inputmode="tel" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.whatsapp||'')}" placeholder="5492615555555" required></div><div class="form-field"><label for="clientVisitDays">Frecuencia aproximada (días) *</label><input id="clientVisitDays" name="approximateVisitDays" type="number" min="1" max="365" value="${Number(c?.approximateVisitDays||15)}" required></div><div class="form-field"><label for="clientCutStyle">Estilo de corte (opcional)</label><input id="clientCutStyle" name="client_cut_style_entry" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.cutStyle||'')}" maxlength="100" placeholder="Ej. fade bajo"></div><div class="form-field span-2"><label for="clientConversationPreference">¿Cómo prefiere la atención? (opcional)</label><select id="clientConversationPreference" name="conversationPreference"><option value="" ${!c?.conversationPreference?'selected':''}>Sin preferencia</option><option value="conversar" ${c?.conversationPreference==='conversar'?'selected':''}>Le gusta conversar</option><option value="tranquilo" ${c?.conversationPreference==='tranquilo'?'selected':''}>Prefiere una atención tranquila</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">${c?'Guardar cambios':'Crear cliente'}</button></div></form>${c?`<div class="login-divider"></div><button class="btn btn-danger btn-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}">Dar de baja a este cliente</button>`:''}</section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle"><div class="modal-header"><div><h2 id="customerModalTitle">${c?'Editar cliente':'Crear cliente'}</h2><p>${c?'Actualizá los datos del cliente.':'Creá su acceso a Barber VIP.'}</p></div><button class="close-modal" type="button" data-action="close-modal">×</button></div><form id="customerForm" data-id="${escapeHtml(c?.uid||'')}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other"><div class="autofill-decoys" aria-hidden="true"><input type="text" name="username" autocomplete="username" tabindex="-1"><input type="password" name="password" autocomplete="current-password" tabindex="-1"></div><div class="field-grid"><div class="form-field span-2"><label for="clientFullName">Nombre y apellido *</label><input id="clientFullName" name="client_name_${Math.random().toString(36).slice(2,9)}" autocomplete="off" aria-autocomplete="none" autocapitalize="words" autocorrect="off" spellcheck="false" data-unlock-on-focus readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.fullName||'')}" placeholder="Joaquín Ortiz" required maxlength="100"></div><div class="form-field span-2"><label for="clientPassword">${c?'Cambiar contraseña (opcional)':'Contraseña inicial *'}</label><div class="password-control"><input id="clientPassword" name="client_password_${Math.random().toString(36).slice(2,9)}" type="password" autocomplete="new-password" aria-autocomplete="none" data-unlock-on-focus readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" autocorrect="off" spellcheck="false" placeholder="${c?'Dejar vacío para no cambiarla':'Mínimo 6 caracteres'}" ${c?'':'required'} minlength="6"><button type="button" class="password-visibility customer-password-toggle" data-action="toggle-password" data-target="clientPassword" aria-label="Mostrar contraseña">Ver</button></div><span class="field-hint">El cliente inicia sesión con su nombre, esta contraseña y el código de tu barbería.</span></div><div class="form-field span-2"><label for="clientWhatsapp">Número de WhatsApp *</label><input id="clientWhatsapp" name="client_phone_${Math.random().toString(36).slice(2,9)}" type="tel" inputmode="tel" autocomplete="off" aria-autocomplete="none" data-unlock-on-focus readonly autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.whatsapp||'')}" placeholder="5492615555555" required></div><div class="form-field"><label for="clientVisitDays">Frecuencia aproximada (días) *</label><input id="clientVisitDays" name="approximateVisitDays" type="number" min="1" max="365" value="${Number(c?.approximateVisitDays||15)}" required></div><div class="form-field"><label for="clientCutStyle">Estilo de corte (opcional)</label><input id="clientCutStyle" name="client_cut_style_entry" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.cutStyle||'')}" maxlength="100" placeholder="Ej. fade bajo"></div><div class="form-field span-2"><label for="clientConversationPreference">¿Cómo prefiere la atención? (opcional)</label><select id="clientConversationPreference" name="conversationPreference"><option value="" ${!c?.conversationPreference?'selected':''}>Sin preferencia</option><option value="conversar" ${c?.conversationPreference==='conversar'?'selected':''}>Le gusta conversar</option><option value="tranquilo" ${c?.conversationPreference==='tranquilo'?'selected':''}>Prefiere una atención tranquila</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">${c?'Guardar cambios':'Crear cliente'}</button></div></form>${c?`<div class="login-divider"></div><button class="btn btn-danger btn-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}">Dar de baja a este cliente</button>`:''}</section></div>`;
     }
     function openClientView(id){
       const c=state.customers.find(x=>x.uid===id);if(!c)return;const program=programForCustomer(c),rewards=availableRewards(c),last=c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no hay cortes';
@@ -753,6 +798,17 @@
       state.reminderPrepared[id]=true;renderApp();toast('WhatsApp se abrió con el mensaje preparado. Después de enviarlo, volvé y tocá «Confirmar envío».','success');
     }
 
+    async function setCustomerRemindersPaused(id, paused){
+      const action=paused?'pause-reminders':'resume-reminders';
+      const response=await api('/api/customers',{method:'PUT',body:JSON.stringify({action,customerId:id})});
+      const updated=response.customer;
+      state.customers=state.customers.map(item=>item.uid===id?{...item,...updated}:item);
+      delete state.reminderPrepared[id];
+      state.query='';
+      renderApp();
+      toast(paused?'Recordatorios pausados. El cliente sigue activo y su historial se conserva.':'Recordatorios reactivados.','success');
+    }
+
     function openPlanInfo(){
       const s=subStatus();
       if(s.status==='active'){
@@ -808,17 +864,80 @@
     }
     function showPipTopic(topic){openPipHelp(topic);}
     function isStandaloneApp(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;}
+    function setInstallGateLock(locked){
+      appRoot.inert=locked;
+      if(locked)appRoot.setAttribute('aria-hidden','true');else appRoot.removeAttribute('aria-hidden');
+      document.body.style.overflow=locked?'hidden':'';
+    }
+    function renderInstallGate(){
+      if(isStandaloneApp()){
+        setInstallGateLock(false);
+        if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        return;
+      }
+      setInstallGateLock(true);
+      const canPrompt=!!deferredInstallPrompt;const ua=navigator.userAgent||'';const isIOS=/iphone|ipad|ipod/i.test(ua);const isAndroid=/android/i.test(ua);const isChromium=/chrome|chromium|edg\//i.test(ua);
+      let title='Usá Barber VIP como aplicación',kicker='EXPERIENCIA APP',copy='Para continuar, instalá Barber VIP y luego abrila desde el ícono que aparecerá en tu pantalla de inicio.';let content='';
+      if(installPhase==='waiting'){
+        kicker='INSTALACIÓN EN CURSO';title='Esperando instalación…';copy='Mientras termina la instalación, Barber VIP queda bloqueada en esta pestaña. Cuando termine, abrila desde el ícono de la aplicación.';
+        content=`<div class="install-waiting"><span class="install-spinner"></span><strong>Esperando instalación</strong></div><p class="install-help-copy">Esta pestaña no puede abrir por la fuerza la aplicación instalada. Si ya aceptaste la instalación, podés ver cómo abrir el ícono nuevo.</p><button class="btn btn-soft btn-block" data-action="install-manual-check">Ver instrucciones de apertura</button>`;
+      } else if(installPhase==='installed'||installPhase==='instructions'){
+        const confirmed=installPhase==='installed';
+        kicker=confirmed?'INSTALACIÓN COMPLETADA':'ABRIR LA APLICACIÓN';title=confirmed?'Barber VIP ya está instalada':'Abrí Barber VIP desde su ícono';copy=confirmed?'Esta pestaña del navegador no puede lanzar la aplicación instalada de forma fiable.':'Para que se abra como app y no como página web, usá el ícono que se creó al instalarla.';
+        content=`<div class="install-help-copy"><strong>📲 Para entrar:</strong><br>1. Cerrá esta pestaña del navegador.<br>2. Buscá el ícono de Barber VIP en la pantalla de inicio o en el menú de aplicaciones.<br>3. Tocá ese ícono. La app reconocerá que se abrió en modo instalado y te dejará continuar.</div><p class="tiny muted">Si todavía no aparece el ícono, terminá la instalación desde el menú del navegador y volvé a intentar.</p><button class="btn btn-soft btn-block" data-action="install-retry">No encuentro el ícono · ver instalación</button>`;
+      } else {
+        if(canPrompt){content=`<button class="btn btn-primary btn-block" data-action="install-app">⬇ Instalar Barber VIP</button>`;}
+        else {content=`<button class="btn btn-primary btn-block" data-action="install-help">📲 Cómo instalarla</button>`;}
+        if(installHelpExpanded){
+          const instructions=isIOS?'En iPhone o iPad: abrí este enlace en Safari, tocá Compartir y elegí «Añadir a pantalla de inicio». Después abrí el ícono nuevo.':isAndroid?'En Android: abrí el menú ⋮ de Chrome y elegí «Instalar aplicación» o «Añadir a pantalla de inicio». Cuando termine, abrí el ícono nuevo.':isChromium?'En Chrome o Edge: abrí el menú del navegador y elegí «Instalar Barber VIP» o «Instalar aplicación». Después abrila desde el ícono creado.':'Este navegador no ofrece instalación directa. Probá con Chrome/Edge en escritorio o Android; en iPhone/iPad, usá Safari y «Añadir a pantalla de inicio».';
+          content+=`<div class="install-help-copy">${instructions}</div>`;
+        }
+        content+=`<p class="tiny muted">La app se habilita cuando la abrís desde el ícono instalado. El navegador tiene que autorizar la instalación.</p>`;
+      }
+      modalRoot.innerHTML=`<div class="modal-backdrop install-nudge-backdrop"><section id="installNudge" class="modal-card install-nudge" role="dialog" aria-modal="true" aria-labelledby="installNudgeTitle"><div class="confirm-logout-icon">✂</div><span class="eyebrow">${kicker}</span><h2 id="installNudgeTitle">${title}</h2><p class="muted">${copy}</p>${content}</section></div>`;
+      const firstControl=modalRoot.querySelector('button');if(firstControl)firstControl.focus({preventScroll:true});
+    }
+    document.addEventListener('keydown',event=>{
+      if(isStandaloneApp()||!modalRoot.querySelector('.install-nudge-backdrop'))return;
+      if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();return;}
+      if(event.key!=='Tab')return;
+      const dialog=modalRoot.querySelector('#installNudge');if(!dialog)return;
+      const items=[...dialog.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')];
+      if(!items.length){event.preventDefault();return;}
+      const first=items[0],last=items[items.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    },true);
     function maybeShowInstallPrompt(){
-      if(isStandaloneApp()||!appRoot.querySelector('.landing'))return;
-      let dismissed=false;try{dismissed=sessionStorage.getItem('barberVipInstallNudgeDismissed')==='1';}catch(_){}
-      if(dismissed||$('#installNudge',modalRoot))return;
-      const canPrompt=!!deferredInstallPrompt;const ua=navigator.userAgent||'';const isIOS=/iphone|ipad|ipod/i.test(ua);
-      modalRoot.innerHTML=`<div class="modal-backdrop install-nudge-backdrop"><section class="modal-card install-nudge" role="dialog" aria-modal="true" aria-labelledby="installNudgeTitle"><div class="confirm-logout-icon">✦</div><span class="eyebrow">EXPERIENCIA APP</span><h2 id="installNudgeTitle">Usá Barber VIP como aplicación</h2><p class="muted">Instalarla deja el acceso en tu pantalla de inicio y abre una experiencia más parecida a una app.</p>${canPrompt?`<button class="btn btn-primary btn-block" data-action="install-app">Instalar Barber VIP</button>`:`<button class="btn btn-primary btn-block" data-action="install-help">Cómo instalarla</button>${installHelpExpanded?`<div class="install-help-copy">${isIOS?'En Safari: tocá Compartir y elegí «Añadir a pantalla de inicio».':'En Chrome o Edge: abrí el menú ⋮ y elegí «Instalar aplicación» o «Añadir a pantalla de inicio».'}</div>`:''}`}<button class="btn btn-ghost btn-block" data-action="continue-web">Continuar en el navegador</button><p class="tiny muted" style="margin:12px 0 0">El navegador decide cuándo puede instalarse; no podemos instalarla sin tu confirmación.</p></section></div>`;
+      if(isStandaloneApp()){
+        if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        return;
+      }
+      if(!installPhase||installPhase==='prompt'){
+        try{if(localStorage.getItem('barberVipInstallPhase')==='installed')installPhase='installed';}catch(_){}
+      }
+      renderInstallGate();
     }
     async function startInstallPrompt(){
-      if(deferredInstallPrompt){try{deferredInstallPrompt.prompt();const result=await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;if(result?.outcome==='accepted'){modalRoot.innerHTML='';toast('Barber VIP se está instalando.','success');}else{maybeShowInstallPrompt();}}catch(error){console.warn('PWA install prompt',error);installHelpExpanded=true;maybeShowInstallPrompt();}}
-      else{installHelpExpanded=!installHelpExpanded;maybeShowInstallPrompt();}
+      if(!deferredInstallPrompt){installHelpExpanded=!installHelpExpanded;installPhase='prompt';renderInstallGate();return;}
+      const installEvent=deferredInstallPrompt;deferredInstallPrompt=null;installPhase='waiting';renderInstallGate();
+      try{
+        const choicePromise=installEvent.userChoice;
+        await installEvent.prompt();
+        const result=await choicePromise;
+        if(result?.outcome==='accepted'){
+          if(installPhase!=='installed')installPhase='waiting';
+        }else{
+          installPhase='prompt';installHelpExpanded=true;
+        }
+        renderInstallGate();
+      }catch(error){
+        console.warn('PWA install prompt',error);installPhase='prompt';installHelpExpanded=true;renderInstallGate();
+      }
     }
+    // Prevent password managers from filling client-creation fields before the barber focuses them.
+    document.addEventListener('focusin',event=>{const input=event.target.closest?.('[data-unlock-on-focus]');if(input)input.removeAttribute('readonly');},true);
+
     document.addEventListener('click',async event=>{
       const button=event.target.closest('[data-action]');if(!button)return;const action=button.dataset.action;
       try {
@@ -839,9 +958,10 @@
         else if(action==='start-signup'){state.pendingSignup=null;renderLogin('barber-signup');}
         else if(action==='install-app'){await startInstallPrompt();}
         else if(action==='install-help'){installHelpExpanded=true;maybeShowInstallPrompt();}
-        else if(action==='continue-web'){try{sessionStorage.setItem('barberVipInstallNudgeDismissed','1');}catch(_){}modalRoot.innerHTML='';}
         else if(action==='reminder-tab'){state.reminderTab=button.dataset.tab==='followup'?'followup':'pending';state.query='';renderApp();}
         else if(action==='confirm-reminder'){await confirmReminderSent(button.dataset.id);}
+        else if(action==='pause-reminders'){await setCustomerRemindersPaused(button.dataset.id,true);}
+        else if(action==='resume-reminders'){await setCustomerRemindersPaused(button.dataset.id,false);}
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
@@ -865,7 +985,8 @@
         else if(action==='remove-reward-step'){const row=button.closest('[data-reward-row]'),rows=$$('[data-reward-row]',button.closest('[data-program-card]'));if(rows.length<=1){toast('El programa necesita al menos una etapa de premio.','error');return;}row.remove();}
         else if(action==='pay'){openPlanInfo();}
         else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription();}
-        else if(action==='open-installed-app'){try{modalRoot.innerHTML='';location.assign(CUSTOMER_APP_URL+'?openApp=1');}catch(error){toast('Abrí Barber VIP desde el ícono que quedó en tu pantalla de inicio.','error');}}
+        else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='instructions';renderInstallGate();}
+        else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;try{localStorage.removeItem('barberVipInstallPhase');}catch(_){};renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de barbería copiado.','success');}
         else if(action==='copy-app-link'){await copyText(CUSTOMER_APP_URL);toast('Enlace para tus clientes copiado.','success');}
         else if(action==='book-turn'){contactBarber(false);}
@@ -957,8 +1078,8 @@
         onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
       } catch(error){console.error('Firebase init error',error);}
     }
-    window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;if(appRoot.querySelector('.landing'))maybeShowInstallPrompt();});
-    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;try{sessionStorage.setItem('barberVipInstallNudgeDismissed','1');}catch(_){};modalRoot.innerHTML=`<div class="modal-backdrop"><section class="modal-card install-nudge" role="dialog" aria-modal="true" aria-labelledby="installedTitle"><div class="confirm-logout-icon">✓</div><span class="eyebrow">INSTALACIÓN COMPLETADA</span><h2 id="installedTitle">Barber VIP ya está instalada</h2><p class="muted">Podés intentar abrir la aplicación ahora. Según el navegador y el sistema del teléfono, quizá tengas que tocar el ícono de Barber VIP en la pantalla de inicio.</p><button class="btn btn-primary btn-block" data-action="open-installed-app">Abrir app ↗</button><button class="btn btn-ghost btn-block" data-action="close-modal">Seguir acá</button></section></div>`;});
+    window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;if(!isStandaloneApp())maybeShowInstallPrompt();});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installPhase='installed';try{localStorage.setItem('barberVipInstallPhase','installed');}catch(_){};renderInstallGate();});
     if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('SW register failed',err));
     if(firebaseReady) renderLoading(); else renderLanding();
   </script>

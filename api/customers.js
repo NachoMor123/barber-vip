@@ -71,6 +71,17 @@ module.exports = async function handler(req, res) {
     const customerSnap = await customerRef.get();
     if (!customerSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró ese cliente.' });
 
+    if (req.method === 'PUT' && ['pause-reminders','resume-reminders'].includes(data.action)) {
+      const pause = data.action === 'pause-reminders';
+      const now = admin().firestore.FieldValue.serverTimestamp();
+      const updates = pause
+        ? { remindersPaused:true, remindersPausedAt:now, updatedAt:now }
+        : { remindersPaused:false, remindersPausedAt:null, reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null, updatedAt:now };
+      await customerRef.update(updates);
+      const saved = await customerRef.get();
+      return send(res, 200, {ok:true, customer:saved.data()});
+    }
+
     if (req.method === 'PUT' && data.action === 'record-reminder') {
       let updatedCustomer = null;
       try {

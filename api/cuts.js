@@ -152,10 +152,10 @@ module.exports = async function handler(req, res) {
         const cycleCuts = cycleNext >= cycleMax ? 0 : cycleNext;
         const rewardReady = availableRewards.length > 0;
         const now = admin().firestore.FieldValue.serverTimestamp();
-        transaction.update(customerRef, { totalCuts, cycleCuts, cycleVersion: 2, availableRewards, rewardReady, lastCutAt: now, reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null, updatedAt: now });
+        transaction.update(customerRef, { totalCuts, cycleCuts, cycleVersion: 2, availableRewards, rewardReady, lastCutAt: now, reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null, remindersPaused:false, remindersPausedAt:null, updatedAt: now });
         const cutRef = cutCollection.doc();
         transaction.set(cutRef, { id: cutRef.id, customerId, customerName: text(customer.fullName || '', 100), createdAt: now, type: 'cut', cycleCut: cycleNext, cycleLength:cycleMax, rewardLabel:earned?.label||'', programId:program.id, programName:program.name||'' });
-        resultCustomer = { ...customer, totalCuts, cycleCuts, cycleVersion: 2, loyaltyProgramId:customer.loyaltyProgramId||program.id, availableRewards, rewardReady, lastCutAt: new Date().toISOString(), reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null };
+        resultCustomer = { ...customer, totalCuts, cycleCuts, cycleVersion: 2, loyaltyProgramId:customer.loyaltyProgramId||program.id, availableRewards, rewardReady, lastCutAt: new Date().toISOString(), reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null, remindersPaused:false, remindersPausedAt:null };
       });
       return send(res, 200, { ok: true, customer: resultCustomer });
     }

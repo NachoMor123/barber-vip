@@ -1,6 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method } = require('../lib/http');
 const { requireUser, subscription } = require('../lib/security');
+function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
 
 
 async function sanitizeBarberLoyalty(database, barberRef, source) {
@@ -63,7 +64,7 @@ module.exports = async function handler(req, res) {
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'Falta configurar el perfil de la barbería.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
       return send(res, 200, {
-        ok: true, role: 'barber', uid: decoded.uid, barberUid: decoded.uid,
+        ok: true, role: 'barber', uid: decoded.uid, barberUid: decoded.uid, subscriptionPrice: getSubscriptionPrice(),
         profile: { ...barber, subscription: subscription(barber), subscriptionExpiresAt: barber.subscriptionExpiresAt && barber.subscriptionExpiresAt.toDate ? barber.subscriptionExpiresAt.toDate().toISOString() : null }
       });
     }
@@ -77,7 +78,7 @@ module.exports = async function handler(req, res) {
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró la barbería asociada.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
-      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer: customerSnap.data(), barber });
+      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer: customerSnap.data(), barber, subscriptionPrice: getSubscriptionPrice() });
     }
     return send(res, 403, { ok: false, error: 'El tipo de cuenta no está configurado correctamente.' });
   } catch (error) {

@@ -1,4 +1,4 @@
-# Barber VIP — actualización de interfaz y fidelización giyh
+# Barber VIP — actualización de interfaz y fidelización
 
 Aplicación web/PWA para barberos. La interfaz vive en `index.html`; los cambios privilegiados se realizan en API de Vercel con Firebase Admin. Esta versión conserva los proyectos y credenciales que ya existen.
 
@@ -21,7 +21,7 @@ En Vercel, confirmá también que **Root Directory** sea la carpeta que contiene
 - Detalles de cliente en modalidad de solo lectura. La contraseña no se muestra: Firebase Authentication no permite recuperarla en texto plano; se puede cambiar desde Editar.
 - Mejoras de borde, contraste, iconos, navegación y botones de salir/cerrar/cancelar, especialmente en móviles.
 - Intentos de desactivar autocompletado de formularios y sugerencias de gestores de contraseñas. La decisión final de mostrar huella/biometría la controla Android o el navegador, y una página web no puede prohibirlo por completo.
-- Se subió la versión del caché PWA a v6 para que el navegador descarte la interfaz anterior y pida la nueva.
+- Se subió la versión del caché PWA a v8 para que el navegador descarte la interfaz anterior y pida la nueva.
 
 ## Archivos que cambian
 
@@ -40,7 +40,7 @@ En Vercel, confirmá también que **Root Directory** sea la carpeta que contiene
 2. Copiá los archivos de este ZIP respetando las carpetas `api/`, `lib/` y `assets/`. Conservá todas las API actuales que no aparecen como modificadas.
 3. Conservá en Vercel las variables privadas existentes. Verificá `FIREBASE_SERVICE_ACCOUNT_JSON`, `APP_URL`, `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` según el flujo de pagos que ya tengas. **Nunca pongas un Access Token privado en el HTML ni en GitHub.**
 4. Configurá `CRON_SECRET` en Vercel como cadena aleatoria fuerte. El cron diario lo usa como `Authorization: Bearer ...` para proteger el endpoint de limpieza.
-5. Para cambiar el precio, mantené sincronizados `SUBSCRIPTION_PRICE_ARS` del HTML y la variable de entorno `SUBSCRIPTION_PRICE_ARS` del servidor (por defecto 2500).
+5. Para cambiar el precio, modificá `SUBSCRIPTION_PRICE_ARS` en las variables de entorno de Vercel y hacé un nuevo deployment. La interfaz lo consulta al servidor; no hace falta cambiar el HTML. Si la variable no existe, el precio predeterminado es $2.500.
 6. Hacé commit/deploy y probá primero en una cuenta de prueba. Si la PWA muestra la versión anterior, cerrá la app instalada y volvé a abrirla; si persiste, limpiá el caché/datos del sitio en el navegador.
 
 ## Firebase y datos
@@ -73,3 +73,36 @@ El historial de Inicio muestra como máximo 100 registros en el rango selecciona
 - Revisar en Vercel los logs de `api/loyalty`, `api/cuts` y `api/cleanup-cuts`. Vercel Cron Hobby ejecuta como máximo una vez al día; la hora puede variar dentro de la hora programada.
 
 **Nota:** el código se ha revisado estáticamente y sus archivos JavaScript se comprobaron con `node --check`; eso no sustituye una prueba real desplegada contra las cuentas Firebase y Mercado Pago.
+
+
+## Funciones de esta entrega
+
+- Confirmación de salida para administrador y cliente.
+- Cabeceras de admin más altas y categorías más visibles; contrastes y bordes siguen el color configurado.
+- Recordatorios configurables: días posteriores a la frecuencia habitual, duración de seguimiento y máximo de 1, 2 o 3 contactos. El servidor valida el máximo; registrar un contacto significa que se abrió el flujo de WhatsApp, no que WhatsApp confirme que el mensaje se envió.
+- Al llegar al máximo, el cliente deja de aparecer entre los recordatorios hasta que se registre un nuevo corte; esto evita repetir avisos indefinidamente.
+- Enlace de WhatsApp para agendar un turno sin mensaje preescrito. Los recordatorios sí preparan un texto personal con el progreso de fidelización; el barbero lo puede revisar antes de enviarlo.
+- Promociones con cronómetro local en segundos. El cronómetro se actualiza en el dispositivo y no consulta Firestore cada segundo.
+- Horarios por día de la semana, permitiendo cerrar días y elegir horario corrido o doble turno por separado.
+- El precio de suscripción mostrado, cobrado y validado por el webhook procede de `SUBSCRIPTION_PRICE_ARS`, mediante la API de cuenta.
+- Registro de barberos desde la aplicación con nombre, correo y contraseña, recuperación de contraseña y prueba de 15 días después de verificar el correo.
+- El acceso nuevo reutiliza `api/profile.js` y `api/me.js`; no se agregó ninguna función serverless. El proyecto tiene 10 funciones API JavaScript.
+
+## Alta de barberos y prueba gratuita
+
+- En Firebase Console, habilitá **Authentication → Sign-in method → Email/Password**.
+- Revisá en **Authentication → Settings → Authorized domains** que figure el dominio de producción de Vercel (`barber-vip-three.vercel.app`).
+- El alta solicita nombre, correo y contraseña. La aplicación envía un correo de verificación y crea el perfil del barbero con una prueba de 15 días únicamente después de verificar el correo.
+- No se agrega ninguna función serverless: se reutilizan `api/profile.js` y `api/me.js`, por lo que `api/` continúa con 10 funciones JavaScript (por debajo del límite de 12 del plan Hobby).
+- `SUBSCRIPTION_PRICE_ARS` controla tanto el precio mostrado en la app como el importe de Checkout y el importe aceptado por el webhook. Si cambiás el precio en Vercel, hacé un nuevo deployment para que el frontend y el backend reciban el mismo valor.
+
+La verificación de correo reduce altas falsas, pero no puede impedir por sí sola que alguien use varias direcciones de correo distintas. Para impedir por completo múltiples pruebas hace falta una verificación adicional de identidad o facturación.
+
+
+### Control de prueba gratuita
+
+El inicio de la prueba requiere verificar el correo. El servidor registra una reclamación privada por correo normalizado y no concede una segunda prueba al mismo correo. Esto reduce duplicaciones accidentales, pero no elimina por completo los abusos con distintos correos o proveedores temporales. No se añade una función serverless nueva.
+
+### Recuperación de contraseña del administrador
+
+En el acceso del administrador se puede solicitar un correo de recuperación de Firebase. Para que llegue, activá Email/Password y verificá el dominio desplegado en Authentication > Settings > Authorized domains.

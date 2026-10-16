@@ -4,46 +4,62 @@ const { requireUser, subscription } = require('../lib/security');
 function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
 
 
+function cleanProgramId(value, fallback='program-general') {
+  const id = String(value || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  return id || fallback;
+}
+function safeProgramRewards(input) {
+  if (!Array.isArray(input)) return [];
+  const out = input.map(item => ({ cut: Number(item.cut), discount: Number(item.discount) })).sort((a,b)=>a.cut-b.cut);
+  if (!out.length || out.length > 10) return [];
+  let previous=0;
+  for (const item of out) {
+    if (!Number.isInteger(item.cut)||item.cut<1||item.cut>50||item.cut<=previous||!Number.isInteger(item.discount)||item.discount<1||item.discount>100) return [];
+    item.label=`${item.discount}% OFF`; previous=item.cut;
+  }
+  return out;
+}
 async function sanitizeBarberLoyalty(database, barberRef, source) {
-  const barber = { ...source };
-  const programs = Array.isArray(barber.loyaltyPrograms) ? barber.loyaltyPrograms : [];
-  const hasLegacyIds = programs.some(program => Array.isArray(program.customerIds) && program.customerIds.length > 0);
-  if (!hasLegacyIds) return barber;
+  const oldPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
+  const chosen = oldPrograms.find(p => p && p.id === source.defaultLoyaltyProgramId)
+    || oldPrograms.find(p => p && p.audience === 'all') || oldPrograms.find(Boolean) || {};
+  const chosenRewards = safeProgramRewards(chosen.rewards);
+  const fallbackRewards = [{cut:2,discount:30,label:'30% OFF'},{cut:4,discount:50,label:'50% OFF'},{cut:6,discount:70,label:'70% OFF'}];
+  const program = {
+    id: cleanProgramId(chosen.id),
+    name: String(chosen.name || 'Programa de premios').slice(0,60),
+    audience: 'all', customerIds: [],
+    rewards: chosenRewards.length ? chosenRewards : fallbackRewards
+  };
+  const needsMigration = oldPrograms.length !== 1 || oldPrograms[0]?.id !== program.id
+    || oldPrograms[0]?.audience !== 'all' || (oldPrograms[0]?.customerIds || []).length > 0
+    || source.defaultLoyaltyProgramId !== program.id;
+  if (!needsMigration) return { ...source, loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id };
 
-  // Migration for earlier builds that stored customer UID lists inside a publicly readable
-  // barber profile. Preserve assignments on private customer docs, then remove the lists.
-  const targetByCustomer = new Map();
-  for (const program of programs) {
-    if (program.audience === 'selected' && Array.isArray(program.customerIds)) {
-      for (const customerId of program.customerIds) if (!targetByCustomer.has(customerId)) targetByCustomer.set(customerId, program.id);
-    }
-  }
-  const defaultId = barber.defaultLoyaltyProgramId || programs.find(program => program.audience === 'all')?.id || programs[0]?.id;
+  // Collapse old variants into one global program while keeping all earned rewards.
   const customersRef = barberRef.collection('customers');
-  const affectedDocs = new Map();
-  const selectedIds = [...targetByCustomer.keys()];
-  for (let i = 0; i < selectedIds.length; i += 100) {
-    const docs = await Promise.all(selectedIds.slice(i, i + 100).map(id => customersRef.doc(id).get()));
-    for (const doc of docs) if (doc.exists) affectedDocs.set(doc.id, doc);
+  const oldIds = [...new Set(oldPrograms.map(p => cleanProgramId(p?.id, '')).filter(Boolean))];
+  const explicitIds = [...new Set(oldPrograms.flatMap(p => Array.isArray(p?.customerIds) ? p.customerIds.map(id => String(id || '').trim()).filter(Boolean) : []))];
+  const affected = new Map();
+  for (const oldId of oldIds) {
+    if (oldId === program.id) continue;
+    const snap = await customersRef.where('loyaltyProgramId', '==', oldId).get();
+    for (const doc of snap.docs) affected.set(doc.id, doc);
   }
-  // Also pick up customers currently assigned to an old variant but no longer in its saved list.
-  for (const program of programs.filter(item => item.audience === 'selected')) {
-    const oldSnap = await customersRef.where('loyaltyProgramId', '==', program.id).get();
-    for (const doc of oldSnap.docs) affectedDocs.set(doc.id, doc);
+  for (let i=0; i<explicitIds.length; i+=100) {
+    const docs = await Promise.all(explicitIds.slice(i,i+100).map(id => customersRef.doc(id).get()));
+    for (const doc of docs) if (doc.exists) affected.set(doc.id, doc);
   }
-  let batch = database.batch();
-  let writes = 0;
-  for (const customerDoc of affectedDocs.values()) {
-    const nextProgramId = targetByCustomer.get(customerDoc.id) || defaultId;
-    if (!nextProgramId || customerDoc.data().loyaltyProgramId === nextProgramId) continue;
-    batch.update(customerDoc.ref, { loyaltyProgramId: nextProgramId, updatedAt: admin().firestore.FieldValue.serverTimestamp() });
+  let batch=database.batch(), writes=0;
+  for (const doc of affected.values()) {
+    if (doc.data().loyaltyProgramId === program.id) continue;
+    batch.update(doc.ref,{loyaltyProgramId:program.id,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
     writes++;
-    if (writes >= 400) { await batch.commit(); batch = database.batch(); writes = 0; }
+    if (writes>=400) { await batch.commit(); batch=database.batch(); writes=0; }
   }
   if (writes) await batch.commit();
-  const publicPrograms = programs.map(({ customerIds, ...program }) => ({ ...program, customerIds: [] }));
-  await barberRef.update({ loyaltyPrograms: publicPrograms, updatedAt: admin().firestore.FieldValue.serverTimestamp() });
-  return { ...barber, loyaltyPrograms: publicPrograms };
+  await barberRef.update({loyaltyPrograms:[program],defaultLoyaltyProgramId:program.id,rewards:program.rewards,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
+  return { ...source, loyaltyPrograms:[program],defaultLoyaltyProgramId:program.id,rewards:program.rewards };
 }
 
 module.exports = async function handler(req, res) {

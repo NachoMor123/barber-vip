@@ -51,12 +51,18 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PUT' && data.action === 'reminder-settings') {
-      const threshold = Number(data.threshold), followUpDays = Number(data.followUpDays), maxMessages = Number(data.maxMessages);
+      const threshold = Number(data.threshold), maxMessages = Number(data.maxMessages);
       if (!Number.isInteger(threshold) || threshold < 0 || threshold > 30) return send(res, 400, { ok:false, error:'El margen debe estar entre 0 y 30 días.' });
-      if (!Number.isInteger(followUpDays) || followUpDays < 1 || followUpDays > 30) return send(res, 400, { ok:false, error:'El seguimiento debe durar entre 1 y 30 días.' });
       if (![1,2,3].includes(maxMessages)) return send(res, 400, { ok:false, error:'Elegí un máximo de 1, 2 o 3 recordatorios.' });
-      await barberRef.update({ reminderThresholdDays:threshold, reminderFollowUpDays:followUpDays, reminderMaxMessages:maxMessages, updatedAt:admin().firestore.FieldValue.serverTimestamp() });
-      return send(res, 200, {ok:true, settings:{reminderThresholdDays:threshold,reminderFollowUpDays:followUpDays,reminderMaxMessages:maxMessages}});
+      const changes = { reminderThresholdDays:threshold, reminderMaxMessages:maxMessages, updatedAt:admin().firestore.FieldValue.serverTimestamp() };
+      if (Object.prototype.hasOwnProperty.call(data, 'messageTemplate')) {
+        const messageTemplate = text(data.messageTemplate, 500);
+        changes.reminderMessageTemplate = messageTemplate;
+      }
+      // Follow-up is intentionally persistent: it ends only when a new cut is registered.
+      await barberRef.update(changes);
+      const saved = await barberRef.get();
+      return send(res, 200, {ok:true, settings:{reminderThresholdDays:threshold,reminderMaxMessages:maxMessages,reminderMessageTemplate:saved.data().reminderMessageTemplate||''}});
     }
 
     const customerId = text(data.customerId, 100);
@@ -74,21 +80,20 @@ module.exports = async function handler(req, res) {
           const current = freshCustomerSnap.data();
           const barber = freshBarberSnap.exists ? freshBarberSnap.data() : {};
           const maxMessages = Math.max(1, Math.min(3, Number(barber.reminderMaxMessages || 2)));
-          const followUpDays = Math.max(1, Math.min(30, Number(barber.reminderFollowUpDays || 7)));
           const oldCount = Math.max(0, Number(current.reminderCount || 0));
-          if (oldCount >= maxMessages) throw new Error('Ya se alcanzó el máximo de recordatorios configurado. Se reactivará cuando registres un nuevo corte.');
+          if (oldCount >= maxMessages) throw new Error('Ya se alcanzó el máximo de recordatorios. El contador se reinicia cuando registrás un nuevo corte.');
           const count = oldCount + 1;
           const nowDate = new Date();
-          const followUpUntil = new Date(nowDate.getTime() + followUpDays * 86400000);
-          const status = count >= maxMessages ? 'final-followup' : 'followup';
           const nowTimestamp = admin().firestore.Timestamp.fromDate(nowDate);
+          // A confirmation records one manual attempt. WhatsApp itself cannot verify delivery.
           transaction.update(customerRef, {
-            reminderCount: count, reminderStatus: status,
-            reminderFollowUpUntil: admin().firestore.Timestamp.fromDate(followUpUntil),
+            reminderCount: count,
+            reminderStatus: 'followup',
+            reminderFollowUpUntil: null,
             reminderLastContactAt: nowTimestamp,
             updatedAt: admin().firestore.FieldValue.serverTimestamp()
           });
-          updatedCustomer = { ...current, reminderCount: count, reminderStatus: status, reminderFollowUpUntil: followUpUntil.toISOString(), reminderLastContactAt: nowDate.toISOString() };
+          updatedCustomer = { ...current, reminderCount: count, reminderStatus: 'followup', reminderFollowUpUntil: null, reminderLastContactAt: nowDate.toISOString() };
         });
       } catch (error) {
         const status = /dado de baja|ya no existe/i.test(error.message) ? 403 : 409;

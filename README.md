@@ -76,3 +76,21 @@ La tarea programada de `api/cleanup-cuts.js` elimina registros de cortes con má
 - Probar cortes, recordatorios, promos, suscripción y limpieza con cuentas de prueba.
 
 La sintaxis del código y la estructura se validan localmente, pero eso no sustituye una prueba real contra tu Firebase y Mercado Pago de producción.
+
+
+## Ajustes de esta entrega
+
+- Se quitó el recorrido tipo spotlight que estaba fallando. Pip queda como guía contextual y muestra temas distintos según sea administrador o cliente, con una explicación inicial orientada al valor del producto y los siguientes pasos recomendados.
+- Los botones principales de Inicio, Clientes, Recordatorios y Promociones son de ancho completo. Se ajustaron los fondos a azul casi negro, bordes azul eléctrico y contraste de texto. Se desactivó la animación de entrada de paneles completos para reducir el efecto de salto cuando Firestore actualiza datos.
+- Si la suscripción está activa, “Ver plan” muestra estado y vencimiento sin abrir Mercado Pago. Solo el período de gracia o la cuenta vencida permite iniciar un pago. La API también rechaza preferencias si la cuenta está activa.
+- Una cuenta vencida no puede registrar cortes (incluidos cortes rápidos) y tampoco crear promociones nuevas. Se mantienen disponibles las demás secciones y las acciones de administrar promociones existentes.
+- Al confirmar la instalación se muestra una opción “Abrir app”. El navegador controla si el enlace abre la PWA instalada o permanece en el navegador; ninguna página web puede forzar ese comportamiento en todos los dispositivos.
+- El proyecto mantiene 10 funciones API, por debajo del límite de 12 del plan Vercel Hobby. No se agregaron endpoints.
+
+## Pruebas recomendadas después del despliegue
+
+1. Iniciar sesión con una cuenta activa y pulsar “Ver plan”: debe mostrar información, no crear un pago.
+2. Probar una cuenta vencida: registrar corte y crear promoción deben devolver un mensaje de renovación; el resto de las secciones debe seguir visible.
+3. Abrir Pip como administrador y como cliente: no debe aparecer un tour ni contenido específico del rol contrario.
+4. Revisar los botones principales en celular y escritorio.
+5. Probar el flujo de instalación en el dispositivo objetivo; el botón “Abrir app” depende del comportamiento del navegador/OS.

@@ -1,11 +1,14 @@
 const { send, method } = require('../lib/http');
-const { requireBarber } = require('../lib/security');
+const { requireBarber, subscription } = require('../lib/security');
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;
+    const barberSnap = await ctx.db.collection('barbers').doc(ctx.uid).get();
+    if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil de tu cuenta.'});
+    if (subscription(barberSnap.data()).status === 'active') return send(res, 409, {ok:false,error:'Tu cuenta está activa. No necesitás iniciar un pago ahora.'});
     const token = process.env.MP_ACCESS_TOKEN;
     const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
     const price = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '2500', 10);

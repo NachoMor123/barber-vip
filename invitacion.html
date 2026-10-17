@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#030611">
+  <meta name="description" content="Unite a tu barbero en Barber VIP y seguí tus cortes y beneficios.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <title>Crear tu espacio VIP · Barber VIP</title>
+  <style>
+    :root{color-scheme:dark;--bg:#02040b;--surface:#070c18;--surface2:#050914;--line:rgba(58,135,255,.64);--blue:#3478ff;--blue2:#75bcff;--white:#f4f7ff;--muted:#a8b5cd;--danger:#ff6c87;--green:#65e6b0}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--white);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}body{min-height:100svh;background:radial-gradient(ellipse at 5% 0%,rgba(35,99,255,.15),transparent 38%),radial-gradient(ellipse at 100% 35%,rgba(43,128,255,.08),transparent 31%),#02040b;display:flex;justify-content:center;padding:18px 14px calc(24px + env(safe-area-inset-bottom))}.wrap{width:min(100%,540px);margin:auto}.brand{display:flex;align-items:center;gap:11px;margin:0 0 22px}.brand-mark{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;border:1px solid var(--line);color:var(--blue2);background:#050b19;box-shadow:0 0 24px rgba(47,121,255,.15);font-size:24px}.brand strong{display:block;font-size:15px;letter-spacing:.01em}.brand small{display:block;margin-top:3px;font-size:10px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase}.card{background:linear-gradient(155deg,rgba(7,12,24,.98),rgba(2,5,13,.99));border:1px solid rgba(64,142,255,.76);border-radius:26px;padding:clamp(20px,5vw,32px);box-shadow:0 20px 60px rgba(0,0,0,.48),0 0 25px rgba(45,113,255,.08),inset 0 1px rgba(255,255,255,.035)}.eyebrow{font-size:10px;letter-spacing:.2em;font-weight:900;color:var(--blue2);text-transform:uppercase}.hero-icon{width:54px;height:54px;display:grid;place-items:center;margin:0 0 17px;border:1px solid rgba(65,141,255,.75);border-radius:17px;background:rgba(39,103,233,.12);color:var(--blue2);font-size:27px;box-shadow:0 0 24px rgba(54,129,255,.14)}h1{font-size:clamp(27px,7vw,35px);line-height:1.08;letter-spacing:-.055em;margin:10px 0 11px}p{margin:0;color:var(--muted);font-size:13px;line-height:1.7}.invite-summary{margin:20px 0 23px;padding:16px;border:1px solid rgba(66,144,255,.5);border-radius:17px;background:#030814}.invite-summary .avatar{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:rgba(54,124,255,.17);color:var(--blue2);font-weight:900;margin-bottom:10px}.invite-summary strong{color:#fff}.invite-summary p{font-size:12px}.code{display:inline-block;margin-top:9px;padding:5px 8px;border:1px solid rgba(74,151,255,.35);border-radius:8px;color:#a5d1ff;font-size:10px;font-weight:850;letter-spacing:.14em}.form{display:grid;gap:15px}.field{display:grid;gap:7px}.field label{font-size:11px;color:#e2eaff;font-weight:800}.field input{display:block;width:100%;min-height:50px;padding:13px 14px;background:#030710;border:1px solid rgba(76,143,255,.42);border-radius:13px;color:var(--white);outline:none;font:inherit;font-size:14px;box-shadow:inset 0 1px 3px rgba(0,0,0,.3);transition:border-color .16s,box-shadow .16s}.field input:focus{border-color:var(--blue2);box-shadow:0 0 0 3px rgba(54,123,255,.15)}.field input::placeholder{color:#7786a0}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.password-wrap{display:flex;gap:7px}.password-wrap input{flex:1;min-width:0}.show-pass{border:1px solid rgba(76,143,255,.45);background:#081225;color:#b7d9ff;border-radius:12px;padding:0 13px;font-size:11px;font-weight:850}.hint{font-size:10px;color:#8999b5;line-height:1.55}.submit{width:100%;min-height:54px;border:1px solid rgba(126,188,255,.95);border-radius:14px;background:linear-gradient(105deg,#2164ff,#3993ff 55%,#79c0ff);color:#020711;font-weight:950;letter-spacing:.01em;font-size:14px;box-shadow:0 8px 27px rgba(43,117,255,.25);transition:transform .16s,filter .16s}.submit:active{transform:scale(.99)}.submit:disabled{opacity:.68;filter:saturate(.65)}.error,.success,.loading{display:none;padding:12px 13px;border-radius:12px;font-size:12px;line-height:1.55}.error.show{display:block;background:rgba(255,76,105,.09);border:1px solid rgba(255,91,120,.45);color:#ffabb9}.success.show{display:block;background:rgba(67,206,153,.08);border:1px solid rgba(101,230,176,.4);color:#a0f3d1}.loading.show{display:block;background:rgba(58,128,255,.08);border:1px solid rgba(66,139,255,.35);color:#aed4ff}.footer{text-align:center;color:#72819a;font-size:10px;margin-top:17px;line-height:1.6}.footer b{color:#b8c9e7}.hidden{display:none!important}.global-status{min-height:20px;margin:12px 0}.account-created{display:none}.account-created.show{display:block}.account-created h2{font-size:20px;margin:0 0 8px}.account-created p{margin-bottom:18px}.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid rgba(101,230,176,.38);background:rgba(101,230,176,.08);border-radius:999px;color:#a4f0d3;font-size:10px;font-weight:850}.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(147,198,255,.25);border-top-color:#9bccff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:420px){body{padding-left:11px;padding-right:11px}.card{border-radius:22px;padding:21px 17px}.row{grid-template-columns:1fr}.row .field{min-width:0}.brand{margin-bottom:16px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="brand"><div class="brand-mark" aria-hidden="true">✂</div><div><strong>Barber VIP</strong><small>Tu estilo · Tu recompensa</small></div></header>
+    <section class="card" aria-labelledby="title">
+      <div class="hero-icon" aria-hidden="true">✦</div>
+      <span class="eyebrow">INVITACIÓN PERSONAL</span>
+      <h1 id="title">Creá tu espacio VIP</h1>
+      <p>Registrate una sola vez y empezá a ver tus visitas y beneficios en la aplicación de tu barbero.</p>
+      <div id="inviteSummary" class="invite-summary"><div class="loading show"><span class="spinner"></span>Validando tu invitación…</div></div>
+      <div id="pageError" class="error global-status" role="alert"></div>
+      <div id="signupArea">
+        <form id="signupForm" class="form" autocomplete="off" novalidate>
+          <div class="field"><label for="fullName">Nombre y apellido</label><input id="fullName" name="vip_full_name_new" placeholder="Ej. Franco Cardozo" autocomplete="off" autocapitalize="words" spellcheck="false" maxlength="100" required data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"></div>
+          <div class="field"><label for="whatsapp">Tu WhatsApp</label><input id="whatsapp" name="vip_phone_new" type="tel" inputmode="tel" placeholder="Ej. 5492615551234" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="24" required data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"><span class="hint">Incluí característica y número. Aceptamos formatos argentinos con o sin +54 y espacios.</span></div>
+          <div class="field"><label for="visitDays">¿Cada cuántos días venís aproximadamente?</label><input id="visitDays" name="vip_visit_interval_new" type="number" min="1" max="365" step="1" inputmode="numeric" value="21" autocomplete="off" required data-lpignore="true" data-form-type="other"><span class="hint">Es una estimación para los recordatorios; podés ajustarla con tu barbero.</span></div>
+          <div class="field"><label for="password">Creá tu contraseña</label><div class="password-wrap"><input id="password" name="vip_password_new" type="password" placeholder="Mínimo 6 caracteres" minlength="6" maxlength="128" autocomplete="new-password" required data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other"><button id="togglePassword" class="show-pass" type="button">Ver</button></div><span class="hint">Guardala en un lugar seguro: tu barbero no puede verla ni recuperarla por vos.</span></div>
+          <div id="formError" class="error" role="alert"></div>
+          <div id="formStatus" class="loading" role="status"></div>
+          <button id="submitButton" class="submit" type="submit">Crear mi cuenta VIP&nbsp; ↗</button>
+        </form>
+        <div id="createdPanel" class="account-created"><span class="badge">✓ Cuenta creada</span><h2>¡Bienvenido a Barber VIP!</h2><p>Tu perfil ya está guardado. Estamos abriendo tu tarjeta VIP en esta aplicación.</p><button id="openAppButton" class="submit" type="button">Abrir mi tarjeta VIP</button><div id="signinError" class="error" role="alert"></div></div>
+      </div>
+    </section>
+    <footer class="footer">Una invitación personal vinculada a un profesional.<br><b>Barber VIP</b> · Tus visitas, tus beneficios.</footer>
+  </main>
+<script type="module">
+  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyBUx_sCO9FlyUsA4TpYUDLbHTNfl9tKkMw',
+    authDomain: 'barbervip-309dc.firebaseapp.com',
+    projectId: 'barbervip-309dc',
+    storageBucket: 'barbervip-309dc.firebasestorage.app',
+    messagingSenderId: '379790329308',
+    appId: '1:379790329308:web:a8ec973f331971803ffb19'
+  };
+  const $ = selector => document.querySelector(selector);
+  const summary = $('#inviteSummary'), pageError = $('#pageError'), form = $('#signupForm'), button = $('#submitButton');
+  const refCode = new URLSearchParams(location.search).get('ref') || '';
+  let invite = null, createdEmail = '', created = false, inviteAuth = null;
+  const show = (el, message) => { el.textContent = message; el.classList.add('show'); };
+  const hide = el => { el.textContent = ''; el.classList.remove('show'); };
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const validCode = value => /^[a-f0-9]{36}$/i.test(String(value || ''));
+
+  // Clear stale legacy SPA referral state: this dedicated route is the source of truth.
+  try { localStorage.removeItem('barberVipPendingReferral'); } catch (_) {}
+
+  function renderInvite(data) {
+    const label = data.barberProfessionalName || data.barberName || 'tu barbero';
+    summary.innerHTML = `<div class="avatar">✦</div><span class="eyebrow">INVITACIÓN VINCULADA</span><p>Te invitó <strong>${escapeHtml(data.referrerName || 'Un amigo')}</strong> para sumarte con el barbero <strong>${escapeHtml(label)}</strong>.</p><div class="code">CÓDIGO · ${escapeHtml(data.barberCode || '—')}</div><p style="margin-top:11px">Tu cuenta quedará vinculada a esta persona y a este profesional. No se puede cambiar el vínculo después del registro.</p>`;
+  }
+  function setBusy(busy, message='') {
+    button.disabled = busy;
+    button.innerHTML = busy ? `<span class="spinner"></span>${escapeHtml(message || 'Creando cuenta…')}` : (created ? 'Abrir mi tarjeta VIP&nbsp; ↗' : 'Crear mi cuenta VIP&nbsp; ↗');
+    for (const input of form.querySelectorAll('input')) input.disabled = busy;
+  }
+  async function signInCreatedAccount() {
+    const signinError = $('#signinError');
+    if (!createdEmail) { show(signinError, 'La cuenta todavía no está creada. Volvé a completar el formulario.'); return; }
+    const password = $('#password').value;
+    if (!password) { show(signinError, 'Ingresá la contraseña que elegiste para abrir tu tarjeta.'); $('#password').focus(); return; }
+    $('#openAppButton').disabled = true;
+    $('#openAppButton').textContent = 'Abriendo tu tarjeta…';
+    try {
+      const app = getApps().find(item => item.name === '[DEFAULT]') || initializeApp(firebaseConfig);
+      inviteAuth = inviteAuth || getAuth(app);
+      await setPersistence(inviteAuth, browserLocalPersistence);
+      await signInWithEmailAndPassword(inviteAuth, createdEmail, password);
+      try { sessionStorage.removeItem('barberVipReferralCreatedEmail'); } catch (_) {}
+      location.replace('/?welcome=referral');
+    } catch (error) {
+      console.error('Sign-in after invitation registration', error);
+      show(form.classList.contains('hidden') ? signinError : $('#formError'), 'La cuenta ya se creó, pero no pudimos iniciar la sesión. Revisá la contraseña e intentá otra vez.');
+      $('#openAppButton').disabled = false;
+      $('#openAppButton').textContent = 'Intentar abrir mi tarjeta';
+    }
+  }
+  $('#togglePassword').addEventListener('click', () => {
+    const input = $('#password'), visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    $('#togglePassword').textContent = visible ? 'Ocultar' : 'Ver';
+    input.focus();
+  });
+  $('#openAppButton').addEventListener('click', signInCreatedAccount);
+
+  async function validateInvite() {
+    if (!validCode(refCode)) throw new Error('Este enlace de invitación no es válido. Pedile a tu amigo que lo comparta nuevamente.');
+    const response = await fetch('/api/customer-login', { method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store', body:JSON.stringify({action:'invite-info', referralCode:refCode}) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok || !data.invite) throw new Error(data.error || 'No pudimos validar esta invitación.');
+    invite = data.invite;
+    renderInvite(invite);
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    hide($('#formError')); hide($('#formStatus')); hide($('#signinError'));
+    if (!invite || !validCode(refCode)) { show($('#formError'), 'La invitación todavía no se pudo validar. Recargá la página o pedile a tu amigo un enlace nuevo.'); return; }
+    const password = $('#password').value;
+    if (password.length < 6 || password.length > 128) { show($('#formError'), 'La contraseña debe tener entre 6 y 128 caracteres.'); $('#password').focus(); return; }
+
+    // If account creation succeeded but automatic sign-in was interrupted, retry sign-in only.
+    if (created) {
+      setBusy(true, 'Ingresando…');
+      await signInCreatedAccount();
+      setBusy(false);
+      return;
+    }
+
+    const fullName = $('#fullName').value.trim().replace(/\s+/g, ' ');
+    const whatsapp = $('#whatsapp').value.trim();
+    const approximateVisitDays = Number($('#visitDays').value);
+    if (fullName.split(' ').filter(Boolean).length < 2) { show($('#formError'), 'Ingresá tu nombre y apellido.'); $('#fullName').focus(); return; }
+    if (!whatsapp || whatsapp.replace(/\D/g, '').length < 10) { show($('#formError'), 'Ingresá un WhatsApp argentino completo, con característica.'); $('#whatsapp').focus(); return; }
+    if (!Number.isInteger(approximateVisitDays) || approximateVisitDays < 1 || approximateVisitDays > 365) { show($('#formError'), 'Elegí una frecuencia aproximada de 1 a 365 días.'); $('#visitDays').focus(); return; }
+
+    setBusy(true, 'Creando cuenta…');
+    try {
+      const response = await fetch('/api/customer-login', { method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store', body:JSON.stringify({action:'register', referralCode:refCode, fullName, whatsapp, approximateVisitDays, password}) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.email) throw new Error(data.error || 'No pudimos crear la cuenta. Probá nuevamente.');
+      createdEmail = data.email;
+      created = true;
+      try { sessionStorage.setItem('barberVipReferralCreatedEmail', JSON.stringify({ email: createdEmail, code: refCode })); } catch (_) {}
+      form.classList.add('hidden');
+      $('#createdPanel').classList.add('show');
+      await signInCreatedAccount();
+    } catch (error) {
+      console.error('Invite signup', error);
+      show($('#formError'), error.message || 'Ocurrió un error al registrarte. Probá nuevamente.');
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  (async () => {
+    try {
+      await validateInvite();
+      // If registration succeeded but auto-login was interrupted, let the same person finish safely.
+      try {
+        const savedPending = JSON.parse(sessionStorage.getItem('barberVipReferralCreatedEmail') || 'null');
+        if (savedPending && savedPending.code === refCode && savedPending.email) {
+          createdEmail = savedPending.email; created = true;
+          form.classList.remove('hidden'); $('#createdPanel').classList.remove('show');
+          ['fullName','whatsapp','visitDays'].forEach(id => { const field = $('#'+id)?.closest('.field'); if (field) field.classList.add('hidden'); });
+          $('#password').value = '';
+          button.textContent = 'Abrir mi tarjeta VIP ↗';
+          show($('#formStatus'), 'Tu cuenta ya fue creada. Ingresá la contraseña que elegiste para abrir tu tarjeta.');
+        }
+      } catch (_) {}
+    } catch (error) {
+      console.error('Invite validation', error);
+      show(pageError, error.message || 'Esta invitación no está disponible.');
+      form.classList.add('hidden');
+      $('#signupArea').insertAdjacentHTML('beforeend', '<p class="hint" style="margin-top:8px">Pedile a tu amigo que vuelva a abrir su Programa de afiliados y comparta una invitación nueva.</p>');
+    }
+  })();
+</script>
+</body>
+</html>

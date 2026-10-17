@@ -31,7 +31,10 @@ function invitationSummary(resolved) {
   return {
     referralCode: resolved.code,
     barberCode: String(resolved.barber.barberCode || ''),
-    barberName: text(resolved.barber.barberName || '', 100),
+    // The invite must identify the actual professional, not confuse them with the business/local name.
+    barberProfessionalName: text(resolved.barber.displayName || resolved.barber.professionalName || '', 100),
+    barberBusinessName: text(resolved.barber.barberName || '', 100),
+    barberName: text(resolved.barber.displayName || resolved.barber.professionalName || '', 100),
     referrerName: text(resolved.referrer.fullName || inviteNameFallback(resolved), 100)
   };
 }
@@ -140,7 +143,7 @@ module.exports = async function handler(req, res) {
         const customer = {
           uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp,
           approximateVisitDays: visitDays, cutStyle: '', conversationPreference: '',
-          totalCuts: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false,
+          totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false,
           active: true, referralCode: ownReferralCode,
           referredByCustomerId: referrerId || null, referredByName: referrerName || null,
           referralSourceCode: referralCode || null, referralFirstCutAt: null, referralBonusGrantedAt: null,

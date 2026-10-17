@@ -61,7 +61,7 @@ function defaultProgram(barber) {
 function programForCustomer(customer,barber){const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
 function normalizeRewards(program){return [...(Array.isArray(program.rewards)?program.rewards:[])].map(r=>({cut:Number(r.cut),discount:Number(r.discount),label:text(r.label,50)||`${Number(r.discount)}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>0&&Number.isInteger(r.discount)&&r.discount>0).sort((a,b)=>a.cut-b.cut);}
 module.exports = async function handler(req, res) {
-  if (!method(req, res, ['GET', 'POST'])) return;
+  if (!method(req, res, ['GET', 'POST', 'DELETE'])) return;
   try {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;
@@ -115,7 +115,36 @@ module.exports = async function handler(req, res) {
     }
 
     const data = body(req);
-    const action = text(data.action, 20);
+    const action = text(data.action, 30);
+
+    // A barbero can manually clear only the retained 60-day window. This never deletes customers,
+    // rewards or referral records. Large ranges are processed in bounded batches for Hobby deployments.
+    if (req.method === 'DELETE' || action === 'delete-history') {
+      const from = text(data.from, 10), to = text(data.to, 10);
+      if (!validDateInput(from) || !validDateInput(to)) return send(res, 400, { ok: false, error: 'Elegí fechas válidas para borrar el historial.' });
+      if (from > to) return send(res, 400, { ok: false, error: 'La fecha «Desde» no puede ser posterior a «Hasta».' });
+      const today = argentinaDateString();
+      const oldest = argentinaDateString(new Date(Date.now() - (RETENTION_DAYS - 1) * 86400000));
+      if (from < oldest || to > today) return send(res, 400, { ok: false, error: `Solo podés borrar registros del período conservado: desde ${oldest} hasta ${today}. El historial más antiguo se elimina automáticamente.` });
+      const rangeQuery = cutCollection
+        .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(startOfDay(from)))
+        .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(startOfDay(to))))
+        .orderBy('createdAt', 'asc');
+      let deleted = 0;
+      const maxDeletePerRequest = 2000;
+      while (deleted < maxDeletePerRequest) {
+        const snap = await rangeQuery.limit(Math.min(400, maxDeletePerRequest - deleted)).get();
+        if (snap.empty) break;
+        const batch = ctx.db.batch();
+        snap.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        deleted += snap.size;
+        if (snap.size < 400) break;
+      }
+      const remaining = await rangeQuery.limit(1).get();
+      return send(res, 200, { ok: true, deleted, hasMore: !remaining.empty, from, to, message: !remaining.empty ? 'Se borró un lote del historial. Quedan más registros en ese rango; podés continuar.' : 'Historial eliminado para el rango seleccionado.' });
+    }
+
     const currentBarber = (await barberRef.get()).data() || {};
     const subscriptionState = subscription(currentBarber);
     if (action === 'walk-in') {
@@ -136,20 +165,33 @@ module.exports = async function handler(req, res) {
       let resultCustomer = null;
       const cutRef = cutCollection.doc();
       await ctx.db.runTransaction(async transaction => {
-        const customerSnap = await transaction.get(customerRef);
+        const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
         if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
         const customer = customerSnap.data();
+        const freshBarber = barberSnap.exists ? barberSnap.data() : currentBarber;
         const hasReferral = Boolean(customer.referredByCustomerId) && customer.referredByCustomerId !== customerId;
-        const shouldProcessReferral = hasReferral && !customer.referralFirstCutAt && !customer.referralBonusGrantedAt;
+        const totalCuts = Number(customer.totalCuts || 0) + 1;
+        // Qualifying referral milestones count real registered visits, not credits the customer
+        // may have earned by inviting other people. Legacy profiles infer a base from known credits.
+        const knownCreditsReceived = Math.max(0, Number(customer.referralCreditsReceived || 0));
+        const actualCutsBefore = Number.isFinite(Number(customer.actualCutsRegistered))
+          ? Math.max(0, Number(customer.actualCutsRegistered))
+          : Math.max(0, Number(customer.totalCuts || 0) - knownCreditsReceived);
+        const actualCutsRegistered = actualCutsBefore + 1;
+        const referralMilestones = [...new Set((Array.isArray(freshBarber.referralRewardMilestones) ? freshBarber.referralRewardMilestones : [1, 4, 6])
+          .map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 100))].sort((a, b) => a - b);
+        const previouslyGranted = [...new Set((Array.isArray(customer.referralMilestonesGranted) ? customer.referralMilestonesGranted : []).map(Number).filter(Number.isInteger))];
+        // Compatibility with the old one-time first-cut program: never award milestone 1 twice.
+        if ((customer.referralFirstCutAt || customer.referralBonusGrantedAt) && actualCutsBefore >= 1 && !previouslyGranted.includes(1)) previouslyGranted.push(1);
+        const milestonesHit = hasReferral && referralMilestones.includes(actualCutsRegistered) && !previouslyGranted.includes(actualCutsRegistered) ? [actualCutsRegistered] : [];
         let referrerRef = null;
         let referrerSnap = null;
-        if (shouldProcessReferral) {
+        if (milestonesHit.length) {
           referrerRef = barberRef.collection('customers').doc(String(customer.referredByCustomerId));
           referrerSnap = await transaction.get(referrerRef);
         }
 
-        const totalCuts = Number(customer.totalCuts || 0) + 1;
-        const program = programForCustomer(customer, currentBarber);
+        const program = programForCustomer(customer, freshBarber);
         const rewards = normalizeRewards(program);
         if (!rewards.length) throw new Error('Este cliente no tiene un programa de premios válido. Revisá Configuración.');
         const cycleMax = Math.max(...rewards.map(r => r.cut));
@@ -163,43 +205,63 @@ module.exports = async function handler(req, res) {
         const rewardReady = availableRewards.length > 0;
         const now = admin().firestore.FieldValue.serverTimestamp();
         const customerUpdates = {
-          totalCuts, cycleCuts, cycleVersion: 2, availableRewards, rewardReady, lastCutAt: now,
+          totalCuts, actualCutsRegistered, cycleCuts, cycleVersion: 2, availableRewards, rewardReady, lastCutAt: now,
           reminderCount: 0, reminderStatus: null, reminderFollowUpUntil: null, reminderLastContactAt: null,
           remindersPaused: false, remindersPausedAt: null, updatedAt: now
         };
+        if (hasReferral) {
+          const nextGranted = [...new Set([...previouslyGranted, ...milestonesHit])].sort((a, b) => a - b);
+          customerUpdates.referralMilestonesGranted = nextGranted;
+          if (!customer.referralFirstCutAt) customerUpdates.referralFirstCutAt = now;
+          if (milestonesHit.length) {
+            customerUpdates.referralLastMilestoneAt = now;
+            customerUpdates.referralLastMilestone = totalCuts;
+          }
+        }
 
+        let referralCreditsGrantedNow = 0;
         let referralBonus = null;
-        if (shouldProcessReferral) {
-          customerUpdates.referralFirstCutAt = now;
+        if (milestonesHit.length) {
           if (referrerSnap && referrerSnap.exists && referrerSnap.data().active !== false) {
             const referrer = referrerSnap.data();
-            const refProgram = programForCustomer(referrer, currentBarber);
+            const refProgram = programForCustomer(referrer, freshBarber);
             const refRewards = normalizeRewards(refProgram);
             if (refRewards.length) {
-              const refCycleMax = Math.max(...refRewards.map(r => r.cut));
-              const refLegacyCount = Math.max(0, Number(referrer.totalCuts || 0)) % refCycleMax;
-              const refCycleBefore = referrer.cycleVersion === 2 ? Math.min(refCycleMax - 1, Math.max(0, Number(referrer.cycleCuts || 0))) : refLegacyCount;
-              const refCycleNext = refCycleBefore + 1;
-              const refEarned = refRewards.find(r => r.cut === refCycleNext);
-              const refAvailableRewards = Array.isArray(referrer.availableRewards) ? [...referrer.availableRewards] : [];
-              if (refEarned) refAvailableRewards.push({ ...refEarned, programId: refProgram.id, programName: refProgram.name || 'Programa de premios', earnedAt: new Date().toISOString(), rewardId: `referral-${cutRef.id}` });
+              let refTotalCuts = Math.max(0, Number(referrer.totalCuts || 0));
+              let refCycle = referrer.cycleVersion === 2 ? Math.min(Math.max(...refRewards.map(r => r.cut)) - 1, Math.max(0, Number(referrer.cycleCuts || 0))) : refTotalCuts % Math.max(...refRewards.map(r => r.cut));
+              let refAvailableRewards = Array.isArray(referrer.availableRewards) ? [...referrer.availableRewards] : [];
+              let lastReward = null;
+              for (const milestone of milestonesHit) {
+                refTotalCuts += 1;
+                const refCycleMax = Math.max(...refRewards.map(r => r.cut));
+                const refCycleNext = refCycle + 1;
+                const refEarned = refRewards.find(r => r.cut === refCycleNext);
+                if (refEarned) {
+                  lastReward = refEarned;
+                  refAvailableRewards.push({ ...refEarned, programId: refProgram.id, programName: refProgram.name || 'Programa de premios', earnedAt: new Date().toISOString(), rewardId: `referral-${cutRef.id}-${milestone}` });
+                }
+                refCycle = refCycleNext >= refCycleMax ? 0 : refCycleNext;
+              }
               transaction.update(referrerRef, {
-                totalCuts: Number(referrer.totalCuts || 0) + 1,
-                cycleCuts: refCycleNext >= refCycleMax ? 0 : refCycleNext,
+                totalCuts: refTotalCuts,
+                cycleCuts: refCycle,
                 cycleVersion: 2,
                 availableRewards: refAvailableRewards,
                 rewardReady: refAvailableRewards.length > 0,
-                referralCreditsReceived: Math.max(0, Number(referrer.referralCreditsReceived || 0)) + 1,
+                referralCreditsReceived: Math.max(0, Number(referrer.referralCreditsReceived || 0)) + milestonesHit.length,
                 updatedAt: now
               });
-              customerUpdates.referralBonusGrantedAt = now;
+              referralCreditsGrantedNow = milestonesHit.length;
+              customerUpdates.referralCreditsAwarded = Math.max(0, Number(customer.referralCreditsAwarded || 0)) + milestonesHit.length;
+              const oldCreditedMilestones = Array.isArray(customer.referralCreditedMilestones) ? customer.referralCreditedMilestones.map(Number).filter(Number.isInteger) : [];
+              customerUpdates.referralCreditedMilestones = [...new Set([...oldCreditedMilestones, ...milestonesHit])].sort((a, b) => a - b);
+              if (milestonesHit.includes(1)) customerUpdates.referralBonusGrantedAt = now; // legacy field retained for old UI/data
               customerUpdates.referralBonusStatus = 'credited';
-              referralBonus = { referrerCustomerId: referrerRef.id, rewardEarned: refEarned ? refEarned.label || `${refEarned.discount}% OFF` : null };
+              referralBonus = { granted: true, count: milestonesHit.length, milestone: totalCuts, rewardEarned: lastReward ? lastReward.label || `${lastReward.discount}% OFF` : null };
             } else {
               customerUpdates.referralBonusStatus = 'invalid-program';
             }
           } else {
-            // A first visit is the single qualifying event. An inactive/missing inviter doesn't earn a late credit.
             customerUpdates.referralBonusStatus = referrerSnap && referrerSnap.exists ? 'referrer-inactive' : 'referrer-unavailable';
           }
         }
@@ -208,16 +270,18 @@ module.exports = async function handler(req, res) {
         transaction.set(cutRef, {
           id: cutRef.id, customerId, customerName: text(customer.fullName || '', 100), createdAt: now,
           type: 'cut', cycleCut: cycleNext, cycleLength: cycleMax, rewardLabel: earned?.label || '',
-          programId: program.id, programName: program.name || ''
+          actualCutNumber: actualCutsRegistered,
+          programId: program.id, programName: program.name || '',
+          referralMilestonesHit: milestonesHit, referralCreditsGranted: referralCreditsGrantedNow
         });
         resultCustomer = {
-          ...customer, ...customerUpdates, totalCuts, cycleCuts, cycleVersion: 2,
+          ...customer, ...customerUpdates, totalCuts, actualCutsRegistered, cycleCuts, cycleVersion: 2,
           loyaltyProgramId: customer.loyaltyProgramId || program.id, availableRewards, rewardReady,
-          lastCutAt: new Date().toISOString(), referralBonus: referralBonus ? { granted: true } : null
+          lastCutAt: new Date().toISOString(), referralBonus: referralBonus ? { granted: true, count: referralBonus.count, milestone: referralBonus.milestone } : null
         };
       });
       const message = resultCustomer?.referralBonus?.granted
-        ? 'Corte registrado. También se acreditó el beneficio de referido a quien te invitó.'
+        ? `Corte registrado. Se acreditó ${resultCustomer.referralBonus.count} crédito${resultCustomer.referralBonus.count === 1 ? '' : 's'} a quien te invitó por alcanzar el hito de ${resultCustomer.referralBonus.milestone} corte${resultCustomer.referralBonus.milestone === 1 ? '' : 's'}.`
         : 'Corte registrado correctamente.';
       return send(res, 200, { ok: true, customer: resultCustomer, message });
     }

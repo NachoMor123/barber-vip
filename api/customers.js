@@ -2,6 +2,9 @@ const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 const crypto = require('crypto');
+const { newReferralCode, inviteRecord } = require('../lib/referrals');
+
+function currentReferralCode(value) { return /^[a-f0-9]{36}$/i.test(String(value || '')); }
 
 function validRequired(value, fallback, max = 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -32,22 +35,31 @@ module.exports = async function handler(req, res) {
 
       const uid = crypto.randomUUID();
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
+      const referralCode = newReferralCode();
       await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
       const now = admin().firestore.FieldValue.serverTimestamp();
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp,
         approximateVisitDays, cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
-        totalCuts: 0, cycleCuts: 0, availableRewards: [], rewardReady: false, active: true,
+        totalCuts: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false, active: true,
+        referralCode, referredByCustomerId: null, referredByName: null, referralFirstCutAt: null,
+        referralBonusGrantedAt: null, referralBonusStatus: null, referralCreditsReceived: 0,
         createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
       };
       try {
-        await customers.doc(uid).set(customer);
-        await database.collection('userProfiles').doc(uid).set({ uid, role: 'customer', barberUid: ctx.uid, createdAt: now });
+        const batch = database.batch();
+        batch.set(customers.doc(uid), customer);
+        batch.set(database.collection('userProfiles').doc(uid), { uid, role: 'customer', barberUid: ctx.uid, createdAt: now });
+        batch.set(database.collection('customerInvites').doc(referralCode), { ...inviteRecord(ctx.uid, uid, fullName), createdAt: now });
+        await batch.commit();
       } catch (error) {
+        await database.collection('barbers').doc(ctx.uid).collection('customers').doc(uid).delete().catch(() => {});
+        await database.collection('userProfiles').doc(uid).delete().catch(() => {});
+        await database.collection('customerInvites').doc(referralCode).delete().catch(() => {});
         await auth().deleteUser(uid).catch(() => {});
         throw error;
       }
-      return send(res, 201, { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } });
+      return send(res, 201, { ok: true, customer: { ...customer, referralCode, createdAt: new Date().toISOString() } });
     }
 
     if (req.method === 'PUT' && data.action === 'reminder-settings') {
@@ -121,6 +133,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      if (currentReferralCode(customerSnap.data().referralCode)) await database.collection('customerInvites').doc(customerSnap.data().referralCode).set({ active: false, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await database.collection('userProfiles').doc(customerId).set({ disabled: true, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
@@ -158,6 +171,12 @@ module.exports = async function handler(req, res) {
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
     }
     await customerRef.update(updates);
+    if (updates.active !== undefined && currentReferralCode(current.referralCode)) {
+      await database.collection('customerInvites').doc(current.referralCode).set({
+        active: Boolean(updates.active),
+        updatedAt: admin().firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
     const saved = await customerRef.get();
     return send(res, 200, { ok: true, customer: saved.data() });
   } catch (error) {

@@ -1,28 +1,30 @@
-# Barber VIP — actualización de interfaz y recordatorios
+# Barber VIP — referidos de clientes
 
-Aplicación web/PWA de fidelización para barberías. Incluye el panel del administrador y el cliente, Firebase Authentication/Firestore, Mercado Pago y 10 funciones API para Vercel Hobby.
+Aplicación web/PWA de fidelización para barberías. Esta versión suma un programa de invitaciones de cliente a cliente y conserva Firebase Authentication/Firestore, Mercado Pago, recordatorios, promociones, historial y PWA.
 
-## Estructura
+## Novedad principal: referidos
 
-- `index.html`: interfaz y lógica del navegador.
-- `api/`: 10 funciones serverless. No agregues copias de endpoints viejos.
-- `lib/`: validación, acceso a Firebase Admin y helpers compartidos.
-- `assets/`, `manifest.webmanifest`, `sw.js`: iconos e instalación PWA. El caché se versionó como `barber-vip-shell-v14` para distribuir esta actualización.
-- `firestore.rules`: referencia de reglas. Conservá las reglas activas ya verificadas salvo que una migración concreta lo requiera.
+- Cada cliente activo obtiene un enlace personal con un token aleatorio de 36 caracteres hexadecimales. El token identifica al cliente que invita y a su barbería; no contiene el nombre ni el UID.
+- En el panel del cliente aparecen las personas registradas desde su invitación, créditos ganados y estados de seguimiento.
+- La persona invitada abre el enlace, instala/abre la PWA y se registra con nombre y apellido, WhatsApp, frecuencia aproximada y contraseña. La barbería y el cliente que invita se fijan a partir de la invitación; el usuario no puede cambiarlos en el formulario.
+- También puede registrarse sin referido usando el código general de la barbería. Ese camino no genera crédito de invitación.
+- El nuevo cliente se crea en Firebase Authentication y Firestore, y aparece en el panel del barbero como los demás clientes.
+- El primer corte que el barbero registre para el referido otorga al invitador un único crédito de corte para su ciclo. No crea una visita ficticia en el historial del local ni suma una visita física a las estadísticas mensuales. Los siguientes cortes del referido no vuelven a otorgar créditos.
+- Un referido no recibe doble crédito por el mismo primer corte: la marca y el crédito se aplican en una transacción de Firestore.
+- Para reducir abuso, el backend limita registros desde una misma conexión a 15 por hora por barbería y evita crear un nuevo referido si ya hay un perfil con el mismo WhatsApp normalizado en esa barbería. Sin verificación de correo o teléfono no se puede demostrar que una persona sea dueña del número o impedir por completo que alguien use datos ajenos; este límite solo reduce el abuso.
+- Los códigos de invitación y límites se crean automáticamente mediante Firebase Admin. No tenés que crear manualmente colecciones ni modificar las reglas de Firestore para ello. Las reglas de cliente siguen bloqueando acceso directo a colecciones privadas.
 
-## Cambios de esta entrega
+## Estructura del proyecto
 
-- Los botones de acción principal de Inicio, Clientes, Recordatorios y Promociones van debajo del encabezado, centrados y a todo el ancho útil en escritorio y celular.
-- Los paneles tienen fondos casi negros y bordes azul eléctrico algo más visibles. La navegación inferior sigue el tema oscuro. Se oculta la etiqueta pequeña de estado junto al nombre solo en la lista general de Clientes; los estados y etiquetas de Recordatorios se conservan.
-- Los formularios para crear clientes usan nombres de campo no convencionales por instancia, señuelos fuera de pantalla, `autocomplete="off"`/`new-password` y campos de texto que se habilitan al enfocarlos para reducir sugerencias. Los navegadores, teclados y gestores de contraseñas externos pueden ignorar estas indicaciones, por lo que no es posible garantizar que nunca aparezca una sugerencia.
-- La instalación PWA bloquea el acceso en una pestaña normal. Cuando la instalación termina, la pantalla instruye al usuario a cerrar la pestaña y abrir el ícono instalado. Una web no puede forzar que un enlace de la pestaña active la ventana PWA instalada en todos los navegadores; el modo app se reconoce al entrar desde el ícono (`display-mode: standalone`).
-- El botón «Ver instrucciones de apertura» funciona también si el navegador no emite `appinstalled`. Mientras la puerta de instalación está activa, el contenido principal queda inerte, se bloquea el desplazamiento y se retiene el foco dentro del diálogo. La marca de instalación se conserva en `localStorage` para que, al volver a una pestaña normal, la pantalla siga explicando cómo abrir el ícono.
-- Se agregó la opción de pausar/reactivar recordatorios. Pausar retira al cliente de las listas Por contactar/Seguimiento, pero el cliente permanece activo en Clientes y sus datos/historial no se borran. Un nuevo corte reactiva el ciclo de recordatorios.
-- No se añadieron funciones API; el total sigue en 10, por debajo del límite de 12 funciones serverless del plan Hobby.
+- `index.html`: interfaz del administrador y del cliente.
+- `api/`: 10 funciones serverless. No dupliques ni agregues funciones antiguas: Vercel Hobby permite hasta 12 funciones por despliegue.
+- `lib/`: Firebase Admin, autenticación, utilidades HTTP y lógica de invitaciones.
+- `assets/`, `manifest.webmanifest`, `sw.js`: iconos e instalación PWA. El caché se actualizó a `barber-vip-shell-v15`.
+- `firestore.rules`: reglas de referencia; no es necesario reemplazarlas si ya tenés las reglas equivalentes activas.
 
 ## Variables de entorno
 
-Conservá las variables que ya funcionan en Vercel, por ejemplo:
+No se agregan variables nuevas. Conservá las que ya usa la aplicación:
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`
 - `APP_URL`
@@ -31,23 +33,24 @@ Conservá las variables que ya funcionan en Vercel, por ejemplo:
 - `SUBSCRIPTION_PRICE_ARS`
 - `CRON_SECRET`
 
-La aplicación no usa `RESEND_API_KEY` ni `EMAIL_FROM`; se pueden eliminar si se habían configurado para una versión anterior.
+`RESEND_API_KEY` y `EMAIL_FROM` no se utilizan en esta versión y se pueden eliminar si solo se habían añadido para una versión antigua.
 
-## Instalación y despliegue
+## Actualización segura en GitHub/Vercel
 
-1. Guardá una copia de seguridad del repositorio desplegado.
-2. Descomprimí el ZIP y subí el contenido, no el ZIP, a la raíz del repositorio.
-3. `index.html`, `vercel.json`, `package.json`, `api/`, `lib/` y `assets/` deben estar al mismo nivel.
-4. No dejes funciones JavaScript duplicadas/obsoletas dentro de `api/`.
-5. Hacé commit y comprobá que Vercel construya el nuevo commit de `main`.
+1. Descargá este ZIP y guardá una copia de seguridad del repositorio que funciona.
+2. Descomprimí el ZIP en tu computadora. Subí el **contenido** extraído a la raíz del repositorio, no el ZIP como archivo.
+3. `index.html`, `vercel.json`, `package.json`, `api/`, `lib/` y `assets/` deben quedar al mismo nivel.
+4. Eliminá funciones `.js` antiguas que ya no correspondan dentro de `api/`. Deben quedar exactamente las 10 de este paquete.
+5. Guardá un commit nuevo y confirmá que Vercel despliegue ese commit de la rama correcta.
 
 ## Pruebas recomendadas
 
-- Probar ancho y centrado de las acciones principales en móvil y escritorio.
-- En Clientes, confirmar que no aparezca la etiqueta de estado junto al nombre; en Recordatorios, verificar que siga apareciendo la información relevante.
-- Crear un cliente en Android y comprobar si el teclado/gestor sigue sugiriendo datos (el HTML no puede controlar completamente el teclado del sistema).
-- En navegador, validar que la app quede bloqueada hasta instalarla, que «Ver instrucciones de apertura» funcione y que abrir el ícono instalado entre en modo standalone.
-- Pausar un cliente, verificar que siga visible en Clientes y que no figure en Recordatorios; después reactivarlo o registrar un nuevo corte.
-- Probar con cuentas de prueba los cortes, promociones, suscripción y limpieza de historial.
+1. Ingresá con un cliente ya existente, copiá su enlace personal y abrilo en una ventana privada o en otro dispositivo.
+2. Completá el registro del referido. Debe aparecer en Clientes del barbero y la invitación debe quedar asociada al cliente que compartió el enlace.
+3. Antes de sumar un corte, confirmá que el invitador todavía no recibió el crédito.
+4. Desde el administrador, registrá el primer corte del referido. El ciclo del invitador debe avanzar un crédito, pero el historial físico y el contador de cortes del mes deben sumar solo el corte real del referido.
+5. Registrá un segundo corte del referido: no debe volver a otorgarse crédito de invitación.
+6. Probá copiar/compartir el enlace, un código general de barbería sin referido, un WhatsApp ya usado en la barbería y varios intentos de registro rápidos.
+7. Verificá Inicio, Clientes, Recordatorios, Promociones, pago y limpieza del historial.
 
-La sintaxis local y la estructura se verifican por separado; eso no sustituye una prueba completa contra Firebase y Mercado Pago del usuario.
+La sintaxis JavaScript/JSON y la estructura del paquete se verifican localmente; eso no sustituye una prueba de extremo a extremo con tu Firebase y Mercado Pago reales.

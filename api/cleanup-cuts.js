@@ -27,7 +27,19 @@ module.exports = async function handler(req, res) {
       deleted += snap.size;
       if (snap.size < BATCH_SIZE) break;
     }
-    return send(res, 200, { ok: true, deleted, retentionDays: RETENTION_DAYS });
+    // Signup rate-limit records store only a hashed IP key. They are operational data and expire quickly.
+    const limitsCutoff = admin().firestore.Timestamp.fromDate(new Date(Date.now() - 2 * 86400000));
+    let rateLimitDocsDeleted = 0;
+    for (let i = 0; i < 5; i++) {
+      const staleLimits = await db().collection('customerSignupLimits').where('updatedAt', '<', limitsCutoff).orderBy('updatedAt', 'asc').limit(BATCH_SIZE).get();
+      if (staleLimits.empty) break;
+      const batch = admin().firestore().batch();
+      staleLimits.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      rateLimitDocsDeleted += staleLimits.size;
+      if (staleLimits.size < BATCH_SIZE) break;
+    }
+    return send(res, 200, { ok: true, deleted, rateLimitDocsDeleted, retentionDays: RETENTION_DAYS, signupRateLimitRetentionDays: 2 });
   } catch (error) {
     console.error('cleanup cuts error', error);
     return send(res, 500, { ok: false, error: 'No se pudo limpiar el historial antiguo.' });

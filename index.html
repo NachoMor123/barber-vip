@@ -263,6 +263,27 @@
     @media(max-width:520px){.main-area{background:transparent!important}.main-area .page-head .page-actions .btn{min-height:47px}.pip-fab{min-height:32px;padding:6px 9px}.customer-pip-fab{bottom:12px}.pip-topic-grid{grid-template-columns:1fr}.tour-card{padding:16px}.tour-card h2{font-size:19px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 
+
+    /* Referral program: compact, high-contrast, theme-consistent client panel. */
+    .referral-program-card{position:relative;isolation:isolate;overflow:hidden;margin:18px 0;padding:22px;border:1px solid rgba(58,125,255,.68);border-radius:22px;background:linear-gradient(145deg,#050a15 0%,#03060e 100%);box-shadow:inset 0 1px rgba(255,255,255,.035),0 16px 36px rgba(0,0,0,.4),0 0 23px rgba(42,111,255,.11)}
+    .referral-program-card:before{content:"";position:absolute;z-index:-1;inset:0 0 auto;height:2px;background:linear-gradient(90deg,transparent,#3788ff,#91d0ff,transparent);opacity:.95}
+    .referral-program-card h2{margin:8px 0 9px;font-size:clamp(19px,3vw,25px);letter-spacing:-.04em;color:#f2f7ff}
+    .referral-program-card p{margin:0;color:#b6c5df;font-size:12px;line-height:1.7;max-width:720px}
+    .referral-program-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:17px}
+    .referral-program-actions .btn{width:100%;min-height:46px}
+    .referral-program-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:17px}
+    .referral-stat{min-width:0;padding:12px;border:1px solid rgba(58,125,255,.35);border-radius:14px;background:#040914}
+    .referral-stat strong{display:block;color:#eef5ff;font-size:22px;line-height:1.15}
+    .referral-stat span{display:block;margin-top:5px;font-size:10px;color:#8fa8d1;line-height:1.4}
+    .referral-list{display:grid;gap:8px;margin-top:15px}
+    .referral-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid rgba(58,125,255,.26);border-radius:13px;background:#030711}
+    .referral-list-row strong{display:block;font-size:12px;color:#edf4ff;overflow-wrap:anywhere}
+    .referral-list-row small{display:block;margin-top:4px;font-size:10px;color:#91a5c5}
+    .referral-status{flex-shrink:0;max-width:46%;font-size:10px;font-weight:800;color:#9dc6ff;text-align:right}
+    .customer-signup-note{padding:13px 14px;border:1px solid rgba(54,126,255,.4);border-radius:14px;background:#050b18;color:#bdd1f3;font-size:11px;line-height:1.6;margin:14px 0}
+    .customer-signup-form .form-field input{autocomplete:off}
+    @media(max-width:540px){.referral-program-card{padding:17px;border-radius:18px}.referral-program-actions{grid-template-columns:1fr}.referral-program-stats{gap:6px}.referral-stat{padding:10px 8px}.referral-stat strong{font-size:19px}.referral-stat span{font-size:9px}.referral-status{font-size:9px}}
+
   </style>
 
   <style id="barber-vip-polish-v2">
@@ -377,7 +398,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], history:[], promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], referrals:[], referralCount:0, pendingCustomerReferral:'', history:[], promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -412,6 +433,24 @@
     const CYCLE_REWARDS = DEFAULT_LOYALTY_PROGRAM.rewards;
     const SUBSCRIPTION_PRICE_ARS = 2500; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
     const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
+    const REFERRAL_STORAGE_KEY = 'barberVipPendingReferral';
+    function validReferralToken(value){return /^[a-f0-9]{36}$/i.test(String(value||''));}
+    function getPendingReferralCode(){
+      const url=new URL(window.location.href);const fromUrl=url.searchParams.get('ref');
+      if(validReferralToken(fromUrl)){try{localStorage.setItem(REFERRAL_STORAGE_KEY,fromUrl.toLowerCase());}catch(_){}return fromUrl.toLowerCase();}
+      try{const saved=localStorage.getItem(REFERRAL_STORAGE_KEY)||'';return validReferralToken(saved)?saved.toLowerCase():'';}catch(_){return '';}
+    }
+    function clearPendingReferral(){
+      try{localStorage.removeItem(REFERRAL_STORAGE_KEY);}catch(_){}
+      const url=new URL(window.location.href);url.searchParams.delete('ref');
+      history.replaceState({},'',url.pathname+(url.search||'')+(url.hash||''));
+      state.pendingCustomerReferral='';
+    }
+    function customerReferralUrl(){
+      const code=state.customer?.referralCode;
+      if(!validReferralToken(code))throw new Error('Todavía estamos preparando tu enlace personal. Volvé a entrar en unos segundos.');
+      const url=new URL(CUSTOMER_APP_URL);url.searchParams.set('ref',String(code).toLowerCase());return url.toString();
+    }
     const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
     function greetingForNow(){const h=new Date().getHours();return h>=5&&h<12?'Buen día':h>=12&&h<20?'Buenas tardes':'Buenas noches';}
     const nameInitials = name => String(name||'BV').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'BV';
@@ -438,11 +477,13 @@
       return data;
     };
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; };
-    const cleanupContext = () => { clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.referrals=[]; state.referralCount=0; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✂</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
     function renderLanding() {
+      const referralCode=getPendingReferralCode();
+      if(referralCode){ state.pendingCustomerReferral=referralCode; void renderCustomerSignup(referralCode); maybeShowInstallPrompt(); return; }
       appRoot.innerHTML = `<main class="landing"><div class="landing-top">${brand}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Una experiencia VIP para cada corte</span></div><h1>Tu estilo.<br><span>Tu recompensa.</span></h1><div class="hero-points"><span><b>✓</b> Seguimiento de visitas</span><span><b>✓</b> Premios automáticos</span><span><b>✓</b> Contacto directo</span></div></div><div class="choice-panel"><div class="choice-top"><div><h2>Bienvenido a Barber VIP</h2><p>¿Cómo querés ingresar?</p></div><div class="choice-icon">✂</div></div><button class="role-choice" data-action="choose-login" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Soy administrador</strong><small>Gestioná clientes, visitas y promociones.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-login" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Soy cliente</strong><small>Consultá tus cortes y beneficios.</small></span><span class="role-arrow">↗</span></button><div class="choice-foot">🔒 Acceso privado para cada barbero y sus clientes.</div>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>`:''}</div></section><footer class="landing-footer"><span>© 2026 Barber VIP · Tu próxima visita cuenta.</span></footer></main>`;
       maybeShowInstallPrompt();
     }
@@ -454,8 +495,30 @@
       const fields = customer
         ? `<div class="form-field"><label for="barberCode">Código de barbería</label><input id="barberCode" name="barberCode" placeholder="Ej. A1B2C3D4" autocomplete="off" data-lpignore="true" data-1p-ignore="true" autocapitalize="characters" required maxlength="16"></div><div class="form-field"><label for="username">Nombre y apellido</label><input id="username" name="username" placeholder="Ej. Joaquín Ortiz" autocomplete="off" autocapitalize="words" data-lpignore="true" data-1p-ignore="true" required></div>`
         : `${signup ? `<div class="form-field"><label for="signupName">Tu nombre</label><input id="signupName" name="displayName" placeholder="Ej. Santiago" maxlength="80" autocomplete="name" required></div>` : ''}<div class="form-field"><label for="email">Correo electrónico</label><input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="${signup?'email':'username'}" autocapitalize="off" spellcheck="false" required></div>`;
-      appRoot.innerHTML = `<main class="login-wrap"><section class="login-card"><button class="link-button" data-action="go-home">← Volver</button>${brand}<div class="login-role-pill">${signup?'✨ PRUEBA GRATIS · 15 DÍAS':customer?'✦ ACCESO DE CLIENTE':'✂ ACCESO PROFESIONAL'}</div><h1>${signup?'Creá tu cuenta':customer?'Tu espacio VIP':'Panel de administrador'}</h1><p>${signup?'Creá tu cuenta con tu nombre, correo y contraseña. No enviamos correos ni enlaces de verificación; la prueba comienza al terminar el registro.':customer?'Ingresá el código de tu barbería, tu nombre y la contraseña que te compartió tu barbero.':'Ingresá con el correo y la contraseña de tu cuenta.'}</p><form id="loginForm" data-mode="${signup?'barber-signup':mode}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other">${fields}<div class="form-field"><label for="accessSecret">Contraseña</label><div class="password-control"><input id="accessSecret" name="${signup?'barberNewPassword':'barberLoginPassword'}" type="password" autocomplete="${signup?'new-password':'current-password'}" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${signup?'Mínimo 8 caracteres':customer?'La contraseña que te dieron':'Tu contraseña'}" minlength="${signup?'8':'6'}" required><button type="button" class="password-visibility" data-action="toggle-password" data-target="accessSecret" aria-label="Mostrar contraseña">Ver</button></div>${signup?'<span class="field-hint">Usá un correo con formato válido. Guardá tu contraseña: no hay recuperación automática.</span>':''}</div><button class="btn btn-primary btn-block" type="submit">${signup?'Crear cuenta · 15 días gratis':'Ingresar'} <span>↗</span></button></form><div class="login-divider"></div>${barber&&!signup?`<div class="login-links"><p class="tiny" style="margin:0">¿Primera vez en Barber VIP? <button class="text-link" type="button" data-action="start-signup">Crear cuenta · 15 días gratis</button></p></div>`:signup?`<p class="tiny" style="margin:0">¿Ya tenés cuenta? <button class="text-link" type="button" data-action="back-to-login">Iniciar sesión</button></p>`:`<p class="tiny muted" style="margin:0">¿No podés entrar? Revisá el código de tu barbería y consultá a tu barbero.</p>`}</section></main>`;
+      const footer = barber&&!signup
+        ? `<div class="login-links"><p class="tiny" style="margin:0">¿Primera vez en Barber VIP? <button class="text-link" type="button" data-action="start-signup">Crear cuenta · 15 días gratis</button></p></div>`
+        : signup
+          ? `<p class="tiny" style="margin:0">¿Ya tenés cuenta? <button class="text-link" type="button" data-action="back-to-login">Iniciar sesión</button></p>`
+          : `<div class="login-links"><p class="tiny" style="margin:0 0 7px">¿Todavía no tenés cuenta en esta barbería?</p><button class="btn btn-primary btn-block" type="button" data-action="start-customer-signup">Crear mi cuenta de cliente</button><p class="field-hint">Si te invitaron con un enlace personal, abrilo para que quede asociado quien te recomendó.</p></div>`;
+      appRoot.innerHTML = `<main class="login-wrap"><section class="login-card"><button class="link-button" data-action="go-home">← Volver</button>${brand}<div class="login-role-pill">${signup?'✨ PRUEBA GRATIS · 15 DÍAS':customer?'✦ ACCESO DE CLIENTE':'✂ ACCESO PROFESIONAL'}</div><h1>${signup?'Creá tu cuenta':customer?'Tu espacio VIP':'Panel de administrador'}</h1><p>${signup?'Creá tu cuenta con tu nombre, correo y contraseña. No enviamos correos ni enlaces de verificación; la prueba comienza al terminar el registro.':customer?'Ingresá el código de tu barbería, tu nombre y la contraseña que te compartió tu barbero.':'Ingresá con el correo y la contraseña de tu cuenta.'}</p><form id="loginForm" data-mode="${signup?'barber-signup':mode}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other">${fields}<div class="form-field"><label for="accessSecret">Contraseña</label><div class="password-control"><input id="accessSecret" name="${signup?'barberNewPassword':'barberLoginPassword'}" type="password" autocomplete="${signup?'new-password':'current-password'}" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${signup?'Mínimo 8 caracteres':customer?'Tu contraseña':'Tu contraseña'}" minlength="${signup?'8':'6'}" required><button type="button" class="password-visibility" data-action="toggle-password" data-target="accessSecret" aria-label="Mostrar contraseña">Ver</button></div>${signup?'<span class="field-hint">Usá un correo con formato válido. Guardá tu contraseña: no hay recuperación automática.</span>':''}</div><button class="btn btn-primary btn-block" type="submit">${signup?'Crear cuenta · 15 días gratis':'Ingresar'} <span>↗</span></button></form><div class="login-divider"></div>${footer}</section></main>`;
     }
+
+    async function renderCustomerSignup(rawReferralCode='') {
+      const referralCode=validReferralToken(rawReferralCode)?String(rawReferralCode).toLowerCase():'';
+      state.pendingCustomerReferral=referralCode;
+      let invite=null;
+      if(referralCode){
+        appRoot.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="loading-symbol">✂</div><h1>Validando invitación…</h1><p>Estamos comprobando quién te invitó y a qué barbería pertenece el enlace.</p></section></main>`;
+        try{const data=await api('/api/customer-login',{method:'POST',body:JSON.stringify({action:'invite-info',referralCode})});invite=data.invite;}
+        catch(error){appRoot.innerHTML=`<main class="login-wrap"><section class="login-card"><button class="link-button" data-action="cancel-customer-signup">← Volver</button>${brand}<span class="login-role-pill">🎁 INVITACIÓN VIP</span><h1>El enlace no está disponible</h1><p>${escapeHtml(error.message||'No pudimos validar esta invitación.')}</p><div class="modal-footer"><button class="btn btn-ghost" data-action="signup-without-referral">Registrarme con código</button><button class="btn btn-primary" data-action="start-customer-login">Ya tengo cuenta</button></div></section></main>`;return;}
+      }
+      const inviteSummary=invite?`<div class="customer-signup-note"><strong>🎁 Invitación vinculada</strong><br>Te invitó <strong>${escapeHtml(invite.referrerName)}</strong> para sumarte a <strong>${escapeHtml(invite.barberName||'esta barbería')}</strong> (código ${escapeHtml(invite.barberCode||'—')}). No se puede cambiar el vínculo después de crear la cuenta. Cuando registres tu primer corte, quien te invitó recibe un crédito de corte una sola vez.</div>`:'';
+      const barberCodeField=invite
+        ? `<input type="hidden" name="barberCode" value="${escapeHtml(invite.barberCode||'')}"><input type="hidden" name="referralCode" value="${escapeHtml(referralCode)}">`
+        : `<div class="form-field"><label for="customerSignupBarberCode">Código de barbería *</label><input id="customerSignupBarberCode" name="barberCode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="Ej. A1B2C3D4" required></div><div class="customer-signup-note">💡 Si te invitó un cliente y querés que reciba el beneficio, abrí su enlace personal antes de registrarte. El código general no vincula una recomendación.</div>`;
+      appRoot.innerHTML=`<main class="login-wrap"><section class="login-card customer-signup-form"><button class="link-button" data-action="cancel-customer-signup">← Volver</button>${brand}<div class="login-role-pill">${invite?'🎁 INVITACIÓN DE UN AMIGO':'✦ NUEVA CUENTA DE CLIENTE'}</div><h1>Creá tu espacio VIP</h1><p>Registrate una sola vez para ver tus cortes, premios y promociones de tu barbero.</p>${inviteSummary}<form id="customerSignupForm" data-referral="${escapeHtml(referralCode)}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other"><div class="autofill-decoys" aria-hidden="true"><input type="text" name="account_username_fake" autocomplete="username" tabindex="-1"><input type="password" name="account_password_fake" autocomplete="current-password" tabindex="-1"></div>${barberCodeField}<div class="form-field"><label for="selfCustomerName">Nombre y apellido *</label><input id="selfCustomerName" name="fullName" placeholder="Ej. Franco Cardozo" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" maxlength="100" required></div><div class="form-field"><label for="selfCustomerWhatsapp">WhatsApp argentino *</label><input id="selfCustomerWhatsapp" name="whatsapp" type="tel" inputmode="tel" placeholder="5492611234567" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" required></div><div class="form-field"><label for="selfCustomerFrequency">¿Cada cuántos días te cortás aproximadamente? *</label><input id="selfCustomerFrequency" name="approximateVisitDays" type="number" min="1" max="365" value="15" required><span class="field-hint">Esto ayuda a que el barbero recuerde contactarte en el momento adecuado.</span></div><div class="form-field"><label for="selfCustomerPassword">Creá tu contraseña *</label><div class="password-control"><input id="selfCustomerPassword" name="password" type="password" minlength="6" maxlength="128" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" placeholder="Mínimo 6 caracteres" required><button type="button" class="password-visibility" data-action="toggle-password" data-target="selfCustomerPassword" aria-label="Mostrar contraseña">Ver</button></div></div><button class="btn btn-primary btn-block" type="submit">Crear mi cuenta ↗</button></form><div class="login-divider"></div><p class="tiny" style="margin:0">¿Ya tenés cuenta? <button class="text-link" type="button" data-action="start-customer-login">Iniciar sesión</button></p></section></main>`;
+    }
+
 
         function openLogoutConfirmation(){
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card logout-confirm-card" role="dialog" aria-modal="true" aria-labelledby="logoutConfirmTitle"><div class="confirm-logout-icon">↪</div><h2 id="logoutConfirmTitle">¿Cerrar sesión?</h2><p class="muted">Vas a salir de tu cuenta de Barber VIP. Tus datos guardados no se modifican.</p><div class="modal-footer"><button class="btn btn-ghost" data-action="cancel-logout">Seguir en la app</button><button class="btn btn-danger" data-action="confirm-logout">Sí, salir</button></div></section></div>`;
@@ -608,6 +671,18 @@
     }
     function navItem(section,icon,label,badge='') { return `<button class="nav-btn ${state.section===section?'active':''}" data-action="nav" data-section="${section}"><span class="nav-ico">${icon}</span><span>${label}</span>${badge?`<span class="nav-badge">${badge}</span>`:''}</button>`; }
 
+    function renderCustomerReferralPanel(){
+      const referrals=Array.isArray(state.referrals)?state.referrals:[];
+      const total=Math.max(Number(state.referralCount)||0,referrals.length);
+      const credits=Math.max(0,Number(state.customer?.referralCreditsReceived)||referrals.filter(r=>r.bonusGranted).length);
+      const waiting=referrals.filter(r=>r.active!==false&&!r.firstCut).length;
+      const rows=referrals.slice(0,12).map(r=>{
+        const status=r.bonusGranted?'🎉 Crédito de corte acreditado':r.firstCut?'Primer corte registrado':r.active===false?'Cuenta inactiva':'⏳ Esperando su primer corte';
+        return `<div class="referral-list-row"><div><strong>${escapeHtml(r.fullName||'Cliente invitado')}</strong><small>${r.createdAt?`Se registró ${escapeHtml(dateLabel(r.createdAt))}`:'Invitación registrada'}</small></div><span class="referral-status">${status}</span></div>`;
+      }).join('');
+      return `<section class="referral-program-card"><span class="eyebrow">🎁 PROGRAMA DE REFERIDOS</span><h2>Invitá a un amigo. Sumá un corte.</h2><p>Compartí tu enlace personal. Cuando tu amigo se registre y el barbero le registre su primer corte, recibís <strong>un crédito de corte</strong> para tu ciclo. Se acredita una sola vez por persona, sin sumar visitas falsas al historial del local.</p><div class="referral-program-stats"><div class="referral-stat"><strong>${total}</strong><span>Personas registradas</span></div><div class="referral-stat"><strong>${credits}</strong><span>Créditos ganados</span></div><div class="referral-stat"><strong>${waiting}</strong><span>Esperando primer corte</span></div></div><div class="referral-program-actions"><button class="btn btn-primary" data-action="share-referral">↗ Compartir mi invitación</button><button class="btn btn-soft" data-action="copy-referral">⧉ Copiar enlace personal</button></div>${rows?`<div class="referral-list"><div class="eyebrow">ACTIVIDAD RECIENTE</div>${rows}</div>`:`<div class="customer-signup-note">Todavía no hay referidos. Compartí tu enlace con un amigo; el beneficio se acredita cuando haga su primer corte registrado.</div>`}</section>`;
+    }
+
     function customerNavigation(){return `<nav class="customer-nav"><button class="customer-nav-btn ${state.customerSection==='home'?'active':''}" data-action="customer-section" data-section="home"><span>⌂</span>Inicio</button><button class="customer-nav-btn ${state.customerSection==='barber'?'active':''}" data-action="customer-section" data-section="barber"><span>✂</span>Datos de tu barbero</button></nav>`;}
     function renderCustomer() {
       const c=state.customer||{}, b=state.barber||{}, count=cycleCount(c), rewards=rewardsForCustomer(c), max=cycleLength(c), ready=availableRewards(c), next=nextCycleReward(c), left=Math.max(0,next.cut-count), pct=Math.min(100,count/max*100), adminName=b.displayName||'Tu barbero', last=c.lastCutAt?relativeTime(c.lastCutAt):'Todavía no registraste un corte';
@@ -620,7 +695,7 @@
       const milestones=rewards.map(r=>`<div class="milestone ${count>=r.cut?'reached':''} ${ready.some(x=>Number(x.cut)===r.cut)?'unlocked':''}"><span class="milestone-cut">Corte ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${ready.some(x=>Number(x.cut)===r.cut)?'Disponible':count>=r.cut?'Completado':'Por desbloquear'}</small></div>`).join('');
       const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${p.endsAt?`<div class="customer-promo-countdown-wrap"><small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown customer-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong></div>`:''}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuentos disponibles</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · corte ${Number(r.cut||'')}</span>`).join('')}</div><small>Mostrale esta pantalla al barbero al momento de canjear.</small></div>`:'';
-      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu barbero.</p></section>${customerNavigation()}<div class="grid client-metrics">${metricCard('Cortes totales',Number(c.totalCuts||0),'✂','Desde tu primera visita')}${metricCard('Última visita',c.lastCutAt?(daysBetween(c.lastCutAt)===0?'Hoy':`${daysBetween(c.lastCutAt)} d`):'—','◷',escapeHtml(last))}${metricCard('Ciclo actual',`${count}/${max}`,'✦',`${left} para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">TU PRÓXIMO DESCUENTO</div><h2>${escapeHtml(next.label)}</h2><p>${left===0?'¡Descuento desbloqueado!':`Te ${left===1?'falta':'faltan'} ${left} corte${left===1?'':'s'} para conseguirlo.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${count} de ${max} cortes del ciclo</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div><button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button></main>`;
+      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu barbero.</p></section>${customerNavigation()}<div class="grid client-metrics">${metricCard('Cortes totales',Number(c.totalCuts||0),'✂','Desde tu primera visita')}${metricCard('Última visita',c.lastCutAt?(daysBetween(c.lastCutAt)===0?'Hoy':`${daysBetween(c.lastCutAt)} d`):'—','◷',escapeHtml(last))}${metricCard('Ciclo actual',`${count}/${max}`,'✦',`${left} para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">TU PRÓXIMO DESCUENTO</div><h2>${escapeHtml(next.label)}</h2><p>${left===0?'¡Descuento desbloqueado!':`Te ${left===1?'falta':'faltan'} ${left} corte${left===1?'':'s'} para conseguirlo.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${count} de ${max} cortes del ciclo</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}${renderCustomerReferralPanel()}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div><button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button></main>`;
     }
     function refreshReminderClock(){
       if(state.role!=='barber'||state.section!=='reminders')return;
@@ -669,7 +744,7 @@
         state.unsubscribers.push(onSnapshot(clientsRef,snap=>{state.customers=snap.docs.map(d=>({uid:d.id,...d.data()})); if(state.role==='barber')renderApp();},err=>{console.error(err);toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');}));
         renderApp(); await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
       } else {
-        state.customer=me.customer; state.barber=me.barber; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
+        state.customer=me.customer; state.barber=me.barber; state.referrals=Array.isArray(me.referrals)?me.referrals:[]; state.referralCount=Number(me.referralCount)||state.referrals.length; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{if(snap.exists()){state.customer={uid:snap.id,...snap.data()};renderApp();}},err=>console.warn('customer snapshot',err)));
@@ -837,6 +912,7 @@
     ];
     const PIP_TOPICS_CUSTOMER = [
       ['card','💈 Mi tarjeta','Los cortes registrados se reflejan en el progreso del ciclo de tu barbero.'],
+      ['referrals','🎁 Invitar amigos','Compartí tu enlace personal. Cuando un amigo se registre con él y el barbero registre su primer corte, recibís un crédito de corte una sola vez por esa persona.'],
       ['loyalty','🎁 Premios','La tarjeta muestra el próximo descuento y los beneficios disponibles para canjear.'],
       ['promos','🔥 Promociones','Las ofertas activas aparecen en Inicio con su cronómetro de vigencia.'],
       ['barber','📍 Datos del barbero','Desde Datos de tu barbero podés ver horarios, WhatsApp, Instagram y ubicación si fueron configurados.'],
@@ -854,6 +930,7 @@
       trial:'La cuenta comienza con 15 días de prueba. Ver plan muestra el estado y la fecha de vencimiento; el pago solo se inicia cuando estás en período de gracia o con la cuenta vencida.',
       card:'Tu tarjeta muestra cortes totales, última visita, progreso y el siguiente descuento. Cuando el barbero registra una nueva visita, el avance se actualiza automáticamente.',
       turn:'El botón abre WhatsApp con el contacto de tu barbero. El mensaje queda vacío para que escribas lo que necesitás.',
+      referrals:'Tu enlace personal asocia de forma automática al amigo con vos. El barbero no tiene que crearle la cuenta: la persona se registra con nombre, WhatsApp, frecuencia y contraseña. Cuando se registra su primer corte, ganás un crédito de corte una sola vez. No se repite cada ciclo y no cuenta como una visita física en las estadísticas del local.',
       barber:'Acá ves los datos que tu barbero eligió compartir: WhatsApp, horarios, Instagram y ubicación. Si un dato opcional no aparece, puede que todavía no lo haya configurado.'
     };
     function openPipHelp(selected=''){
@@ -946,6 +1023,10 @@
           if(input){const visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'Ocultar':'Ver';button.setAttribute('aria-label',visible?'Ocultar contraseña':'Mostrar contraseña');}
         }
         else if(action==='choose-login'){if(!firebaseConfigured()){toast('Primero configurá Firebase en index.html y volvé a cargar.','error');return;}renderLogin(button.dataset.mode);}
+        else if(action==='start-customer-signup'){void renderCustomerSignup(getPendingReferralCode());maybeShowInstallPrompt();}
+        else if(action==='signup-without-referral'){clearPendingReferral();void renderCustomerSignup('');}
+        else if(action==='cancel-customer-signup'){clearPendingReferral();renderLanding();}
+        else if(action==='start-customer-login'){clearPendingReferral();renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home')renderLanding();else modalRoot.innerHTML='';}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
         else if(action==='nav'){state.section=button.dataset.section;state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);if(state.section==='home')refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}
@@ -989,6 +1070,14 @@
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;try{localStorage.removeItem('barberVipInstallPhase');}catch(_){};renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de barbería copiado.','success');}
         else if(action==='copy-app-link'){await copyText(CUSTOMER_APP_URL);toast('Enlace para tus clientes copiado.','success');}
+        else if(action==='copy-referral'){
+          const url=customerReferralUrl();await copyText(url);toast('Enlace personal copiado. Compartilo con tu amigo.','success');
+        }
+        else if(action==='share-referral'){
+          const url=customerReferralUrl();const shareData={title:'Mi invitación a Barber VIP',text:'Registrate en la barbería con mi enlace personal. Cuando registres tu primer corte, me ayudás a avanzar en mi ciclo de beneficios.',url};
+          if(navigator.share){try{await navigator.share(shareData);}catch(error){if(error?.name!=='AbortError')throw error;}}
+          else {await copyText(url);toast('Tu navegador no ofrece compartir directamente. Copié el enlace para que lo pegues en WhatsApp.','success');}
+        }
         else if(action==='book-turn'){contactBarber(false);}
         else if(action==='contact-barber'){contactBarber(false);}
       } catch(error){console.error(error);toast(error.message||'Ocurrió un error. Probá otra vez.','error');}
@@ -1003,6 +1092,34 @@
       if(form.id==='profileEditForm'){event.preventDefault();await saveProfileForm(form);return;}
       if(form.id==='loyaltySettingsForm'){event.preventDefault();await saveLoyaltyForm(form);return;}
       if(form.id==='reminderSettingsForm'){event.preventDefault();await saveReminderSettings(form);return;}
+      if(form.id==='customerSignupForm'){
+        event.preventDefault();
+        if(!firebaseReady){toast('Firebase no está listo. Recargá la aplicación e intentá nuevamente.','error');return;}
+        const fd=new FormData(form),button=$('button[type="submit"]',form);
+        const referralCode=String(form.dataset.referral||'').trim();
+        const payload={action:'register',fullName:String(fd.get('fullName')||'').trim(),whatsapp:String(fd.get('whatsapp')||'').trim(),approximateVisitDays:Number(fd.get('approximateVisitDays')),password:String(fd.get('password')||''),barberCode:String(fd.get('barberCode')||'').trim(),referralCode};
+        if(payload.fullName.split(/\s+/).filter(Boolean).length<2){toast('Ingresá nombre y apellido.','error');return;}
+        if(payload.password.length<6){toast('La contraseña debe tener al menos 6 caracteres.','error');return;}
+        button.disabled=true;button.textContent='Creando cuenta…';state.manualLogin=true;
+        try{
+          await setPersistence(state.auth,browserLocalPersistence);
+          const created=await api('/api/customer-login',{method:'POST',body:JSON.stringify(payload)});
+          await signInWithEmailAndPassword(state.auth,created.email,payload.password);
+          const me=await api('/api/me');
+          clearPendingReferral();
+          await loadContext(me);state.manualLogin=false;
+          toast(referralCode?'¡Cuenta creada! Tu invitación quedó vinculada. El crédito se entrega cuando registres tu primer corte.':'¡Cuenta creada! Ya podés ver tus cortes y beneficios.','success');
+        }catch(error){
+          state.manualLogin=false;
+          if(state.auth?.currentUser&&!state.user)await signOut(state.auth).catch(()=>{});
+          let message=error.message||'No se pudo crear la cuenta. Probá nuevamente.';
+          if(message.includes('auth/email-already-in-use'))message='Ya existe una cuenta para este registro. Probá iniciar sesión o consultá con tu barbero.';
+          else if(message.includes('auth/weak-password'))message='Usá una contraseña de al menos 6 caracteres.';
+          else if(message.includes('auth/too-many-requests'))message='Hubo demasiados intentos. Esperá un momento y probá otra vez.';
+          toast(message,'error');button.disabled=false;button.textContent='Crear mi cuenta ↗';
+        }finally{if(state.manualLogin)state.manualLogin=false;}
+        return;
+      }
       if(form.id==='loginForm'){
         event.preventDefault();if(!firebaseReady){toast('Firebase todavía no está configurado.','error');return;}
         const fd=new FormData(form),mode=form.dataset.mode,button=$('button[type="submit"]',form);button.disabled=true;button.textContent=mode==='barber-signup'?'Creando cuenta…':'Ingresando…';state.manualLogin=true;

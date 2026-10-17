@@ -1,6 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method } = require('../lib/http');
 const { requireUser, subscription } = require('../lib/security');
+const { ensureCustomerInvite } = require('../lib/referrals');
 function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
 
 
@@ -86,15 +87,29 @@ module.exports = async function handler(req, res) {
     }
 
     if (profile.role === 'customer' && profile.barberUid) {
-      const customerRef = database.collection('barbers').doc(profile.barberUid).collection('customers').doc(decoded.uid);
+      const barberRef = database.collection('barbers').doc(profile.barberUid);
+      const customerRef = barberRef.collection('customers').doc(decoded.uid);
       const customerSnap = await customerRef.get();
       if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu barbero.' });
+      let customer = await ensureCustomerInvite(database, profile.barberUid, customerRef, customerSnap.data());
       await customerRef.update({ lastSeenAt: admin().firestore.FieldValue.serverTimestamp() });
-      const barberRef = database.collection('barbers').doc(profile.barberUid);
+      customer = { ...customer, lastSeenAt: new Date().toISOString() };
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró la barbería asociada.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
-      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer: customerSnap.data(), barber, subscriptionPrice: getSubscriptionPrice() });
+      // Referral details are scoped to the authenticated customer and reveal only people invited by them.
+      const referralsSnap = await barberRef.collection('customers').where('referredByCustomerId', '==', decoded.uid).limit(50).get();
+      let referralCount = referralsSnap.size;
+      try {
+        const countSnap = await barberRef.collection('customers').where('referredByCustomerId', '==', decoded.uid).count().get();
+        referralCount = countSnap.data().count || referralsSnap.size;
+      } catch (_) { /* Aggregation counts may be unavailable in older emulator setups; list size remains a safe fallback. */ }
+      const referrals = referralsSnap.docs.map(doc => {
+        const item = doc.data();
+        const iso = value => value && typeof value.toDate === 'function' ? value.toDate().toISOString() : (value ? new Date(value).toISOString() : null);
+        return { id: doc.id, fullName: String(item.fullName || 'Cliente').slice(0, 100), active: item.active !== false, createdAt: iso(item.createdAt), firstCut: !!item.referralFirstCutAt, bonusGranted: !!item.referralBonusGrantedAt, bonusStatus: item.referralBonusStatus || 'pending' };
+      }).sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber, referrals, referralCount, subscriptionPrice: getSubscriptionPrice() });
     }
     return send(res, 403, { ok: false, error: 'El tipo de cuenta no está configurado correctamente.' });
   } catch (error) {

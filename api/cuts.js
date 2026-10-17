@@ -183,7 +183,11 @@ module.exports = async function handler(req, res) {
         const previouslyGranted = [...new Set((Array.isArray(customer.referralMilestonesGranted) ? customer.referralMilestonesGranted : []).map(Number).filter(Number.isInteger))];
         // Compatibility with the old one-time first-cut program: never award milestone 1 twice.
         if ((customer.referralFirstCutAt || customer.referralBonusGrantedAt) && actualCutsBefore >= 1 && !previouslyGranted.includes(1)) previouslyGranted.push(1);
-        const milestonesHit = hasReferral && referralMilestones.includes(actualCutsRegistered) && !previouslyGranted.includes(actualCutsRegistered) ? [actualCutsRegistered] : [];
+        // Referral milestones repeat continuously: with [1,4,6], qualifying cuts are 1,4,6,7,10,12…
+        // Store absolute visit numbers so each individual milestone remains idempotent across retries.
+        const referralCycleLength = referralMilestones.length ? Math.max(...referralMilestones) : 6;
+        const referralCyclePosition = ((Math.max(1, actualCutsRegistered) - 1) % referralCycleLength) + 1;
+        const milestonesHit = hasReferral && referralMilestones.includes(referralCyclePosition) && !previouslyGranted.includes(actualCutsRegistered) ? [actualCutsRegistered] : [];
         let referrerRef = null;
         let referrerSnap = null;
         if (milestonesHit.length) {
@@ -215,7 +219,7 @@ module.exports = async function handler(req, res) {
           if (!customer.referralFirstCutAt) customerUpdates.referralFirstCutAt = now;
           if (milestonesHit.length) {
             customerUpdates.referralLastMilestoneAt = now;
-            customerUpdates.referralLastMilestone = totalCuts;
+            customerUpdates.referralLastMilestone = actualCutsRegistered;
           }
         }
 
@@ -257,7 +261,7 @@ module.exports = async function handler(req, res) {
               customerUpdates.referralCreditedMilestones = [...new Set([...oldCreditedMilestones, ...milestonesHit])].sort((a, b) => a - b);
               if (milestonesHit.includes(1)) customerUpdates.referralBonusGrantedAt = now; // legacy field retained for old UI/data
               customerUpdates.referralBonusStatus = 'credited';
-              referralBonus = { granted: true, count: milestonesHit.length, milestone: totalCuts, rewardEarned: lastReward ? lastReward.label || `${lastReward.discount}% OFF` : null };
+              referralBonus = { granted: true, count: milestonesHit.length, milestone: actualCutsRegistered, rewardEarned: lastReward ? lastReward.label || `${lastReward.discount}% OFF` : null };
             } else {
               customerUpdates.referralBonusStatus = 'invalid-program';
             }

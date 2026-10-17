@@ -37,9 +37,15 @@ module.exports = async function handler(req, res) {
     if (Number(payment.transaction_amount) !== configuredPrice || payment.currency_id !== 'ARS') return send(res, 400, { ok: false, error: 'El importe o la moneda del pago no coinciden con el precio configurado.' });
 
     const barberUid = String(payment.external_reference || (payment.metadata && payment.metadata.barber_uid) || '');
+    let skipTrial = payment.metadata && payment.metadata.billing_action === 'skip-trial';
     if (!barberUid || (payment.metadata && payment.metadata.barber_uid && payment.metadata.barber_uid !== barberUid)) return send(res, 400, { ok: false, error: 'El pago no está asociado a una cuenta de Barber VIP.' });
     const barberRef = db().collection('barbers').doc(barberUid);
     const payRef = barberRef.collection('payments').doc(String(payment.id));
+    const preferenceId = String(payment.preference_id || '');
+    const preferenceRef = preferenceId ? barberRef.collection('paymentPreferences').doc(preferenceId) : null;
+    if (preferenceRef) {
+      try { const preferenceSnap = await preferenceRef.get(); if (preferenceSnap.exists && preferenceSnap.data().billingAction === 'skip-trial') skipTrial = true; } catch (_) {}
+    }
     const approvedAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
     await db().runTransaction(async transaction => {
       const [barberSnap, paidSnap] = await Promise.all([transaction.get(barberRef), transaction.get(payRef)]);
@@ -47,13 +53,14 @@ module.exports = async function handler(req, res) {
       if (!barberSnap.exists) throw new Error('No existe la cuenta asociada al pago.');
       const rawExpiry = barberSnap.data().subscriptionExpiresAt;
       const expiry = rawExpiry && rawExpiry.toDate ? rawExpiry.toDate() : (rawExpiry ? new Date(rawExpiry) : null);
-      const base = expiry && expiry.getTime() > approvedAt.getTime() ? expiry : approvedAt;
+      const base = !skipTrial && expiry && expiry.getTime() > approvedAt.getTime() ? expiry : approvedAt;
       const newExpiry = new Date(base.getTime() + 30 * 86400000);
-      transaction.update(barberRef, { subscriptionExpiresAt: admin().firestore.Timestamp.fromDate(newExpiry), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      transaction.update(barberRef, { subscriptionExpiresAt: admin().firestore.Timestamp.fromDate(newExpiry), hasPaidSubscription: true, lastPaymentAt: admin().firestore.Timestamp.fromDate(approvedAt), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
       transaction.set(payRef, {
         paymentId: String(payment.id), amount: Number(payment.transaction_amount), currency: payment.currency_id,
         status: 'approved', approvedAt: admin().firestore.Timestamp.fromDate(approvedAt), newExpiry: admin().firestore.Timestamp.fromDate(newExpiry), createdAt: admin().firestore.FieldValue.serverTimestamp()
       });
+      if (preferenceRef) transaction.set(preferenceRef, { processedAt: admin().firestore.FieldValue.serverTimestamp(), paymentId: String(payment.id) }, { merge: true });
     });
     return send(res, 200, { ok: true, received: true });
   } catch (error) {

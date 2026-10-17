@@ -141,7 +141,7 @@ module.exports = async function handler(req, res) {
         await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
         const now = admin().firestore.FieldValue.serverTimestamp();
         const customer = {
-          uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp,
+          uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: referrerId ? 'referral' : 'self',
           approximateVisitDays: visitDays, cutStyle: '', conversationPreference: '',
           totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false,
           active: true, referralCode: ownReferralCode,

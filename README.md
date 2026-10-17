@@ -1,78 +1,48 @@
-# Barber VIP — referidos, trazabilidad e historial controlado
+# Barber VIP — revisión de producto y referidos continuos
 
-Aplicación web/PWA para barberías. Esta entrega parte de la versión que ya compila en Vercel e integra el flujo completo de invitaciones sin crear nuevas funciones serverless.
+Entrega basada en `BarberVIP-Referidos-Profesional.zip`. Incluye la aplicación, la página comercial, el registro aislado por invitación y las 10 funciones API previstas para Vercel Hobby.
 
-## Cambios funcionales
+## Cambios de esta revisión
 
-### 1. Invitación aislada para registrar clientes
+- **Inicio:** accesos rápidos reducidos a Crear cliente, Sumar corte, Promociones y Programa de referidos. Se quitó Configuración de ese bloque para priorizar las tareas diarias.
+- **Clientes:** filtro de origen para distinguir altas creadas por el barbero, registro directo, registro por referido y perfiles antiguos cuyo origen no quedó guardado. Las altas nuevas guardan `signupSource`; los perfiles antiguos no se etiquetan falsamente.
+- **Interfaz:** se unificó el lenguaje visual en negro azulado, superficies casi negras, bordes azul eléctrico más visibles y botones primarios luminosos. El bloque general de accesos rápidos ya no es otra tarjeta detrás de las cuatro acciones.
+- **Recordatorios:** se quitó la fila duplicada de contadores. Las pestañas muestran las cantidades; la explicación queda una sola vez.
+- **Referidos continuos:** los hitos se repiten por ciclo. Con `[1, 4, 6]`, los créditos corresponden a los cortes reales 1, 4, 6, 7, 10, 12, 13, 16, 18… Cada crédito avanza el ciclo de premios del invitador sin sumar un corte ficticio a las estadísticas mensuales ni al historial. La operación se registra dentro de la transacción del corte para evitar duplicados por reintentos.
+- **Perfil de Instagram:** en Ajustes se escribe solamente el usuario; el servidor lo valida y guarda una URL canónica de Instagram. Se aceptan URLs antiguas para mantener compatibilidad con perfiles ya guardados.
+- **Plan:** «Ver plan» no inicia pagos para cuentas activas. Durante la prueba gratuita aparece una opción separada para pagar antes; si Mercado Pago aprueba ese pago con la acción correspondiente, los 30 días se cuentan desde la aprobación y sustituyen el tiempo de prueba restante. Los pagos normales extienden el vencimiento como antes.
+- **Instalación PWA:** el estado «instalada» ya no se conserva en `localStorage`, porque eso quedaba desactualizado si se desinstalaba después. Si el navegador no está en modo app, vuelve a ofrecer instalación; tras aceptar, la espera pasa a instrucciones si el navegador no confirma la instalación en 25 segundos.
+- **Página comercial:** nuevo `comercial.html`, con explicación del producto, beneficios, referidos, preguntas frecuentes y CTA a `/?signup=1`, que abre el formulario de administrador si no hay una sesión activa.
+- **Pip:** se actualizó la explicación del pago anticipado y de los hitos de afiliación repetidos.
 
-- Cada cliente tiene un enlace personal con un token aleatorio de 36 caracteres hexadecimales, por ejemplo `https://barber-vip-three.vercel.app/invitacion.html?ref=…`.
-- El enlace abre `invitacion.html`, una página independiente del panel SPA. Así, si se prueba todo desde un teléfono con otra sesión abierta, la invitación sigue mostrando el formulario de alta en lugar de recuperar la sesión anterior.
-- La página consulta `POST /api/customer-login` con `action: "invite-info"` para mostrar al cliente que invita y el nombre profesional del barbero. El usuario no puede cambiar el referido ni el barbero.
-- El nuevo cliente crea la cuenta con nombre, WhatsApp, frecuencia aproximada y contraseña. El servidor crea la cuenta en Firebase Authentication, los documentos de cliente/perfil y una invitación propia. Luego la página inicia sesión con la cuenta nueva y vuelve a `/`.
-- El enlace invitado no incluye una opción «volver» ni una pantalla para elegir el rol. Si el registro ocurre en un navegador, puede mostrarse la guía para abrir la app instalada al volver a la raíz; el navegador controla si un enlace puede abrir una PWA instalada.
-- La app continúa admitiendo alta normal mediante código de barbería. El camino sin invitación no otorga créditos por referido.
+## Despliegue
 
-### 2. Recompensa progresiva por referidos
+1. Guardá una copia del repositorio que está funcionando.
+2. Extraé este ZIP y copiá **todo su contenido** a la raíz del repositorio `NachoMor123/barber-vip`, reemplazando los archivos correspondientes. No subas el ZIP como archivo dentro del repositorio.
+3. Verificá que `index.html`, `comercial.html`, `invitacion.html`, `vercel.json`, `package.json`, `firestore.rules`, y las carpetas `api/`, `lib/`, `assets/` estén en la raíz.
+4. Dentro de `api/` dejá las 10 funciones de este ZIP. No conserves funciones viejas duplicadas.
+5. Hacé commit y comprobá que Vercel haya desplegado el commit correcto.
 
-- En el administrador existe la sección **Referidos**, con la relación «quién invitó a quién», visitas reales del referido, hitos logrados y créditos acreditados.
-- En el cliente hay una pestaña inferior **Afiliados** independiente de Inicio y Datos del barbero. Allí aparecen su enlace, personas invitadas, cortes reales, créditos recibidos por cada persona y su estado.
-- El barbero puede configurar de 1 a 10 hitos de cortes reales (por defecto `1, 4, 6`). Cuando un cliente referido alcanza cada hito, su invitador recibe un crédito para avanzar su propio ciclo de fidelización. Cada hito por referido se acredita una sola vez.
-- El crédito no crea una visita física ficticia ni aumenta los cortes del mes. El contador `actualCutsRegistered` separa las visitas reales de los créditos de fidelización.
-- La invitación y el crédito se vinculan en el servidor y el guardado del hito se realiza en la transacción del registro del corte, para evitar que reintentos acrediten dos veces.
-- El nombre que se muestra al invitado es el del profesional, no el nombre del local.
+## Variables de Vercel
 
-### 3. Recordatorios e historial
+No se agregan variables nuevas. Se mantienen las existentes: `FIREBASE_SERVICE_ACCOUNT_JSON`, `APP_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `SUBSCRIPTION_PRICE_ARS` y `CRON_SECRET`.
 
-- Recordatorios tiene las pestañas **Por contactar**, **Seguimiento** y **Ocultos**. Ocultar no borra al cliente, su cuenta ni el historial. Puede reactivarse desde Ocultos; un nuevo corte también reinicia los recordatorios.
-- Al abrir WhatsApp, el mensaje sugerido se prepara; es el barbero quien confirma el envío en la app. WhatsApp no informa a Barber VIP si el mensaje fue efectivamente entregado o leído.
-- El historial permite filtrar por Desde/Hasta y borrar un rango, pero la API limita el borrado manual a la ventana conservada de 60 días. Solo se eliminan documentos de cortes, nunca las cuentas ni los premios. Si el rango contiene más de 2.000 registros por petición, la interfaz procesa lotes acotados y avisa si hay que continuar.
-- La limpieza programada mantiene 60 días de cortes. Los documentos operativos del límite de alta se eliminan después de dos días.
+Para Mercado Pago, confirmá que `APP_URL` sea la URL de producción y que `MP_WEBHOOK_SECRET` corresponda al webhook configurado. El webhook debe recibir notificaciones reales para activar la suscripción.
 
-## Estructura
+## Firebase / escalabilidad
 
-- `index.html`: panel de administrador, panel de cliente y navegación.
-- `invitacion.html`: página aislada de registro con invitación personal.
-- `api/`: 10 funciones serverless. No agregues funciones `.js` antiguas a esta carpeta: Vercel Hobby admite hasta 12 funciones por despliegue.
-- `lib/`: Firebase Admin, control de acceso, utilidades HTTP y funciones de invitación.
-- `assets/`, `manifest.webmanifest`, `sw.js`: recursos e instalación PWA. El service worker está en `barber-vip-shell-v16` y guarda `invitacion.html` por separado, sin sobrescribir el caché de Inicio.
-- `firestore.rules`: reglas de referencia. Las operaciones de alta, hitos y limpieza usan Firebase Admin en el servidor. No las reemplaces si las reglas equivalentes ya están funcionando.
+No hace falta crear colecciones manualmente. Las colecciones `customerInvites`, `customerSignupLimits`, `trialClaims` y `payments` se usan/actualizan desde el servidor. Las operaciones protegidas usan Firebase Admin.
 
-## Variables de entorno
+El historial conserva 60 días de cortes y la limpieza programada está configurada en `vercel.json`. Ocultar un recordatorio no borra el cliente ni su historial. El historial manual se puede eliminar por rango dentro de la ventana conservada.
 
-No se agregan variables nuevas para esta entrega. Conservá las existentes:
+La lista de clientes y el panel de referidos siguen siendo apropiados para el lanzamiento inicial, pero el siguiente paso para volúmenes altos es agregar paginación de clientes y paginación de referidos; no conviene cargar miles de documentos en una sola vista.
 
-- `FIREBASE_SERVICE_ACCOUNT_JSON`
-- `APP_URL`
-- `MP_ACCESS_TOKEN`
-- `MP_WEBHOOK_SECRET`
-- `SUBSCRIPTION_PRICE_ARS`
-- `CRON_SECRET`
+## Notificaciones
 
-`RESEND_API_KEY` y `EMAIL_FROM` no se utilizan y se pueden quitar si solo se habían agregado para una versión anterior.
+La aplicación mantiene recordatorios dentro del panel y abre WhatsApp con un mensaje preparado; el barbero confirma manualmente el envío. **No se simulan notificaciones push**: para enviar avisos aun con la app cerrada hace falta implementar Web Push real, permiso explícito, claves VAPID, almacenamiento de suscripciones y un proceso programado. No se activó esa infraestructura en esta entrega para no presentar una notificación local como si fuera una push fiable.
 
-## Actualización de GitHub/Vercel
+## Verificaciones realizadas y límites
 
-1. Guardá una copia de seguridad de la versión que ya funciona.
-2. Descargá el ZIP y elegí **Extraer todo**. Subí el contenido extraído a la raíz del repositorio, no el ZIP como archivo.
-3. `index.html`, `invitacion.html`, `vercel.json`, `package.json` y las carpetas `api/`, `lib/` y `assets/` tienen que quedar al mismo nivel.
-4. Dentro de `api/` deben quedar exactamente las 10 funciones que vienen en este ZIP; quitá funciones obsoletas que hayan quedado de versiones anteriores.
-5. Hacé un commit nuevo y comprobá que Vercel despliegue ese commit de `main`.
-
-No hace falta crear colecciones manualmente. Se crean/actualizan mediante Firebase Admin (`customerInvites`, `customerSignupLimits` y campos de los documentos de cliente/barbero). Las reglas existentes pueden conservarse porque los navegadores no escriben directamente en esas colecciones protegidas.
-
-## Pruebas antes de usarlo con todos los clientes
-
-1. En un segundo navegador o celular, abrir un enlace de invitación y confirmar que el resumen diga «sumarte con [nombre del barbero]».
-2. Crear el referido. Tiene que aparecer en Clientes del barbero; después probar iniciar sesión y abrir Inicio, Datos del barbero y Afiliados.
-3. Registrar cortes reales al referido hasta los hitos configurados (por defecto 1, 4 y 6). Verificar que el invitador reciba un crédito por hito, pero que el historial y el contador mensual incluyan solamente cortes reales.
-4. Verificar que la sección Referidos del administrador muestre la relación correcta, incluso si un perfil es dado de baja.
-5. Probar que WhatsApp abre el texto preescrito y que el barbero debe confirmar manualmente el envío; ocultar y reactivar un recordatorio sin borrar al cliente.
-6. Filtrar un período de historial y borrar solo un rango dentro de los últimos 60 días.
-7. Probar Inicio, Clientes, Promociones, pago de suscripción y acceso como cliente.
-
-## Límites y seguridad
-
-La sintaxis JavaScript/JSON y estructura del ZIP se verifican localmente, pero eso no sustituye una prueba de extremo a extremo contra el Firebase y Mercado Pago reales.
-
-Los enlaces usan tokens aleatorios no predecibles y el vínculo se establece del lado del servidor. El límite de registros por conexión y la detección de WhatsApp duplicado reducen el abuso, pero, sin verificar el teléfono o correo, no se puede probar la identidad humana al 100%. Si más adelante querés miles de clientes por barbería individual, el siguiente paso profesional sería paginar el listado del barbero y mover consultas largas del panel a páginas del servidor.
+- Sintaxis de los archivos API JavaScript comprobada localmente con `node --check`.
+- Estructura del ZIP y rutas revisadas.
+- La integración real con Firebase, Mercado Pago, los dispositivos Android/iOS y el despliegue Vercel no puede certificarse desde este entorno. Antes de abrirlo a muchos usuarios, probá con dos cuentas y dos dispositivos: registro, hitos de referidos, pago de prueba, vencimiento, instalación/desinstalación y reintentos de red.

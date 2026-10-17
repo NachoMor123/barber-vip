@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
       await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
       const now = admin().firestore.FieldValue.serverTimestamp();
       const customer = {
-        uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp,
+        uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         approximateVisitDays, cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
         totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false, active: true,
         referralCode, referredByCustomerId: null, referredByName: null, referralFirstCutAt: null,

@@ -80,6 +80,9 @@ module.exports = async function handler(req, res) {
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'Falta configurar el perfil de la barbería.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
+      if (typeof barber.hasPaidSubscription !== 'boolean') {
+        try { const paid = await barberRef.collection('payments').limit(1).get(); barber.hasPaidSubscription = !paid.empty; } catch (_) { barber.hasPaidSubscription = false; }
+      }
       barber.referralRewardMilestones = Array.isArray(barber.referralRewardMilestones) && barber.referralRewardMilestones.length ? barber.referralRewardMilestones : [1, 4, 6];
       return send(res, 200, {
         ok: true, role: 'barber', uid: decoded.uid, barberUid: decoded.uid, subscriptionPrice: getSubscriptionPrice(),

@@ -122,7 +122,7 @@ module.exports = async function handler(req, res) {
               theme:{accent:'#3478ff',density:'comfortable'},
               loyaltyPrograms:[{id:'program-246',name:'Programa de premios',audience:'all',customerIds:[],rewards:fallbackRewards}],
               defaultLoyaltyProgramId:'program-246', rewards:fallbackRewards,
-              subscriptionExpiresAt:trialExpiry,
+              subscriptionExpiresAt:trialExpiry, hasPaidSubscription:false,
               reminderThresholdDays:3, reminderFollowUpDays:7, reminderMaxMessages:2, reminderMessageTemplate:'',
               trialStartedAt:claim && claim.claimedAt ? claim.claimedAt : now,
               createdAt:now, updatedAt:now
@@ -171,7 +171,18 @@ module.exports = async function handler(req, res) {
     if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok:false, error:'Ingresá un WhatsApp argentino válido y completo.' });
     let instagramUrl, mapsUrl, schedule;
     try {
-      instagramUrl = safeHttpsUrl(data.instagramUrl, ['instagram.com']);
+      let instagramInput = text(data.instagramUsername ?? data.instagramUrl, 500).trim();
+      if (instagramInput) {
+        if (/^https?:\/\//i.test(instagramInput)) {
+          const parsed = new URL(safeHttpsUrl(instagramInput, ['instagram.com']));
+          instagramInput = parsed.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
+        }
+        instagramInput = instagramInput.replace(/^@/, '').trim();
+        if (!/^[A-Za-z0-9._]{1,30}$/.test(instagramInput) || instagramInput === '.' || instagramInput === '..') {
+          throw new Error('Ingresá solo tu usuario de Instagram (sin @ ni enlace), con hasta 30 letras, números, puntos o guiones bajos.');
+        }
+        instagramUrl = `https://www.instagram.com/${instagramInput}/`;
+      } else instagramUrl = '';
       mapsUrl = safeHttpsUrl(data.mapsUrl, ['google.com','maps.app.goo.gl','goo.gl']);
       schedule = cleanSchedule(data.schedule || {});
     } catch (error) { return send(res, 400, {ok:false,error:error.message}); }

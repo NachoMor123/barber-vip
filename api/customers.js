@@ -41,9 +41,9 @@ module.exports = async function handler(req, res) {
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         approximateVisitDays, cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
-        totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false, active: true,
+        totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
         referralCode, referredByCustomerId: null, referredByName: null, referralFirstCutAt: null,
-        referralBonusGrantedAt: null, referralBonusStatus: null, referralCreditsReceived: 0,
+        referralBonusGrantedAt: null, referralBonusStatus: null, referralCreditsReceived: 0, referralCreditsAwarded: 0, referralCreditsSkipped: 0, referralCutVisits: 0,
         createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
       };
       try {

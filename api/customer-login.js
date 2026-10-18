@@ -143,11 +143,11 @@ module.exports = async function handler(req, res) {
         const customer = {
           uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: referrerId ? 'referral' : 'self',
           approximateVisitDays: visitDays, cutStyle: '', conversationPreference: '',
-          totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, availableRewards: [], rewardReady: false,
+          totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
           active: true, referralCode: ownReferralCode,
           referredByCustomerId: referrerId || null, referredByName: referrerName || null,
           referralSourceCode: referralCode || null, referralFirstCutAt: null, referralBonusGrantedAt: null,
-          referralBonusStatus: referrerId ? 'pending' : null, referralCreditsReceived: 0,
+          referralBonusStatus: referrerId ? 'pending' : null, referralCreditsReceived: 0, referralCreditsAwarded: 0, referralCreditsSkipped: 0, referralCutVisits: 0,
           reminderCount: 0, reminderStatus: null, remindersPaused: false,
           createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
         };

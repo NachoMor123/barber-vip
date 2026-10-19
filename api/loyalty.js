@@ -2,15 +2,6 @@ const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 
-const DEFAULT_REFERRAL_MILESTONES = [1, 4, 6]; // Legacy field retained for compatibility; referrals now credit each visit.
-
-function cleanReferralMilestones(input) {
-  const raw = Array.isArray(input) ? input : (typeof input === 'string' ? input.split(',') : DEFAULT_REFERRAL_MILESTONES);
-  const values = [...new Set(raw.map(value => Number(String(value).trim())).filter(value => Number.isInteger(value) && value >= 1 && value <= 100))].sort((a, b) => a - b);
-  if (!values.length || values.length > 10) throw new Error('Configurá entre 1 y 10 hitos de cortes, del 1 al 100. Ejemplo: 1, 4, 6.');
-  return values;
-}
-
 const DEFAULT_PROGRAM = {
   id: 'program-general',
   name: 'Programa de premios',
@@ -123,20 +114,10 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'GET') {
       const program = current.loyaltyPrograms[0] || DEFAULT_PROGRAM;
-      return send(res, 200, { ok: true, programs: [program], defaultLoyaltyProgramId: program.id, referralRewardMilestones: cleanReferralMilestones(current.referralRewardMilestones || DEFAULT_REFERRAL_MILESTONES) });
+      return send(res, 200, { ok: true, programs: [program], defaultLoyaltyProgramId: program.id });
     }
 
     const data = body(req);
-    if (data.action === 'referral-settings') {
-      let milestones;
-      try { milestones = cleanReferralMilestones(data.milestones); }
-      catch (error) { return send(res, 400, { ok: false, error: error.message }); }
-      await barberRef.update({
-        referralRewardMilestones: milestones,
-        updatedAt: admin().firestore.FieldValue.serverTimestamp()
-      });
-      return send(res, 200, { ok: true, referralRewardMilestones: milestones });
-    }
     if (!Array.isArray(data.programs) || data.programs.length !== 1) {
       return send(res, 400, { ok: false, error: 'El programa de fidelización es único y se aplica a todos los clientes.' });
     }

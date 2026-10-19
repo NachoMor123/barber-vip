@@ -2,9 +2,6 @@ const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 const crypto = require('crypto');
-const { newReferralCode, inviteRecord } = require('../lib/referrals');
-
-function currentReferralCode(value) { return /^[a-f0-9]{36}$/i.test(String(value || '')); }
 
 function validRequired(value, fallback, max = 1000) {
   const parsed = Number.parseInt(value, 10);
@@ -30,36 +27,35 @@ module.exports = async function handler(req, res) {
       if (fullName.length < 3) return send(res, 400, { ok: false, error: 'Ingresá el nombre y apellido del cliente.' });
       if (password.length < 6) return send(res, 400, { ok: false, error: 'La contraseña debe tener al menos 6 caracteres.' });
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
-      const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).limit(1).get();
-      if (!duplicate.empty) return send(res, 409, { ok: false, error: 'Ya existe un cliente con ese nombre en esta barbería. Probá agregar una inicial o distinguir el apellido.' });
+      const [duplicateNames, duplicatePhones] = await Promise.all([
+        customers.where('usernameNormalized', '==', usernameNormalized).get(),
+        customers.where('whatsapp', '==', whatsapp).get()
+      ]);
+      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese nombre en esta barbería. Agregá una inicial para distinguirlo.' });
+      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese WhatsApp en esta barbería.' });
 
       const uid = crypto.randomUUID();
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
-      const referralCode = newReferralCode();
       await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
       const now = admin().firestore.FieldValue.serverTimestamp();
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         approximateVisitDays, cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
         totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
-        referralCode, referredByCustomerId: null, referredByName: null, referralFirstCutAt: null,
-        referralBonusGrantedAt: null, referralBonusStatus: null, referralCreditsReceived: 0, referralCreditsAwarded: 0, referralCreditsSkipped: 0, referralCutVisits: 0,
         createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
       };
       try {
         const batch = database.batch();
         batch.set(customers.doc(uid), customer);
         batch.set(database.collection('userProfiles').doc(uid), { uid, role: 'customer', barberUid: ctx.uid, createdAt: now });
-        batch.set(database.collection('customerInvites').doc(referralCode), { ...inviteRecord(ctx.uid, uid, fullName), createdAt: now });
         await batch.commit();
       } catch (error) {
         await database.collection('barbers').doc(ctx.uid).collection('customers').doc(uid).delete().catch(() => {});
         await database.collection('userProfiles').doc(uid).delete().catch(() => {});
-        await database.collection('customerInvites').doc(referralCode).delete().catch(() => {});
         await auth().deleteUser(uid).catch(() => {});
         throw error;
       }
-      return send(res, 201, { ok: true, customer: { ...customer, referralCode, createdAt: new Date().toISOString() } });
+      return send(res, 201, { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } });
     }
 
     if (req.method === 'PUT' && data.action === 'reminder-settings') {
@@ -132,8 +128,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
-      if (currentReferralCode(customerSnap.data().referralCode)) await database.collection('customerInvites').doc(customerSnap.data().referralCode).set({ active: false, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', remindersPaused: true, remindersPausedAt: admin().firestore.FieldValue.serverTimestamp(), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
       await database.collection('userProfiles').doc(customerId).set({ disabled: true, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
@@ -147,8 +142,8 @@ module.exports = async function handler(req, res) {
       const fullName = text(data.fullName, 100);
       const usernameNormalized = normalizeName(fullName);
       if (fullName.length < 3) return send(res, 400, { ok: false, error: 'Ingresá el nombre y apellido del cliente.' });
-      const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).limit(5).get();
-      if (duplicate.docs.some(doc => doc.id !== customerId)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente con ese nombre dentro de esta barbería.' });
+      const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).get();
+      if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de esta barbería.' });
       updates.fullName = fullName;
       updates.usernameNormalized = usernameNormalized;
       await auth().updateUser(customerId, { displayName: fullName }).catch(() => {});
@@ -156,6 +151,8 @@ module.exports = async function handler(req, res) {
     if (data.whatsapp !== undefined) {
       const whatsapp = normalizeArgentinaPhone(data.whatsapp);
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
+      const duplicatePhone = await customers.where('whatsapp', '==', whatsapp).get();
+      if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de esta barbería.' });
       updates.whatsapp = whatsapp;
     }
     if (data.approximateVisitDays !== undefined) updates.approximateVisitDays = validRequired(data.approximateVisitDays, current.approximateVisitDays, 365);
@@ -171,12 +168,6 @@ module.exports = async function handler(req, res) {
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
     }
     await customerRef.update(updates);
-    if (updates.active !== undefined && currentReferralCode(current.referralCode)) {
-      await database.collection('customerInvites').doc(current.referralCode).set({
-        active: Boolean(updates.active),
-        updatedAt: admin().firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    }
     const saved = await customerRef.get();
     return send(res, 200, { ok: true, customer: saved.data() });
   } catch (error) {

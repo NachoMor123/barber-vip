@@ -1,44 +1,12 @@
 const crypto = require('crypto');
 const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
-const { newReferralCode, isReferralCode, inviteRecord } = require('../lib/referrals');
+
 
 function cleanBarberCode(value) {
   return text(value, 16).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-async function resolveInvite(database, rawCode) {
-  const code = String(rawCode || '').trim().toLowerCase();
-  if (!isReferralCode(code)) throw new Error('El enlace de invitación no es válido. Pedile a tu amigo que te comparta uno nuevo.');
-  const inviteSnap = await database.collection('customerInvites').doc(code).get();
-  if (!inviteSnap.exists || inviteSnap.data().active === false) throw new Error('Esta invitación ya no está disponible. Pedile a tu amigo que genere o comparta su enlace actual.');
-  const invite = inviteSnap.data();
-  if (!invite.barberUid || !invite.referrerCustomerId) throw new Error('La invitación está incompleta. Pedile a tu amigo que copie nuevamente el enlace.');
-  const barberRef = database.collection('barbers').doc(invite.barberUid);
-  const referrerRef = barberRef.collection('customers').doc(invite.referrerCustomerId);
-  const [barberSnap, referrerSnap] = await Promise.all([barberRef.get(), referrerRef.get()]);
-  if (!barberSnap.exists || !referrerSnap.exists || referrerSnap.data().active === false) throw new Error('El cliente que compartió esta invitación ya no está activo.');
-  return {
-    code,
-    barberUid: invite.barberUid,
-    barber: barberSnap.data(),
-    referrerId: referrerSnap.id,
-    referrer: referrerSnap.data()
-  };
-}
-
-function invitationSummary(resolved) {
-  return {
-    referralCode: resolved.code,
-    barberCode: String(resolved.barber.barberCode || ''),
-    // The invite must identify the actual professional, not confuse them with the business/local name.
-    barberProfessionalName: text(resolved.barber.displayName || resolved.barber.professionalName || '', 100),
-    barberBusinessName: text(resolved.barber.barberName || '', 100),
-    barberName: text(resolved.barber.displayName || resolved.barber.professionalName || '', 100),
-    referrerName: text(resolved.referrer.fullName || inviteNameFallback(resolved), 100)
-  };
-}
-function inviteNameFallback(resolved) { return resolved.referrer.displayName || 'Tu amigo'; }
 
 async function enforceSignupRateLimit(database, req, barberUid) {
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -78,15 +46,6 @@ module.exports = async function handler(req, res) {
     const database = db();
     const action = text(data.action, 30);
 
-    if (action === 'invite-info') {
-      try {
-        const resolved = await resolveInvite(database, data.referralCode);
-        return send(res, 200, { ok: true, invite: invitationSummary(resolved) });
-      } catch (error) {
-        return send(res, 400, { ok: false, error: error.message || 'No pudimos validar la invitación.' });
-      }
-    }
-
     if (action === 'register') {
       const fullName = text(data.fullName, 100);
       const usernameNormalized = normalizeName(fullName);
@@ -100,33 +59,20 @@ module.exports = async function handler(req, res) {
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
       if (!Number.isInteger(visitDays) || visitDays < 1 || visitDays > 365) return send(res, 400, { ok: false, error: 'Indicá cada cuántos días aproximadamente venís a cortarte (1 a 365).'});
 
-      let barberUid = '', barber = {}, referrerId = '', referrerName = '', referralCode = '';
-      if (text(data.referralCode, 64)) {
-        let resolved;
-        try { resolved = await resolveInvite(database, data.referralCode); }
-        catch (error) { return send(res, 400, { ok: false, error: error.message }); }
-        barberUid = resolved.barberUid;
-        barber = resolved.barber;
-        referrerId = resolved.referrerId;
-        referrerName = text(resolved.referrer.fullName || '', 100);
-        referralCode = resolved.code;
-      } else {
-        const barberCode = cleanBarberCode(data.barberCode);
-        if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de barbería. Si venís recomendado, usá el enlace personal que te compartieron.' });
-        const barberQuery = await database.collection('barbers').where('barberCode', '==', barberCode).limit(1).get();
-        if (barberQuery.empty) return send(res, 404, { ok: false, error: 'No encontramos esa barbería. Revisá el código y probá de nuevo.' });
-        barberUid = barberQuery.docs[0].id;
-        barber = barberQuery.docs[0].data();
-      }
-
+      const barberCode = cleanBarberCode(data.barberCode);
+      if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de tu barbero.' });
+      const barberQuery = await database.collection('barbers').where('barberCode', '==', barberCode).limit(1).get();
+      if (barberQuery.empty) return send(res, 404, { ok: false, error: 'No encontramos ese código. Revisalo con tu barbero y probá nuevamente.' });
+      const barberUid = barberQuery.docs[0].id;
+      const barber = barberQuery.docs[0].data();
       const barberRef = database.collection('barbers').doc(barberUid);
       const customersRef = barberRef.collection('customers');
-      if (referrerId) {
-        const duplicatePhone = await customersRef.where('whatsapp', '==', whatsapp).limit(1).get();
-        if (!duplicatePhone.empty) return send(res, 409, { ok: false, error: 'Ya existe un perfil con ese WhatsApp en esta barbería. Iniciá sesión o pedile ayuda al barbero; no se puede duplicar el crédito de invitación.' });
-      }
-      const duplicate = await customersRef.where('usernameNormalized', '==', usernameNormalized).limit(1).get();
-      if (!duplicate.empty) return send(res, 409, { ok: false, error: 'Ya existe una cuenta con ese nombre en esta barbería. Iniciá sesión o consultá con tu barbero.' });
+      const [duplicateNames, duplicatePhones] = await Promise.all([
+        customersRef.where('usernameNormalized', '==', usernameNormalized).get(),
+        customersRef.where('whatsapp', '==', whatsapp).get()
+      ]);
+      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese nombre en esta barbería. Iniciá sesión o consultá con tu barbero.' });
+      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese WhatsApp en esta barbería. Iniciá sesión o consultá con tu barbero.' });
       try {
         await enforceSignupRateLimit(database, req, barberUid);
       } catch (error) {
@@ -135,34 +81,26 @@ module.exports = async function handler(req, res) {
       }
 
       const uid = crypto.randomUUID();
-      const ownReferralCode = newReferralCode();
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
       try {
         await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
         const now = admin().firestore.FieldValue.serverTimestamp();
         const customer = {
-          uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: referrerId ? 'referral' : 'self',
+          uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'self',
           approximateVisitDays: visitDays, cutStyle: '', conversationPreference: '',
           totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
-          active: true, referralCode: ownReferralCode,
-          referredByCustomerId: referrerId || null, referredByName: referrerName || null,
-          referralSourceCode: referralCode || null, referralFirstCutAt: null, referralBonusGrantedAt: null,
-          referralBonusStatus: referrerId ? 'pending' : null, referralCreditsReceived: 0, referralCreditsAwarded: 0, referralCreditsSkipped: 0, referralCutVisits: 0,
+          active: true,
           reminderCount: 0, reminderStatus: null, remindersPaused: false,
           createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
         };
         const batch = database.batch();
         batch.set(customersRef.doc(uid), customer);
         batch.set(database.collection('userProfiles').doc(uid), { uid, role: 'customer', barberUid, createdAt: now });
-        batch.set(database.collection('customerInvites').doc(ownReferralCode), {
-          ...inviteRecord(barberUid, uid, fullName), createdAt: now
-        });
         await batch.commit();
         return send(res, 201, { ok: true, email: loginEmail, barberCode: String(barber.barberCode || '') });
       } catch (error) {
         await database.collection('barbers').doc(barberUid).collection('customers').doc(uid).delete().catch(() => {});
         await database.collection('userProfiles').doc(uid).delete().catch(() => {});
-        await database.collection('customerInvites').doc(ownReferralCode).delete().catch(() => {});
         await auth().deleteUser(uid).catch(() => {});
         if (error && error.code === 'auth/email-already-exists') return send(res, 409, { ok: false, error: 'No se pudo crear la cuenta en este momento. Probá nuevamente.' });
         throw error;
@@ -176,7 +114,7 @@ module.exports = async function handler(req, res) {
     const barberQuery = await database.collection('barbers').where('barberCode', '==', barberCode).limit(1).get();
     if (barberQuery.empty) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código de barbería, el nombre y la contraseña.' });
     const barberDoc = barberQuery.docs[0];
-    const query = await barberDoc.ref.collection('customers').where('usernameNormalized', '==', usernameNormalized).limit(2).get();
+    const query = await barberDoc.ref.collection('customers').where('usernameNormalized', '==', usernameNormalized).get();
     const customerDoc = query.docs.find(doc => doc.data().active !== false);
     if (!customerDoc) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código de barbería, el nombre y la contraseña.' });
     return send(res, 200, { ok: true, email: customerDoc.data().loginEmail });

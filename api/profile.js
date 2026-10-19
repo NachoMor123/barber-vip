@@ -111,9 +111,9 @@ module.exports = async function handler(req, res) {
           const trialExpiry = Timestamp.fromDate(trialExpiryDate);
           const barberCode = freshBarberSnap.exists ? (freshBarberSnap.data().barberCode || defaultCode(decoded.uid)) : defaultCode(decoded.uid);
           const fallbackRewards = [
-            {cut:2,discount:30,label:'30% OFF'},
-            {cut:4,discount:50,label:'50% OFF'},
-            {cut:6,discount:70,label:'70% OFF'}
+            {cut:2,discount:10,label:'10% OFF'},
+            {cut:4,discount:20,label:'20% OFF'},
+            {cut:6,discount:30,label:'30% OFF'}
           ];
           if (!freshBarberSnap.exists) {
             transaction.set(barberRef, {

@@ -161,7 +161,7 @@ module.exports = async function handler(req, res) {
       const cutRef = cutCollection.doc();
       const now = admin().firestore.FieldValue.serverTimestamp();
       await cutRef.set({ id: cutRef.id, type: 'walk-in', customerId: null, customerName, cycleCut: null, createdAt: now });
-      return send(res, 200, { ok: true, id: cutRef.id, customerName, message: 'Corte rápido registrado.' });
+      return send(res, 200, { ok: true, id: cutRef.id, customerName, message: 'Visita rápida registrada.' });
     }
 
     const customerId = text(data.customerId, 100);
@@ -248,16 +248,16 @@ module.exports = async function handler(req, res) {
         outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });
       let message = 'Visita registrada correctamente.';
-      if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en este corte.'; }
+      if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en esta visita.'; }
       if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 
-    return send(res, 400, { ok: false, error: 'Acción de corte desconocida.' });
+    return send(res, 400, { ok: false, error: 'Acción de visita desconocida.' });
   } catch (error) {
     console.error('cuts error', error);
     if (error.message && /cliente|descuento|premio|fecha|corte|cuenta|programa|fidelización/.test(error.message)) return send(res, 400, { ok: false, error: error.message });
-    return send(res, 500, { ok: false, error: 'No se pudo registrar el corte. Probá de nuevo.' });
+    return send(res, 500, { ok: false, error: 'No se pudo registrar la visita. Probá de nuevo.' });
   }
 };
 

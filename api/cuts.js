@@ -201,8 +201,8 @@ module.exports = async function handler(req, res) {
         const shouldRestart = Boolean(customer.cyclePausedAtMax) || cycleBefore >= cycleMax || Boolean(pendingReward && Number(pendingReward.cut) >= cycleMax);
         const cycleForVisit = shouldRestart ? 1 : Math.min(cycleMax, cycleBefore + 1);
         const milestoneReward = rewards.find(r => Number(r.cut) === cycleForVisit) || null;
-        const appliedReward = (pendingReward && shouldRestart) ? pendingReward : (milestoneReward || pendingReward || null);
-        const appliedOnFinalMilestone = Boolean(milestoneReward && Number(milestoneReward.cut) >= cycleMax && appliedReward === milestoneReward);
+        const appliedReward = pendingReward || milestoneReward || null;
+        const appliedOnFinalMilestone = Boolean(!pendingReward && milestoneReward && Number(milestoneReward.cut) >= cycleMax && appliedReward === milestoneReward);
         // Once the final reward is used, the next cycle begins at zero; history keeps the actual visit at 6/6.
         const cycleNext = appliedOnFinalMilestone ? 0 : cycleForVisit;
         const availableRewards = [];

@@ -984,7 +984,7 @@
           const missing=/No se encontró el perfil de esta cuenta/i.test(error.message);
           if(!missing) throw error;
           await user.getIdToken(true);
-          await api('/api/profile',{method:'POST',body:JSON.stringify({action:'ensure',displayName:user.displayName||user.email?.split('@')[0]||'Barbero'})});
+          await api('/api/profile',{method:'POST',body:JSON.stringify({action:'ensure',displayName:user.displayName||user.email?.split('@')[0]||'Profesional'})});
           me=await api('/api/me');
         }
         await loadContext(me);

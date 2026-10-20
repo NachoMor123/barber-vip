@@ -73,9 +73,18 @@ module.exports = async function handler(req, res) {
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil de esta cuenta. Volvé a ingresar.' });
     const profile = profileSnap.data();
-    const isOnline = String(req.query && req.query.presence || '1') !== '0';
-    const presencePatch = { lastSeenAt: admin().firestore.FieldValue.serverTimestamp(), isOnline };
-    await profileRef.update(presencePatch);
+    const presenceParam = String(req.query && req.query.presence || '');
+    // Presence pings are deliberately lightweight: no full barber/customer payload, and no profile write.
+    if (presenceParam === '1' || presenceParam === '0') {
+      if (profile.role === 'customer' && profile.barberUid) {
+        const customerRef = database.collection('barbers').doc(profile.barberUid).collection('customers').doc(decoded.uid);
+        await customerRef.update({
+          lastSeenAt: admin().firestore.FieldValue.serverTimestamp(),
+          isOnline: presenceParam === '1'
+        });
+      }
+      return send(res, 200, { ok:true, role:profile.role, online:presenceParam === '1' });
+    }
 
     if (profile.role === 'barber') {
       const barberRef = database.collection('barbers').doc(decoded.uid);
@@ -96,9 +105,7 @@ module.exports = async function handler(req, res) {
       const customerRef = barberRef.collection('customers').doc(decoded.uid);
       const customerSnap = await customerRef.get();
       if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu barbero.' });
-      let customer = customerSnap.data();
-      await customerRef.update(presencePatch);
-      customer = { ...customer, lastSeenAt: new Date().toISOString(), isOnline };
+      const customer = customerSnap.data();
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró la barbería asociada.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());

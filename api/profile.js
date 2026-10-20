@@ -120,8 +120,8 @@ module.exports = async function handler(req, res) {
           const claim = claimSnap.exists ? claimSnap.data() : null;
           if (claim && claim.uid && claim.uid !== decoded.uid) throw new Error('TRIAL_ALREADY_USED');
           const now = Timestamp.now();
-          const requestedName = text(data.displayName || decoded.name || String(decoded.email || '').split('@')[0] || 'Barbero VIP', 80);
-          const displayName = requestedName.length >= 2 ? requestedName : 'Barbero VIP';
+          const requestedName = text(data.displayName || decoded.name || String(decoded.email || '').split('@')[0] || 'Profesional VIP', 80);
+          const displayName = requestedName.length >= 2 ? requestedName : 'Profesional VIP';
           let trialExpiryDate;
           if (freshBarberSnap.exists) {
             const existingExpiry = freshBarberSnap.data().subscriptionExpiresAt;
@@ -183,7 +183,7 @@ module.exports = async function handler(req, res) {
     const ref = context.db.collection('barbers').doc(context.uid);
     if (req.method === 'GET') {
       const snap = await ref.get();
-      if (!snap.exists) return send(res, 404, { ok:false, error:'No se encontró la configuración del barbero.' });
+      if (!snap.exists) return send(res, 404, { ok:false, error:'No se encontró la configuración profesional.' });
       return send(res, 200, { ok:true, profile:profileView(snap.data()) });
     }
     const data = body(req);

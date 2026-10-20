@@ -46,6 +46,31 @@ function cleanSchedule(input) {
   const days = ['mon','tue','wed','thu','fri','sat','sun'].map(day => byDay.get(day) || {day,mode:'continuous',enabled:false,start1:'09:00',end1:'18:00',start2:'16:00',end2:'20:00'});
   return { mode:'mixed', days };
 }
+function cleanServices(input) {
+  if (!Array.isArray(input)) return [];
+  if (input.length > 20) throw new Error('Podés configurar hasta 20 servicios.');
+  const out = [], ids = new Set(), names = new Set();
+  for (let index = 0; index < input.length; index++) {
+    const item = input[index] && typeof input[index] === 'object' ? input[index] : {};
+    const name = text(item.name, 60).trim();
+    if (!name) continue;
+    if (name.length < 2) throw new Error('Cada servicio necesita un nombre de al menos 2 caracteres.');
+    const key = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (names.has(key)) throw new Error('No repitas el nombre de un servicio.');
+    names.add(key);
+    let price = null;
+    if (item.price !== null && item.price !== undefined && String(item.price).trim() !== '') {
+      price = Number(item.price);
+      if (!Number.isInteger(price) || price < 0 || price > 10000000) throw new Error('Cada precio debe ser un importe entero entre $0 y $10.000.000, o dejarse vacío para consultar.');
+    }
+    let id = text(item.id, 80).replace(/[^a-zA-Z0-9_-]/g, '') || 'service-' + (index + 1);
+    if (ids.has(id)) id = id + '-' + (index + 1);
+    ids.add(id);
+    out.push({ id, name, price, active: item.active !== false });
+  }
+  return out;
+}
+
 function profileView(barber) {
   return {
     ...barber,
@@ -188,13 +213,17 @@ module.exports = async function handler(req, res) {
     } catch (error) { return send(res, 400, {ok:false,error:error.message}); }
     const existingSnap = await ref.get();
     const existing = existingSnap.exists ? existingSnap.data() : {};
+    let services;
+    try { services = cleanServices(data.services === undefined ? existing.services : data.services); }
+    catch (error) { return send(res, 400, { ok:false, error:error.message }); }
+    const showServices = data.showServices === undefined ? existing.showServices === true : data.showServices === true;
     const thresholdInput = data.reminderThresholdDays === undefined ? existing.reminderThresholdDays : data.reminderThresholdDays;
     const maxInput = data.reminderMaxMessages === undefined ? existing.reminderMaxMessages : data.reminderMaxMessages;
     const thresholdNumber = Number(thresholdInput ?? 3);
     const maxMessageNumber = Number(maxInput ?? 2);
     const reminderThresholdDays = Number.isInteger(thresholdNumber) ? Math.max(0,Math.min(30,thresholdNumber)) : 3;
     const reminderMaxMessages = [1,2,3].includes(maxMessageNumber) ? maxMessageNumber : 2;
-    await ref.update({displayName,barberName,whatsapp,instagramUrl,mapsUrl,schedule,theme:{accent,density},reminderThresholdDays,reminderMaxMessages,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
+    await ref.update({displayName,barberName,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},reminderThresholdDays,reminderMaxMessages,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
     const fresh = await ref.get();
     return send(res, 200, {ok:true,profile:profileView(fresh.data()),subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {

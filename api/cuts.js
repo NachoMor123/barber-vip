@@ -39,14 +39,6 @@ function nextMonthStart(d) {
   const month = date.getUTCMonth();
   return new Date(Date.UTC(year, month + 1, 1, 3, 0, 0));
 }
-async function purgeOldCuts(cutCollection, cutoff, max = 350) {
-  const old = await cutCollection.where('createdAt', '<', admin().firestore.Timestamp.fromDate(cutoff)).orderBy('createdAt', 'asc').limit(max).get();
-  if (old.empty) return 0;
-  const batch = admin().firestore().batch();
-  old.docs.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
-  return old.size;
-}
 function iso(value) {
   if (!value) return null;
   if (typeof value.toDate === 'function') return value.toDate().toISOString();
@@ -80,10 +72,6 @@ module.exports = async function handler(req, res) {
     if (!ctx) return;
     const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
     const cutCollection = barberRef.collection('cuts');
-    const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400000);
-    // Opportunistic cleanup keeps this barber's history tidy even if the daily cron misses a run.
-    try { await purgeOldCuts(cutCollection, cutoff); } catch (cleanupError) { console.warn('cut retention cleanup:', cleanupError.message); }
-
     if (req.method === 'GET') {
       const from = text(req.query && req.query.from, 10);
       const to = text(req.query && req.query.to, 10);

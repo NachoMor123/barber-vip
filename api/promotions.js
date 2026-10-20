@@ -59,11 +59,13 @@ module.exports = async function handler(req, res) {
       if (subscription(barberSnap.data()).status === 'suspended') return send(res, 402, {ok:false,error:'Tu cuenta está vencida. Renovala para crear promociones nuevas.'});
     }
     const data = body(req);
-    const collection = ctx.db.collection('barbers').doc(ctx.uid).collection('promotions');
+    const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
+    const collection = barberRef.collection('promotions');
     const id = text(data.id, 120);
     if (req.method === 'DELETE') {
       if (!id) return send(res, 400, {ok:false,error:'Falta identificar la promoción.'});
       await collection.doc(id).delete();
+      await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
       return send(res, 200, {ok:true});
     }
     const title = text(data.title, 80), description = text(data.description, 500), conditions = text(data.conditions, 300);
@@ -78,9 +80,15 @@ module.exports = async function handler(req, res) {
     if (audience === 'selected' && !customerIds.length) return send(res, 400, {ok:false,error:'Seleccioná al menos un cliente para esta promoción.'});
     const now = admin().firestore.FieldValue.serverTimestamp();
     const payload = { title, description, conditions, audience, customerIds, startsAt: startsAt ? admin().firestore.Timestamp.fromDate(startsAt) : null, endsAt: endsAt ? admin().firestore.Timestamp.fromDate(endsAt) : null, active: data.active !== false, updatedAt: now };
-    if (req.method === 'POST') { payload.createdAt = now; const ref = await collection.add(payload); return send(res, 201, {ok:true,id:ref.id}); }
+    if (req.method === 'POST') {
+      payload.createdAt = now;
+      const ref = await collection.add(payload);
+      await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      return send(res, 201, {ok:true,id:ref.id});
+    }
     if (!id) return send(res, 400, {ok:false,error:'Falta identificar la promoción.'});
     await collection.doc(id).update(payload);
+    await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
     return send(res, 200, {ok:true,id});
   } catch (error) {
     console.error('promotions error', error);

@@ -89,6 +89,13 @@ module.exports = async function handler(req, res) {
       const rangeTsTo = admin().firestore.Timestamp.fromDate(rangeTo);
       const rangeQuery = cutCollection.where('createdAt', '>=', rangeTsFrom).where('createdAt', '<', rangeTsTo);
       const countRange = await getCount(rangeQuery);
+      let countToday;
+      if (String(req.query && req.query.includeToday || '') === '1') {
+        const todayStart = startOfDay(argentinaDateString());
+        countToday = await getCount(cutCollection
+          .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(todayStart))
+          .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(todayStart))));
+      }
 
       const monthStart = argentinaMonthStart();
       const monthEnd = nextMonthStart(monthStart);
@@ -112,7 +119,7 @@ module.exports = async function handler(req, res) {
           };
         });
       }
-      return send(res, 200, { ok: true, countRange, countMonth, countTotal, from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
+      return send(res, 200, { ok: true, countRange, countMonth, countTotal, ...(countToday === undefined ? {} : { countToday }), from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
     }
 
     const data = body(req);
@@ -149,7 +156,7 @@ module.exports = async function handler(req, res) {
     const currentBarber = (await barberRef.get()).data() || {};
     const subscriptionState = subscription(currentBarber);
     if (action === 'walk-in') {
-      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para sumar cortes, primero renová Barber VIP desde Configuración.' });
+      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.' });
       const customerName = text(data.customerName, 70) || 'Cliente de paso';
       const cutRef = cutCollection.doc();
       const now = admin().firestore.FieldValue.serverTimestamp();
@@ -162,7 +169,7 @@ module.exports = async function handler(req, res) {
     const customerRef = barberRef.collection('customers').doc(customerId);
 
     if (action === 'add') {
-      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para sumar cortes, primero renová Barber VIP desde Configuración.' });
+      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.' });
       let resultCustomer = null;
       const cutRef = cutCollection.doc();
       let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
@@ -240,8 +247,8 @@ module.exports = async function handler(req, res) {
         };
         outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });
-      let message = 'Corte registrado correctamente.';
-      if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Corte registrado. ' + label + ' se aplicó en este corte.'; }
+      let message = 'Visita registrada correctamente.';
+      if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en este corte.'; }
       if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }

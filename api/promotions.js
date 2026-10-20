@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
       if (profile.role === 'customer' && profile.barberUid) {
         const customerSnap = await database.collection('barbers').doc(profile.barberUid).collection('customers').doc(decoded.uid).get();
         if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok:false, error:'Este cliente no está activo.' });
-        const snap = await database.collection('barbers').doc(profile.barberUid).collection('promotions').where('active','==',true).get();
+        const snap = await database.collection('barbers').doc(profile.barberUid).collection('promotions').where('active','==',true).limit(100).get();
         const now = Date.now();
         const promos = snap.docs.map(view).filter(p => {
           const start = p.startsAt ? new Date(p.startsAt).getTime() : 0;

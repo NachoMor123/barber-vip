@@ -73,7 +73,9 @@ module.exports = async function handler(req, res) {
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil de esta cuenta. Volvé a ingresar.' });
     const profile = profileSnap.data();
-    await profileRef.update({ lastSeenAt: admin().firestore.FieldValue.serverTimestamp() });
+    const isOnline = String(req.query && req.query.presence || '1') !== '0';
+    const presencePatch = { lastSeenAt: admin().firestore.FieldValue.serverTimestamp(), isOnline };
+    await profileRef.update(presencePatch);
 
     if (profile.role === 'barber') {
       const barberRef = database.collection('barbers').doc(decoded.uid);
@@ -95,8 +97,8 @@ module.exports = async function handler(req, res) {
       const customerSnap = await customerRef.get();
       if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu barbero.' });
       let customer = customerSnap.data();
-      await customerRef.update({ lastSeenAt: admin().firestore.FieldValue.serverTimestamp() });
-      customer = { ...customer, lastSeenAt: new Date().toISOString() };
+      await customerRef.update(presencePatch);
+      customer = { ...customer, lastSeenAt: new Date().toISOString(), isOnline };
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró la barbería asociada.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());

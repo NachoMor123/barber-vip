@@ -142,7 +142,7 @@ module.exports = async function handler(req, res) {
           ];
           if (!freshBarberSnap.exists) {
             transaction.set(barberRef, {
-              uid:decoded.uid, displayName, barberName:'', whatsapp:'', instagramUrl:'', mapsUrl:'',
+              uid:decoded.uid, displayName, barberName:'', activityType:'barberia', whatsapp:'', instagramUrl:'', mapsUrl:'',
               schedule:{mode:'mixed',days:[]}, barberCode,
               theme:{accent:'#3478ff',density:'comfortable'},
               loyaltyPrograms:[{id:'program-246',name:'Programa de premios',audience:'all',customerIds:[],rewards:fallbackRewards}],
@@ -213,6 +213,12 @@ module.exports = async function handler(req, res) {
     } catch (error) { return send(res, 400, {ok:false,error:error.message}); }
     const existingSnap = await ref.get();
     const existing = existingSnap.exists ? existingSnap.data() : {};
+    const allowedActivityTypes = ['barberia','peluqueria','unas','estetica','masajes','otro'];
+    let activityType = allowedActivityTypes.includes(existing.activityType) ? existing.activityType : 'barberia';
+    if (data.activityType !== undefined) {
+      activityType = text(data.activityType, 30);
+      if (!allowedActivityTypes.includes(activityType)) return send(res, 400, {ok:false,error:'Elegí un tipo de actividad válido.'});
+    }
     let services;
     try { services = cleanServices(data.services === undefined ? existing.services : data.services); }
     catch (error) { return send(res, 400, { ok:false, error:error.message }); }
@@ -223,7 +229,7 @@ module.exports = async function handler(req, res) {
     const maxMessageNumber = Number(maxInput ?? 2);
     const reminderThresholdDays = Number.isInteger(thresholdNumber) ? Math.max(0,Math.min(30,thresholdNumber)) : 3;
     const reminderMaxMessages = [1,2,3].includes(maxMessageNumber) ? maxMessageNumber : 2;
-    await ref.update({displayName,barberName,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},reminderThresholdDays,reminderMaxMessages,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
+    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},reminderThresholdDays,reminderMaxMessages,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
     const fresh = await ref.get();
     return send(res, 200, {ok:true,profile:profileView(fresh.data()),subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {

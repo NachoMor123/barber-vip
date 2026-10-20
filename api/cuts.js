@@ -177,7 +177,7 @@ module.exports = async function handler(req, res) {
       if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para sumar cortes, primero renová Barber VIP desde Configuración.' });
       let resultCustomer = null;
       const cutRef = cutCollection.doc();
-      let outcome = { appliedReward: null, earnedReward: null, cycleCut: 0, cyclePausedAtMax: false };
+      let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
       await ctx.db.runTransaction(async transaction => {
         const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
         if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
@@ -196,28 +196,18 @@ module.exports = async function handler(req, res) {
         let cycleBefore = customer.cycleVersion === 2
           ? Math.max(0, Math.min(cycleMax, Number(customer.cycleCuts || 0)))
           : (ownCutsBefore % cycleMax);
-        // Older versions could store non-visit credits inside totalCuts.
-        // Preserve real-visit statistics while keeping an already-earned reward intact.
+        // The discount belongs to the visit that reaches the milestone, not an extra visit afterward.
         if (legacyNonVisitCredits > 0 && !pendingReward) cycleBefore = ownCutsBefore % cycleMax;
         const shouldRestart = Boolean(customer.cyclePausedAtMax) || cycleBefore >= cycleMax || Boolean(pendingReward && Number(pendingReward.cut) >= cycleMax);
-        const appliedReward = pendingReward || null;
-        let cycleNext;
-        if (appliedReward && shouldRestart) {
-          // The final milestone reward is applied to this haircut; this same visit starts the next cycle at 1.
-          cycleNext = 1;
-        } else {
-          cycleNext = Math.min(cycleMax, cycleBefore + 1);
-          if (shouldRestart && !appliedReward) cycleNext = 1;
-        }
-        let earnedReward = null;
-        if (!appliedReward) {
-          earnedReward = rewards.find(r => Number(r.cut) === cycleNext) || null;
-        }
-        const availableRewards = earnedReward
-          ? [{ ...earnedReward, programId: program.id, programName: program.name || 'Programa de premios', earnedAt: new Date().toISOString(), rewardId: `${String(customerId).slice(0,12)}-${cutRef.id}` }]
-          : [];
-        const cyclePausedAtMax = Boolean(earnedReward && Number(earnedReward.cut) >= cycleMax);
-        const rewardReady = availableRewards.length > 0;
+        const cycleForVisit = shouldRestart ? 1 : Math.min(cycleMax, cycleBefore + 1);
+        const milestoneReward = rewards.find(r => Number(r.cut) === cycleForVisit) || null;
+        const appliedReward = (pendingReward && shouldRestart) ? pendingReward : (milestoneReward || pendingReward || null);
+        const appliedOnFinalMilestone = Boolean(milestoneReward && Number(milestoneReward.cut) >= cycleMax && appliedReward === milestoneReward);
+        // Once the final reward is used, the next cycle begins at zero; history keeps the actual visit at 6/6.
+        const cycleNext = appliedOnFinalMilestone ? 0 : cycleForVisit;
+        const availableRewards = [];
+        const cyclePausedAtMax = false;
+        const rewardReady = false;
         const now = admin().firestore.FieldValue.serverTimestamp();
         const updates = {
           totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2, cyclePausedAtMax,
@@ -238,11 +228,11 @@ module.exports = async function handler(req, res) {
           customerName: text(customer.fullName || '', 100),
           createdAt: now,
           type: 'cut',
-          cycleCut: cycleNext,
+          cycleCut: cycleForVisit,
           cycleLength: cycleMax,
-          rewardLabel: appliedReward ? text(appliedReward.label || `${appliedReward.discount}% OFF`, 50) : (earnedReward ? text(earnedReward.label || `${earnedReward.discount}% OFF`, 50) : ''),
-          rewardAction: appliedReward ? 'applied' : (earnedReward ? 'ready' : ''),
-          unlockedRewardLabel: earnedReward ? text(earnedReward.label || `${earnedReward.discount}% OFF`, 50) : '',
+          rewardLabel: appliedReward ? text(appliedReward.label || `${appliedReward.discount}% OFF`, 50) : '',
+          rewardAction: appliedReward ? 'applied' : '',
+          unlockedRewardLabel: '',
           cyclePausedAtMax,
           actualCutNumber: actualCutsRegistered,
           programId: program.id,
@@ -261,13 +251,12 @@ module.exports = async function handler(req, res) {
           rewardReady,
           lastCutAt: new Date().toISOString()
         };
-        outcome = { appliedReward, earnedReward, cycleCut: cycleNext, cyclePausedAtMax };
+        outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });
       let message = 'Corte registrado correctamente.';
-      if (outcome.appliedReward) message = `Corte registrado. Se aplicó automáticamente ${outcome.appliedReward.label || `${outcome.appliedReward.discount}% OFF`}.`;
-      if (outcome.earnedReward) message += ` ${outcome.earnedReward.label || `${outcome.earnedReward.discount}% OFF`} quedó listo para el próximo corte.`;
-      if (outcome.appliedReward && Number(outcome.appliedReward.cut) >= 6) message += ' El ciclo nuevo comienza en el corte 1.';
-      return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, earnedReward: outcome.earnedReward, message });
+      if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Corte registrado. ' + label + ' se aplicó en este corte.'; }
+      if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
+      return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 
     return send(res, 400, { ok: false, error: 'Acción de corte desconocida.' });

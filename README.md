@@ -22,8 +22,8 @@ PWA para barberos independientes. Esta versión elimina el programa de afiliaci�
 - Los clientes de paso generan una visita de historial, pero no reciben cuenta ni avanzan un ciclo de fidelización.
 - El filtro de «Sumar corte» filtra en vivo por nombre (sin depender de mayúsculas o tildes) y WhatsApp.
 - En Clientes existe un filtro de «Premios listos».
-- En Recordatorios se agregó una vista previa de prueba que permite variar nombre, frecuencia y días desde el último corte sin crear clientes ni guardar cambios.
-- El estado «Estoy atendiendo / No estoy atendiendo» se calcula con los horarios semanales configurados y la hora local del dispositivo. Si no hay horarios configurados, la app lo aclara.
+- Recordatorios conserva el flujo normal de Por contactar, Seguimiento y Ocultos; no incluye simulador de prueba.
+- El estado «Estoy atendiendo / No estoy atendiendo» se calcula con los horarios semanales y la hora local del dispositivo, y solo se muestra en la experiencia del cliente; no aparece en el panel del administrador.
 - Las promociones de cliente se vuelven a consultar al volver a la pestaña y cada 60 segundos mientras la sesión está visible; los cambios no requieren actualizar manualmente, aunque no son instantáneos al segundo.
 - En Configuración se puede ocultar o volver a mostrar el botón de ayuda Pip.
 - El cronómetro de promociones del cliente se muestra sin el recuadro interior pesado.
@@ -42,6 +42,6 @@ PWA para barberos independientes. Esta versión elimina el programa de afiliaci�
 6. Hacé un commit nuevo y comprobá que Vercel despliegue ese commit.
 
 ## Validación y limitaciones
-Se valida sintaxis JavaScript de los módulos y endpoints, JSON y estructura del ZIP. No se afirma haber probado transacciones con tu Firebase o Mercado Pago reales. No se afirma haber probado transacciones con tu Firebase o Mercado Pago reales; antes del uso real, probá sumar cortes 1–7, aplicar premios, dar de baja un cliente y reusar nombre/WhatsApp, buscar en «Sumar corte» y confirmar que el historial conserva solo 60 días.
+Se valida sintaxis JavaScript de los módulos y endpoints, JSON y estructura del ZIP. No se afirma haber probado transacciones con tu Firebase o Mercado Pago reales; antes del uso real, probá sumar cortes 1–7, aplicar premios, dar de baja un cliente y reusar nombre/WhatsApp, buscar en «Sumar corte» y confirmar que el historial conserva solo 60 días.
 
 Nota de compatibilidad: un campo histórico antiguo puede permanecer en documentos existentes para preservar el cálculo de visitas reales, pero no existe interfaz ni operación activa de referidos en esta versión.

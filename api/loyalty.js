@@ -44,7 +44,7 @@ function chooseGeneralProgram(barber) {
   const rewards = [2, 4, 6].map(cut => {
     const existing = sourceRewards.find(r => Number(r.cut) === cut) || sourceRewards[[2,4,6].indexOf(cut)];
     const discount = Number(existing?.discount) || DEFAULT_PROGRAM.rewards.find(r => r.cut === cut).discount;
-    return { cut, discount: Math.min(50, Math.max(1, discount)), label: `${Math.min(50, Math.max(1, discount))}% OFF` };
+    return { cut, discount: Math.min(100, Math.max(1, discount)), label: `${Math.min(100, Math.max(1, discount))}% OFF` };
   });
   return { id: cleanId(chosen.id), name: text(chosen.name, 60) || 'Programa de premios', audience: 'all', customerIds: [], rewards };
 }
@@ -96,7 +96,7 @@ function normalizeSubmitted(raw) {
   const rewards = [2, 4, 6].map(cut => {
     const row = raw.rewards.find(r => Number(r.cut) === cut);
     const discount = Number(row?.discount);
-    if (!Number.isInteger(discount) || discount < 1 || discount > 50) throw new Error('Los descuentos de los cortes 2, 4 y 6 deben estar entre 1% y 50%.');
+    if (!Number.isInteger(discount) || discount < 1 || discount > 100) throw new Error('Los descuentos de los cortes 2, 4 y 6 deben estar entre 1% y 100%.');
     return { cut, discount, label: `${discount}% OFF` };
   });
   return { id, name, audience: 'all', customerIds: [], rewards };

@@ -63,13 +63,14 @@ function programForCustomer(customer,barber){const programs=Array.isArray(barber
 function normalizeRewards(program){
   const raw=Array.isArray(program.rewards)?program.rewards:[];
   const legacyDefault=raw.length===3&&Number(raw[0]?.cut)===2&&Number(raw[0]?.discount)===30&&Number(raw[1]?.cut)===4&&Number(raw[1]?.discount)===50&&Number(raw[2]?.cut)===6&&Number(raw[2]?.discount)===70;
-  const defaults=[{cut:2,discount:10},{cut:4,discount:20},{cut:6,discount:30}];
-  return defaults.map(base=>{const old=legacyDefault?base:raw.find(r=>Number(r.cut)===base.cut)||raw[defaults.indexOf(base)];const discount=Math.min(50,Math.max(1,Number(old?.discount)||base.discount));return {cut:base.cut,discount,label:`${discount}% OFF`};});
+  const source=legacyDefault?[{cut:2,discount:10},{cut:4,discount:20},{cut:6,discount:30}]:raw;
+  const normalized=source.map(r=>({cut:Number(r.cut),discount:Math.min(100,Math.max(1,Number(r.discount)||1)),label:`${Math.min(100,Math.max(1,Number(r.discount)||1))}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50).sort((a,b)=>a.cut-b.cut);
+  return normalized.length?normalized:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
 }
 function activeReward(customer,rewards){
   const current=Array.isArray(customer.availableRewards)?customer.availableRewards:[];
   if(current.length)return current.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0];
-  if(customer.rewardReady){const n=Number(customer.cycleCuts||0);const cut=customer.cyclePausedAtMax||n>=6?6:n>=4?4:2;return rewards.find(r=>r.cut===cut)||rewards[0];}
+  if(customer.rewardReady){const n=Number(customer.cycleCuts||0);return [...rewards].filter(r=>Number(r.cut)<=n).pop()||rewards[0];}
   return null;
 }
 module.exports = async function handler(req, res) {
@@ -184,7 +185,7 @@ module.exports = async function handler(req, res) {
         const freshBarber = barberSnap.exists ? barberSnap.data() : currentBarber;
         const program = programForCustomer(customer, freshBarber);
         const rewards = normalizeRewards(program);
-        const cycleMax = 6;
+        const cycleMax = Math.max(1,...rewards.map(r=>Number(r.cut)||1));
         const legacyNonVisitCredits = Math.max(0, Number(customer.referralCreditsReceived || 0));
         const ownCutsBefore = Number.isFinite(Number(customer.actualCutsRegistered))
           ? Math.max(0, Number(customer.actualCutsRegistered))
@@ -202,7 +203,7 @@ module.exports = async function handler(req, res) {
         const appliedReward = pendingReward || null;
         let cycleNext;
         if (appliedReward && shouldRestart) {
-          // The sixth-cut reward is applied to this haircut; this same visit starts the next cycle at 1.
+          // The final milestone reward is applied to this haircut; this same visit starts the next cycle at 1.
           cycleNext = 1;
         } else {
           cycleNext = Math.min(cycleMax, cycleBefore + 1);

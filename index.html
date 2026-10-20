@@ -739,7 +739,7 @@
       }
       const chip=hidden?'Oculto':reminder?(followup?'En seguimiento':`${info.days??'—'} días sin venir`):status[0];
       const chipClass=hidden?'warn':reminder?(followup?'good':'danger'):status[1]==='danger'?'danger':status[1]==='warn'?'warn':'';
-      return `<article class="client-row ${reminder?'reminder-client-row':''} ${hidden?'hidden-reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong>${reminder||hidden?`<span class="status-chip ${chipClass}">${escapeHtml(chip)}</span>`:``}</div><div class="client-meta"><span>✂ <b>${Number(c.totalCuts||0)}</b> cortes totales</span><span>Último corte: <b>${escapeHtml(lastCut)}</b></span>${reminder&&!hidden?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:reminder&&hidden?`<span>Este cliente sigue activo; solo se ocultó de Recordatorios.</span>`:`<span>Estado: <b><span class="presence-live" data-presence-value="${escapeHtml(presenceIso(c.lastSeenAt))}" data-presence-online="${c.isOnline===true?'true':c.isOnline===false?'false':''}">${presenceMarkup(c.lastSeenAt,c.isOnline)}</span></b></span>${info.paused&&!reminder?'<span>⌁ Recordatorios ocultos</span>':''}`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${displayCycleCount}/${cycleMax} · ${rewardLine}</div>${reminder&&!hidden?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar un nuevo corte.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:hidden?`<div class="reminder-tip-box tiny muted">No aparecerá en Por contactar ni en Seguimiento hasta que lo reactives o registre un nuevo corte.</div>${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`${c.remindersPaused?`<button class="btn btn-soft btn-mini" data-action="resume-reminders" data-id="${escapeHtml(c.uid)}">↻ Reactivar recordatorios</button>`:''}<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Corte</button><button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button><button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}" aria-label="Eliminar cliente" title="Eliminar cliente">⌫</button></div></article>`;
+      return `<article class="client-row ${reminder?'reminder-client-row':''} ${hidden?'hidden-reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong>${reminder||hidden?`<span class="status-chip ${chipClass}">${escapeHtml(chip)}</span>`:``}</div><div class="client-meta"><span>✂ <b>${Number(c.totalCuts||0)}</b> cortes totales</span><span>Último corte: <b>${escapeHtml(lastCut)}</b></span>${reminder&&!hidden?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:reminder&&hidden?`<span>Este cliente sigue activo; solo se ocultó de Recordatorios.</span>`:`<span>Estado: <b><span class="presence-live" data-presence-customer="${escapeHtml(c.uid)}" data-presence-value="${escapeHtml(presenceIso(c.lastSeenAt))}" data-presence-online="${c.isOnline===true?'true':c.isOnline===false?'false':''}">${presenceMarkup(c.lastSeenAt,c.isOnline)}</span></b></span>${info.paused&&!reminder?'<span>⌁ Recordatorios ocultos</span>':''}`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${displayCycleCount}/${cycleMax} · ${rewardLine}</div>${reminder&&!hidden?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar un nuevo corte.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:hidden?`<div class="reminder-tip-box tiny muted">No aparecerá en Por contactar ni en Seguimiento hasta que lo reactives o registre un nuevo corte.</div>${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`${c.remindersPaused?`<button class="btn btn-soft btn-mini" data-action="resume-reminders" data-id="${escapeHtml(c.uid)}">↻ Reactivar recordatorios</button>`:''}<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Corte</button><button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button><button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}" aria-label="Eliminar cliente" title="Eliminar cliente">⌫</button></div></article>`;
     }
 
             function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
@@ -913,13 +913,50 @@
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
         const clientsRef=collection(state.db,'barbers',me.barberUid,'customers');
-        state.unsubscribers.push(onSnapshot(clientsRef,snap=>{state.customers=snap.docs.map(d=>({uid:d.id,...d.data()})); if(state.role==='barber')renderApp();},err=>{console.error(err);toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');}));
+        state.unsubscribers.push(onSnapshot(clientsRef,snap=>{
+          const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
+          const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
+          const changes=snap.docChanges();
+          const presenceOnly=previous.length>0&&changes.length>0&&changes.every(change=>{
+            if(change.type!=='modified')return false;
+            const before=previousById.get(change.doc.id);if(!before)return false;
+            const after={uid:change.doc.id,...change.doc.data()};
+            const oldCore={...before},newCore={...after};
+            delete oldCore.lastSeenAt;delete oldCore.isOnline;delete newCore.lastSeenAt;delete newCore.isOnline;
+            return JSON.stringify(oldCore)===JSON.stringify(newCore);
+          });
+          state.customers=next;
+          if(state.role!=='barber')return;
+          if(presenceOnly){
+            const changedIds=new Set(changes.map(change=>change.doc.id));
+            for(const customer of next){
+              if(!changedIds.has(customer.uid))continue;
+              $('.presence-live').filter(el=>el.dataset.presenceCustomer===customer.uid).forEach(el=>{
+                el.dataset.presenceValue=presenceIso(customer.lastSeenAt);
+                el.dataset.presenceOnline=customer.isOnline===true?'true':customer.isOnline===false?'false':'';
+                el.innerHTML=presenceMarkup(customer.lastSeenAt,customer.isOnline);
+              });
+            }
+            return;
+          }
+          renderApp();
+        },err=>{console.error(err);toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');}));
         renderApp(); await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
       } else {
         state.customer=me.customer; state.barber=me.barber; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         const barberRef=doc(state.db,'barbers',me.barberUid);
-        state.unsubscribers.push(onSnapshot(customerRef,snap=>{if(snap.exists()){state.customer={uid:snap.id,...snap.data()};renderApp();}},err=>console.warn('customer snapshot',err)));
+        state.unsubscribers.push(onSnapshot(customerRef,snap=>{
+          if(!snap.exists())return;
+          const fresh={uid:snap.id,...snap.data()};
+          const previous=state.customer;
+          const oldCore=previous?{...previous}:null,newCore={...fresh};
+          if(oldCore){delete oldCore.lastSeenAt;delete oldCore.isOnline;}
+          delete newCore.lastSeenAt;delete newCore.isOnline;
+          const presenceOnly=!!oldCore&&JSON.stringify(oldCore)===JSON.stringify(newCore);
+          state.customer=fresh;
+          if(!presenceOnly)renderApp();
+        },err=>console.warn('customer snapshot',err)));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const nextRevision=promotionRevisionKey(fresh.promotionsUpdatedAt);const shouldReloadPromos=state.promotionsVersion!==null&&nextRevision!==state.promotionsVersion;state.barber=fresh;state.promotionsVersion=nextRevision;applyTheme(state.barber.theme);renderApp();if(shouldReloadPromos)loadPromotions().then(()=>{if(state.role==='customer')renderApp();});}},err=>console.warn('barber profile snapshot',err)));
         renderApp();

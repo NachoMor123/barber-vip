@@ -534,7 +534,7 @@
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<180000)return 'En línea'; if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function presenceMarkup(value,isOnline){const d=asDate(value);const fresh=!!d&&Date.now()-d.getTime()>=0&&Date.now()-d.getTime()<180000;if(fresh&&isOnline!==false)return '<span class="online-indicator"><i></i>En línea</span>';if(isOnline===false||isOnline===true)return '<span class="offline-indicator">Desconectado</span>';return escapeHtml(relativeTime(value));}
+    function presenceMarkup(value,isOnline){const d=asDate(value);const fresh=!!d&&Date.now()-d.getTime()>=0&&Date.now()-d.getTime()<420000;if(fresh&&isOnline!==false)return '<span class="online-indicator"><i></i>En línea</span>';if(isOnline===false||isOnline===true)return '<span class="offline-indicator">Desconectado</span>';return escapeHtml(relativeTime(value));}
     function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function whatsappNumber(input) {
@@ -896,7 +896,7 @@
     }
     async function updatePresence(active){if(!state.user||!state.auth?.currentUser)return;try{await api(`/api/me?presence=${active?'1':'0'}`);}catch(error){console.debug('presence update skipped',error.message);}}
     async function sendPresencePing(){if(document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,120000);state.presenceUiTimer=setInterval(()=>{if(state.role==='barber')refreshPresenceLabels();},30000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,300000);state.presenceUiTimer=setInterval(()=>{if(state.role==='barber')refreshPresenceLabels();},30000);}
     document.addEventListener('visibilitychange',()=>{if(!state.user)return;if(document.visibilityState==='visible')sendPresencePing();else updatePresence(false);});
     window.addEventListener('pagehide',()=>{if(!state.user||!state.auth?.currentUser)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 

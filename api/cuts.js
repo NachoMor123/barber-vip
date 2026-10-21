@@ -241,7 +241,9 @@ module.exports = async function handler(req, res) {
           loyaltyProgramId: customer.loyaltyProgramId || program.id,
           availableRewards,
           rewardReady,
-          lastCutAt: new Date().toISOString()
+          lastCutAt: new Date().toISOString(),
+          lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null,
+          lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null
         };
         outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });

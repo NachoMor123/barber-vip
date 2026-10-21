@@ -1,4 +1,4 @@
-# Vínculo VIP — fidelización para servicios recurrentes
+# Orvello — fidelización para servicios recurrentes
 
 Aplicación web instalable (PWA) con panel profesional y espacio individual para cada cliente. Incluye visitas, ciclos de beneficios, promociones, recordatorios, perfil profesional y suscripción mensual.
 

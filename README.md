@@ -16,6 +16,8 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: la app prepara el contacto por WhatsApp y el profesional confirma su envío.
+- Presencia aproximada: pulso cada 15 minutos solo mientras el cliente tiene la pestaña visible; el indicador considera en línea una actualización de los últimos 16 minutos.
+- La instalación PWA es opcional: abrir `/?signup=1` muestra el registro si no hay sesión; si la sesión ya está iniciada, se entra directamente al panel. No se bloquea el uso por una pantalla de instalación.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
 - Historial de visitas retenido durante 60 días con limpieza programada.
 
@@ -52,7 +54,7 @@ Vercel Hobby está destinado a usos personales/no comerciales según las condici
 
 ## Lista previa al lanzamiento
 
-- Confirmar las reglas de Firestore desplegadas en el proyecto Firebase.
+- Publicar en Firebase Console las reglas de `firestore.rules` incluidas en el paquete: los clientes ya no deben poder leer el documento privado del perfil profesional directamente.
 - Confirmar que todas las variables privadas estén configuradas en producción.
 - Probar acceso de barbero y cliente, altas/bajas, visitas, hitos, promociones, recordatorios y errores de red.
 - Verificar el webhook de Mercado Pago con eventos de prueba y firma configurada.

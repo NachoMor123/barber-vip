@@ -54,9 +54,7 @@ function defaultProgram(barber) {
 function programForCustomer(customer,barber){const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
 function normalizeRewards(program){
   const raw=Array.isArray(program.rewards)?program.rewards:[];
-  const legacyDefault=raw.length===3&&Number(raw[0]?.cut)===2&&Number(raw[0]?.discount)===30&&Number(raw[1]?.cut)===4&&Number(raw[1]?.discount)===50&&Number(raw[2]?.cut)===6&&Number(raw[2]?.discount)===70;
-  const source=legacyDefault?[{cut:2,discount:10},{cut:4,discount:20},{cut:6,discount:30}]:raw;
-  const normalized=source.map(r=>({cut:Number(r.cut),discount:Math.min(100,Math.max(1,Number(r.discount)||1)),label:`${Math.min(100,Math.max(1,Number(r.discount)||1))}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50).sort((a,b)=>a.cut-b.cut);
+  const normalized=raw.map(r=>({cut:Number(r.cut),discount:Math.min(100,Math.max(1,Number(r.discount)||1)),label:`${Math.min(100,Math.max(1,Number(r.discount)||1))}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50).sort((a,b)=>a.cut-b.cut);
   return normalized.length?normalized:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
 }
 function activeReward(customer,rewards){

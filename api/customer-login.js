@@ -57,7 +57,7 @@ module.exports = async function handler(req, res) {
       }
       if (password.length < 6 || password.length > 128) return send(res, 400, { ok: false, error: 'La contraseña debe tener entre 6 y 128 caracteres.' });
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
-      if (!Number.isInteger(visitDays) || visitDays < 1 || visitDays > 365) return send(res, 400, { ok: false, error: 'Indicá cada cuántos días aproximadamente venís a cortarte (1 a 365).'});
+      if (!Number.isInteger(visitDays) || visitDays < 1 || visitDays > 365) return send(res, 400, { ok: false, error: 'Indicá cada cuántos días aproximadamente visitás a tu profesional (1 a 365).'});
 
       const barberCode = cleanBarberCode(data.barberCode);
       if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de tu profesional.' });

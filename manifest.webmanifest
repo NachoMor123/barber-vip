@@ -1,7 +1,7 @@
 {
   "name": "Barber VIP",
   "short_name": "Barber VIP",
-  "description": "Gestión de clientes y beneficios para barberías",
+  "description": "Fidelización de clientes para servicios recurrentes",
   "lang": "es-AR",
   "start_url": "/",
   "scope": "/",

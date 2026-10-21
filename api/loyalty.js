@@ -1,6 +1,6 @@
 const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
-const { requireBarber } = require('../lib/security');
+const { requireBarber, subscription } = require('../lib/security');
 
 const DEFAULT_PROGRAM = {
   id: 'program-general',
@@ -113,6 +113,9 @@ module.exports = async function handler(req, res) {
     const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
     const barberSnap = await barberRef.get();
     if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil profesional.' });
+    if (req.method === 'PUT' && subscription(barberSnap.data()).status === 'suspended') {
+      return send(res, 402, { ok:false, error:'Tu plan está vencido. Renovalo para modificar los hitos de fidelización.' });
+    }
     const current = await migrateToSingleProgram(ctx.db, barberRef, barberSnap.data());
 
     if (req.method === 'GET') {

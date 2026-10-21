@@ -91,7 +91,7 @@ module.exports = async function handler(req, res) {
     if (profile.role === 'barber') {
       const barberRef = database.collection('barbers').doc(decoded.uid);
       const barberSnap = await barberRef.get();
-      if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'Falta configurar el perfil de la barbería.' });
+      if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'Falta configurar el perfil profesional.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
       if (typeof barber.hasPaidSubscription !== 'boolean') {
         try { const paid = await barberRef.collection('payments').limit(1).get(); barber.hasPaidSubscription = !paid.empty; } catch (_) { barber.hasPaidSubscription = false; }
@@ -106,10 +106,10 @@ module.exports = async function handler(req, res) {
       const barberRef = database.collection('barbers').doc(profile.barberUid);
       const customerRef = barberRef.collection('customers').doc(decoded.uid);
       const customerSnap = await customerRef.get();
-      if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu barbero.' });
+      if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu profesional.' });
       const customer = customerSnap.data();
       const barberSnap = await barberRef.get();
-      if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró la barbería asociada.' });
+      if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el espacio profesional asociado.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
       return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber, subscriptionPrice: getSubscriptionPrice() });
     }

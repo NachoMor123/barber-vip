@@ -24,13 +24,15 @@ async function sanitizeBarberLoyalty(database, barberRef, source) {
   const chosen = oldPrograms.find(p => p && p.id === source.defaultLoyaltyProgramId)
     || oldPrograms.find(p => p && p.audience === 'all') || oldPrograms.find(Boolean) || {};
   const chosenRewards = safeProgramRewards(chosen.rewards);
-  const oldDefault = chosenRewards.length===3 && chosenRewards[0]?.cut===2 && chosenRewards[0]?.discount===30 && chosenRewards[1]?.cut===4 && chosenRewards[1]?.discount===50 && chosenRewards[2]?.cut===6 && chosenRewards[2]?.discount===70;
   const fallbackRewards = [{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
   const program = {
     id: cleanProgramId(chosen.id),
     name: String(chosen.name || 'Programa de premios').slice(0,60),
     audience: 'all', customerIds: [],
-    rewards: chosenRewards.length ? (oldDefault ? fallbackRewards : [2,4,6].map((cut,i)=>{const r=chosenRewards.find(x=>Number(x.cut)===cut)||chosenRewards[i];const discount=Math.max(1,Math.min(50,Number(r?.discount)||fallbackRewards[i].discount));return {cut,discount,label:`${discount}% OFF`};})) : fallbackRewards
+    rewards: (chosenRewards.length ? chosenRewards : fallbackRewards).map(item => {
+      const discount = Math.max(1, Math.min(100, Number(item.discount) || 1));
+      return {cut:Number(item.cut),discount,label:`${discount}% OFF`};
+    })
   };
   const needsMigration = oldPrograms.length !== 1 || oldPrograms[0]?.id !== program.id
     || oldPrograms[0]?.audience !== 'all' || (oldPrograms[0]?.customerIds || []).length > 0

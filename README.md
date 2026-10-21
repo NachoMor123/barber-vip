@@ -17,7 +17,7 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: la app prepara el contacto por WhatsApp y el profesional confirma su envío.
 - Presencia aproximada: pulso cada 15 minutos solo mientras el cliente tiene la pestaña visible; el indicador considera en línea una actualización de los últimos 16 minutos.
-- La instalación PWA es opcional: abrir `/?signup=1` muestra el registro si no hay sesión; si la sesión ya está iniciada, se entra directamente al panel. No se bloquea el uso por una pantalla de instalación.
+- La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
 - Historial de visitas retenido durante 60 días con limpieza programada.
 

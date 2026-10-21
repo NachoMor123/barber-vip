@@ -31,8 +31,8 @@ module.exports = async function handler(req, res) {
         customers.where('usernameNormalized', '==', usernameNormalized).get(),
         customers.where('whatsapp', '==', whatsapp).get()
       ]);
-      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese nombre en esta barbería. Agregá una inicial para distinguirlo.' });
-      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese WhatsApp en esta barbería.' });
+      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese nombre en este espacio profesional. Agregá una inicial para distinguirlo.' });
+      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese WhatsApp en este espacio profesional.' });
 
       const uid = crypto.randomUUID();
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
@@ -143,7 +143,7 @@ module.exports = async function handler(req, res) {
       const usernameNormalized = normalizeName(fullName);
       if (fullName.length < 3) return send(res, 400, { ok: false, error: 'Ingresá el nombre y apellido del cliente.' });
       const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).get();
-      if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de esta barbería.' });
+      if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de este espacio profesional.' });
       updates.fullName = fullName;
       updates.usernameNormalized = usernameNormalized;
       await auth().updateUser(customerId, { displayName: fullName }).catch(() => {});
@@ -152,7 +152,7 @@ module.exports = async function handler(req, res) {
       const whatsapp = normalizeArgentinaPhone(data.whatsapp);
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
       const duplicatePhone = await customers.where('whatsapp', '==', whatsapp).get();
-      if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de esta barbería.' });
+      if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de este espacio profesional.' });
       updates.whatsapp = whatsapp;
     }
     if (data.approximateVisitDays !== undefined) updates.approximateVisitDays = validRequired(data.approximateVisitDays, current.approximateVisitDays, 365);

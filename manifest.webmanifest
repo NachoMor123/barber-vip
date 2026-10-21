@@ -1,7 +1,7 @@
 {
-  "name": "Vínculo VIP",
-  "short_name": "Vínculo",
-  "description": "Fidelización de clientes para servicios recurrentes",
+  "name": "Orvello",
+  "short_name": "Orvello",
+  "description": "Orvello: fidelización de clientes para servicios recurrentes",
   "lang": "es-AR",
   "start_url": "/",
   "scope": "/",

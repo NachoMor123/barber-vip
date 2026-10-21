@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
 
     const barberUid = String(payment.external_reference || (payment.metadata && payment.metadata.barber_uid) || '');
     let skipTrial = payment.metadata && payment.metadata.billing_action === 'skip-trial';
-    if (!barberUid || (payment.metadata && payment.metadata.barber_uid && payment.metadata.barber_uid !== barberUid)) return send(res, 400, { ok: false, error: 'El pago no está asociado a una cuenta de Kelvori.' });
+    if (!barberUid || (payment.metadata && payment.metadata.barber_uid && payment.metadata.barber_uid !== barberUid)) return send(res, 400, { ok: false, error: 'El pago no está asociado a una cuenta de Barber VIP.' });
     const barberRef = db().collection('barbers').doc(barberUid);
     const payRef = barberRef.collection('payments').doc(String(payment.id));
     const preferenceId = String(payment.preference_id || '');

@@ -1,35 +1,34 @@
-# Kelvori — fidelización para servicios recurrentes
+# Barber VIP — fidelización para barberías
 
-Aplicación web instalable (PWA) con panel profesional y espacio individual para cada cliente. Incluye visitas, ciclos de beneficios, promociones, recordatorios, perfil profesional y suscripción mensual.
+Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel profesional, visitas, ciclos de beneficios configurables, promociones, recordatorios, perfil profesional y suscripción mensual.
 
-## Entornos y enlaces
+## Enlaces actuales
 
 - Aplicación: https://barber-vip-three.vercel.app/
-- Inicio de registro profesional: https://barber-vip-three.vercel.app/?signup=1
-- La web comercial se publica como un proyecto de Vercel independiente y no forma parte de este repositorio.
+- Registro profesional: https://barber-vip-three.vercel.app/?signup=1
+- La web comercial se entrega por separado y no se incluye en el ZIP de la aplicación.
 
 ## Funciones principales
 
-- Perfil profesional con actividad, horarios, WhatsApp, Instagram, ubicación y servicios opcionales para mostrar al cliente.
+- Perfil de cada barbero con horarios, WhatsApp, Instagram y ubicación.
 - Clientes con cuenta individual, datos de contacto, frecuencia aproximada de visita, historial y seguimiento.
-- Registro de una visita desde el panel profesional; no hay selector de servicio obligatorio al registrar.
-- Ciclo de fidelización con hitos configurables. El beneficio se aplica en la visita que alcanza el hito y el historial conserva el número real de esa visita.
-- El hito final se muestra visualmente como ciclo completo; internamente el contador reinicia el siguiente ciclo.
-- Promociones independientes de los premios, con vigencia y destinatarios.
-- Recordatorios que se preparan para WhatsApp; la persona profesional decide el contacto y confirma su seguimiento.
-- Suscripción mensual con Mercado Pago y webhook.
-- Historial retenido durante 60 días; hay limpieza programada mediante `/api/cleanup-cuts`.
+- Registro de visitas desde el panel profesional y acceso separado para cada cliente.
+- Ciclo de fidelización con hitos y beneficios configurables.
+- Promociones con vigencia y destinatarios.
+- Recordatorios de seguimiento: la app prepara el contacto por WhatsApp y el profesional confirma su envío.
+- Suscripción mensual con Mercado Pago y webhook de confirmación.
+- Historial de visitas retenido durante 60 días con limpieza programada.
 
-## Arquitectura actual
+## Arquitectura
 
-- `index.html`: aplicación frontend; contiene una parte importante de la interfaz y la lógica de presentación en un archivo único.
-- `api/*.js`: endpoints serverless en Node.js.
-- `lib/admin.js` y `lib/security.js`: Firebase Admin y comprobación de identidad/rol en servidor.
-- `firestore.rules`: bloquea escrituras directas desde el navegador. Las acciones con privilegios pasan por la API.
+- `index.html`: interfaz de la PWA.
+- `api/*.js`: endpoints serverless Node.js.
+- `lib/admin.js` y `lib/security.js`: Firebase Admin y validaciones de identidad/rol en servidor.
+- `firestore.rules`: bloquea escrituras directas desde el navegador; las operaciones privilegiadas pasan por la API.
 - `manifest.webmanifest`, `sw.js` y `assets/`: instalación PWA, caché e iconos.
 - Firebase Authentication: cuentas profesionales y clientes.
 - Cloud Firestore: perfiles, clientes, visitas, promociones, configuración y pagos.
-- Mercado Pago: preferencia de suscripción y webhook de confirmación.
+- Mercado Pago: preferencia de suscripción y webhook.
 - Vercel: hosting estático y ejecución de funciones `/api`.
 
 ## Variables de entorno
@@ -43,22 +42,22 @@ Configurar en Vercel, no en el frontend:
 - `SUBSCRIPTION_PRICE_ARS`
 - `CRON_SECRET`
 
-Tomar los valores reales desde el entorno privado del proyecto; no publicar credenciales en este archivo ni en Git.
+Conservar los valores privados existentes. El nombre visible de la marca no obliga a crear otro proyecto Firebase ni a cambiar identificadores internos. `APP_URL` debe seguir apuntando a la URL de producción que utiliza el proceso de pago.
 
-## Costos y límites
+## Costos, límites y escalabilidad
 
-Las cuotas gratuitas tienen límites diarios/mensuales y no implican capacidad ilimitada. Las escuchas en tiempo real generan lecturas cuando cambian documentos; las escrituras frecuentes de presencia también consumen cuota. Revisar métricas reales de Firestore y Function Invocations de Vercel antes de aumentar usuarios.
+El plan gratuito de Firestore tiene límites diarios/mensuales y no representa capacidad ilimitada. Las consultas, listeners en tiempo real, escrituras de presencia e índices consumen recursos. Revisar las métricas reales de Firestore y las invocaciones de funciones de Vercel antes de aumentar usuarios.
 
-Importante: el plan Vercel Hobby está destinado a uso personal/no comercial. Para vender y operar este SaaS comercialmente, usar Vercel Pro u otro proveedor cuyo plan permita ese uso según sus condiciones vigentes.
+Vercel Hobby está destinado a usos personales/no comerciales según las condiciones vigentes. Si se vende el servicio, revisar el plan o proveedor de hosting permitido para uso comercial.
 
-## Seguridad y validación antes de lanzamiento
+## Lista previa al lanzamiento
 
 - Confirmar las reglas de Firestore desplegadas en el proyecto Firebase.
-- Confirmar que las variables privadas estén configuradas en producción.
-- Probar acceso como profesional y como cliente, alta/baja de clientes, visita rápida, hitos, promociones, recordatorios, pagos, vencimiento y recuperación de errores.
-- Verificar el webhook de Mercado Pago con eventos de prueba y la firma configurada.
-- Ejecutar pruebas concurrentes de registro de visitas para comprobar consistencia del ciclo.
-- Medir lecturas/escrituras de Firestore con la aplicación funcionando durante jornadas reales.
-- Confirmar despliegue y probar la app en Android/Chrome después de cada release.
+- Confirmar que todas las variables privadas estén configuradas en producción.
+- Probar acceso de barbero y cliente, altas/bajas, visitas, hitos, promociones, recordatorios y errores de red.
+- Verificar el webhook de Mercado Pago con eventos de prueba y firma configurada.
+- Probar múltiples visitas concurrentes para comprobar la consistencia de premios e historiales.
+- Medir lecturas/escrituras reales durante jornadas de uso.
+- Verificar el flujo de la web comercial: botón de registro, sesión ya iniciada, sesión cerrada y PWA instalada.
 
-Este README documenta el diseño observado en el repositorio. No sustituye una prueba de carga ni certifica una auditoría de seguridad sobre el proyecto desplegado.
+Este README describe el diseño observado en el repositorio. No sustituye una prueba de carga ni certifica una auditoría completa del proyecto desplegado.

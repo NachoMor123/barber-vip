@@ -39,13 +39,12 @@ function chooseGeneralProgram(barber) {
     || programs.find(Boolean)
     || DEFAULT_PROGRAM;
   const rewards = cleanRewards(chosen.rewards);
-  const normalized = rewards.length ? rewards : DEFAULT_PROGRAM.rewards;
   return {
     id: cleanId(chosen.id),
     name: text(chosen.name, 60) || 'Programa de premios',
     audience: 'all',
     customerIds: [],
-    rewards: normalized.map(r => ({
+    rewards: (rewards.length ? rewards : DEFAULT_PROGRAM.rewards).map(r => ({
       cut: Number(r.cut),
       discount: Math.min(100, Math.max(1, Number(r.discount))),
       label: `${Math.min(100, Math.max(1, Number(r.discount)))}% OFF`
@@ -101,7 +100,7 @@ function normalizeSubmitted(raw) {
   }
   const rewards = cleanRewards(raw.rewards);
   if (!rewards.length || rewards.length !== raw.rewards.length) {
-    throw new Error('Revisá los hitos: deben ser únicos, estar ordenados y tener una cantidad de visitas entre 1 y 50 y descuentos entre 1% y 100%.');
+    throw new Error('Revisá los hitos: deben ser únicos, estar entre 1 y 50 visitas y tener descuentos entre 1% y 100%.');
   }
   return { id, name, audience: 'all', customerIds: [], rewards };
 }

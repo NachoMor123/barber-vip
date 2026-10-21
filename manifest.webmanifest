@@ -1,7 +1,7 @@
 {
-  "name": "Kelvori",
-  "short_name": "Kelvori",
-  "description": "Kelvori: fidelización de clientes para servicios recurrentes",
+  "name": "Barber VIP",
+  "short_name": "Barber VIP",
+  "description": "Fidelización de clientes y visitas para barberías",
   "lang": "es-AR",
   "start_url": "/",
   "scope": "/",

@@ -7,12 +7,6 @@ service cloud.firestore {
     function isBarber(barberId) {
       return signedIn() && request.auth.uid == barberId;
     }
-    function isActiveCustomer(barberId) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/barbers/$(barberId)/customers/$(request.auth.uid))
-        && get(/databases/$(database)/documents/barbers/$(barberId)/customers/$(request.auth.uid)).data.active == true;
-    }
-
     // Los perfiles internos y los cambios se administran desde las API del servidor.
     match /userProfiles/{uid} {
       allow read, write: if false;

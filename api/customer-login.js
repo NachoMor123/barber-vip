@@ -26,7 +26,7 @@ async function enforceSignupRateLimit(database, req, barberUid) {
     const stillInWindow = windowStarted > 0 && nowMs - windowStarted < windowMs;
     const count = stillInWindow ? Number(current.count || 0) : 0;
     if (count >= 15) {
-      const error = new Error('Se alcanzó el límite temporal de registros desde esta conexión. Esperá una hora o pedile al barbero que cree la cuenta.');
+      const error = new Error('Se alcanzó el límite temporal de registros desde esta conexión. Esperá una hora o pedile a tu profesional que cree la cuenta.');
       error.code = 'signup-rate-limited';
       throw error;
     }
@@ -60,9 +60,9 @@ module.exports = async function handler(req, res) {
       if (!Number.isInteger(visitDays) || visitDays < 1 || visitDays > 365) return send(res, 400, { ok: false, error: 'Indicá cada cuántos días aproximadamente venís a cortarte (1 a 365).'});
 
       const barberCode = cleanBarberCode(data.barberCode);
-      if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de tu barbero.' });
+      if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de tu profesional.' });
       const barberQuery = await database.collection('barbers').where('barberCode', '==', barberCode).limit(1).get();
-      if (barberQuery.empty) return send(res, 404, { ok: false, error: 'No encontramos ese código. Revisalo con tu barbero y probá nuevamente.' });
+      if (barberQuery.empty) return send(res, 404, { ok: false, error: 'No encontramos ese código. Revisalo con tu profesional y probá nuevamente.' });
       const barberUid = barberQuery.docs[0].id;
       const barber = barberQuery.docs[0].data();
       const barberRef = database.collection('barbers').doc(barberUid);
@@ -71,8 +71,8 @@ module.exports = async function handler(req, res) {
         customersRef.where('usernameNormalized', '==', usernameNormalized).get(),
         customersRef.where('whatsapp', '==', whatsapp).get()
       ]);
-      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese nombre en esta barbería. Iniciá sesión o consultá con tu barbero.' });
-      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese WhatsApp en esta barbería. Iniciá sesión o consultá con tu barbero.' });
+      if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese nombre en este espacio profesional. Iniciá sesión o consultá con tu profesional.' });
+      if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Iniciá sesión o consultá con tu profesional.' });
       try {
         await enforceSignupRateLimit(database, req, barberUid);
       } catch (error) {
@@ -110,13 +110,13 @@ module.exports = async function handler(req, res) {
     // Existing customer sign-in path: names are resolved to the internal Firebase Auth email.
     const barberCode = cleanBarberCode(data.barberCode);
     const usernameNormalized = normalizeName(data.username);
-    if (!barberCode || !usernameNormalized) return send(res, 400, { ok: false, error: 'Completá el código de barbería y tu nombre.' });
+    if (!barberCode || !usernameNormalized) return send(res, 400, { ok: false, error: 'Completá el código de tu profesional y tu nombre.' });
     const barberQuery = await database.collection('barbers').where('barberCode', '==', barberCode).limit(1).get();
-    if (barberQuery.empty) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código de barbería, el nombre y la contraseña.' });
+    if (barberQuery.empty) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código profesional, el nombre y la contraseña.' });
     const barberDoc = barberQuery.docs[0];
     const query = await barberDoc.ref.collection('customers').where('usernameNormalized', '==', usernameNormalized).get();
     const customerDoc = query.docs.find(doc => doc.data().active !== false);
-    if (!customerDoc) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código de barbería, el nombre y la contraseña.' });
+    if (!customerDoc) return send(res, 401, { ok: false, error: 'No encontramos esa combinación. Revisá el código profesional, el nombre y la contraseña.' });
     return send(res, 200, { ok: true, email: customerDoc.data().loginEmail });
   } catch (error) {
     console.error('customer login/register error', error);

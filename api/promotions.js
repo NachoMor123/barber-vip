@@ -53,13 +53,13 @@ module.exports = async function handler(req, res) {
       return send(res, 403, { ok:false, error:'No tenés permiso para ver estas promociones.' });
     }
     const ctx = await requireBarber(req, res); if (!ctx) return;
-    if (req.method === 'POST') {
-      const barberSnap = await ctx.db.collection('barbers').doc(ctx.uid).get();
-      if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil profesional.'});
-      if (subscription(barberSnap.data()).status === 'suspended') return send(res, 402, {ok:false,error:'Tu cuenta está vencida. Renovala para crear promociones nuevas.'});
+    const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
+    const barberSnap = await barberRef.get();
+    if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil profesional.'});
+    if (subscription(barberSnap.data()).status === 'suspended') {
+      return send(res, 402, {ok:false,error:'Tu plan está vencido. Renovalo para modificar promociones.'});
     }
     const data = body(req);
-    const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
     const collection = barberRef.collection('promotions');
     const id = text(data.id, 120);
     if (req.method === 'DELETE') {

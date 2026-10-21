@@ -51,4 +51,5 @@ jobs:
             exit 0
           fi
           git commit -m "Generate 512px Barber VIP install icon"
+          git pull --rebase origin main
           git push

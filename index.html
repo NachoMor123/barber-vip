@@ -619,14 +619,20 @@
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
     function renderLanding() {
-      const signupRequested = new URLSearchParams(location.search).get('signup') === '1';
-      if (signupRequested) {
+      const query = new URLSearchParams(location.search);
+      const fromSignupLink = query.get('signup') === '1';
+      if(fromSignupLink){try{localStorage.setItem('barberVipStartSignup','1');}catch(_){}}
+      let pendingSignup = fromSignupLink;
+      if(!pendingSignup){try{pendingSignup=localStorage.getItem('barberVipStartSignup')==='1';}catch(_){}}
+      if(fromSignupLink){query.delete('signup');history.replaceState({},'',location.pathname+(query.toString()?'?'+query.toString():'')+location.hash);}
+      if (pendingSignup) {
         renderLogin('barber-signup');
+        void maybeShowInstallPrompt();
         return;
       }
       appRoot.innerHTML = `<main class="landing"><div class="landing-top">${brand}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Una experiencia VIP para cada visita</span></div><h1>Tu estilo.<br><span>Tu recompensa.</span></h1><div class="hero-points"><span><b>✓</b> Seguimiento de visitas</span><span><b>✓</b> Premios automáticos</span><span><b>✓</b> Contacto directo</span></div></div><div class="choice-panel"><div class="choice-top"><div><h2>Un buen servicio atrae. Una razón para volver fideliza.</h2><p>Entrá a tu espacio de trabajo o consultá tu tarjeta de visitas y beneficios.</p></div><div class="choice-icon">✦</div></div><button class="role-choice" data-action="choose-login" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Soy administrador</strong><small>Gestioná clientes, visitas y promociones.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-login" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Soy cliente</strong><small>Consultá tus visitas y beneficios.</small></span><span class="role-arrow">↗</span></button><div class="choice-foot">🔒 Acceso privado para cada profesional y sus clientes.</div>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>`:''}</div></section><footer class="landing-footer"><span>© 2026 Barber VIP · Cada visita puede ser el motivo para volver.</span></footer></main>`;
+      void maybeShowInstallPrompt();
     }
-
     function renderLogin(mode) {
       const signup = mode === 'barber-signup';
       const barber = mode === 'barber' || signup;
@@ -889,6 +895,7 @@
       else { syncReminderClock(); renderCustomer(); }
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
+      void maybeShowInstallPrompt();
     }
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
@@ -1207,6 +1214,25 @@
     }
     function showPipTopic(topic){openPipHelp(topic);}
     function isStandaloneApp(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;}
+    let installedPwaDetectionPromise = null;
+    async function isInstalledPwaInBrowser(){
+      if(isStandaloneApp())return true;
+      if(typeof navigator.getInstalledRelatedApps!=='function')return false;
+      if(!installedPwaDetectionPromise){
+        installedPwaDetectionPromise=(async()=>{
+          try{
+            const related=await navigator.getInstalledRelatedApps();
+            const expectedManifest=new URL('/manifest.webmanifest',location.origin).href;
+            return Array.isArray(related)&&related.some(app=>{
+              if(app?.platform!=='webapp')return false;
+              if(!app.url)return true;
+              try{return new URL(app.url,location.origin).href===expectedManifest;}catch(_){return false;}
+            });
+          }catch(error){console.debug('PWA installed-state detection unavailable',error?.message||'');return false;}
+        })();
+      }
+      return installedPwaDetectionPromise;
+    }
     function setInstallGateLock(locked){
       appRoot.inert=locked;
       if(locked)appRoot.setAttribute('aria-hidden','true');else appRoot.removeAttribute('aria-hidden');
@@ -1221,12 +1247,14 @@
       setInstallGateLock(true);
       const canPrompt=!!deferredInstallPrompt;const ua=navigator.userAgent||'';const isIOS=/iphone|ipad|ipod/i.test(ua);const isAndroid=/android/i.test(ua);const isChromium=/chrome|chromium|edg\//i.test(ua);
       let title='Usá Barber VIP como aplicación',kicker='EXPERIENCIA APP',copy='Para continuar, instalá Barber VIP y luego abrila desde el ícono que aparecerá en tu pantalla de inicio.';let content='';
-      if(installPhase==='waiting'){
+      if(installPhase==='already-installed'){
+        kicker='APLICACIÓN INSTALADA';title='Barber VIP ya está instalada';copy='No hace falta instalarla de nuevo. En algunos navegadores, un enlace abre primero una pestaña web en lugar de lanzar la aplicación.';
+        content=`<div class="install-help-copy"><strong>📲 Para abrirla como aplicación:</strong><br>1. Volvé a la pantalla de inicio del teléfono.<br>2. Tocá el ícono Barber VIP que ya instalaste.<br>3. Vas a entrar directamente, sin esta pantalla de instalación.</div><p class="tiny muted">Si el navegador ya abrió Barber VIP como aplicación, esta pantalla no aparecerá.</p><button class="btn btn-primary btn-block" data-action="continue-installed-browser">Continuar en esta pestaña</button>`;
+      } else if(installPhase==='waiting'){
         kicker='INSTALACIÓN EN CURSO';title='Esperando instalación…';copy='Mientras termina la instalación, Barber VIP queda bloqueada en esta pestaña. Cuando termine, abrila desde el ícono de la aplicación.';
         content=`<div class="install-waiting"><span class="install-spinner"></span><strong>Esperando instalación</strong></div><p class="install-help-copy">Esta pestaña no puede abrir por la fuerza la aplicación instalada. Si ya aceptaste la instalación, podés ver cómo abrir el ícono nuevo.</p><button class="btn btn-soft btn-block" data-action="install-manual-check">Ver instrucciones de apertura</button>`;
       } else if(installPhase==='installed'||installPhase==='instructions'){
-        const confirmed=false;
-        kicker='ABRIR LA APLICACIÓN';title='Terminá de abrir Barber VIP';copy='Si la instalación terminó, abrí el ícono de Barber VIP. Esta pestaña no puede lanzar una PWA instalada de forma fiable en todos los navegadores.';
+        kicker='INSTALACIÓN COMPLETADA';title='Abrí Barber VIP desde su ícono';copy='La instalación ya terminó. Abrí el ícono de Barber VIP en la pantalla de inicio para entrar en el modo aplicación.';
         content=`<div class="install-help-copy"><strong>📲 Para entrar:</strong><br>1. Cerrá esta pestaña del navegador.<br>2. Buscá el ícono de Barber VIP en la pantalla de inicio o en el menú de aplicaciones.<br>3. Tocá ese ícono. La app reconocerá que se abrió en modo instalado y te dejará continuar.</div><p class="tiny muted">Si todavía no aparece el ícono, terminá la instalación desde el menú del navegador y volvé a intentar.</p><button class="btn btn-soft btn-block" data-action="install-retry">No encuentro el ícono · ver instalación</button>`;
       } else {
         if(canPrompt){content=`<button class="btn btn-primary btn-block" data-action="install-app">⬇ Instalar Barber VIP</button>`;}
@@ -1251,14 +1279,23 @@
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
       else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
     },true);
-    function maybeShowInstallPrompt(){
+    async function maybeShowInstallPrompt(){
       if(isStandaloneApp()){
         if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        setInstallGateLock(false);
         return;
       }
-      // Installed state is only trusted while this page receives appinstalled; persistent localStorage
-      // cannot tell whether the user later uninstalled the PWA. Outside standalone mode, offer install again.
-      if(installPhase==='installed') installPhase='prompt';
+      const installed=await isInstalledPwaInBrowser();
+      if(isStandaloneApp()){
+        if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        setInstallGateLock(false);
+        return;
+      }
+      if(installed){
+        if(!['waiting','instructions','installed'].includes(installPhase))installPhase='already-installed';
+      }else if(!['waiting','instructions','installed'].includes(installPhase)){
+        installPhase='prompt';
+      }
       renderInstallGate();
     }
     async function startInstallPrompt(){
@@ -1324,10 +1361,11 @@
         else if(action==='logout'){openLogoutConfirmation();}
         else if(action==='confirm-logout'){modalRoot.innerHTML='';await signOutAndReturn();}
         else if(action==='cancel-logout'){modalRoot.innerHTML='';}
-        else if(action==='back-to-login'){renderLogin('barber');}
+        else if(action==='back-to-login'){try{localStorage.removeItem('barberVipStartSignup');}catch(_){}renderLogin('barber');}
         else if(action==='start-signup'){state.pendingSignup=null;renderLogin('barber-signup');}
         else if(action==='install-app'){await startInstallPrompt();}
-        else if(action==='install-help'){installHelpExpanded=true;maybeShowInstallPrompt();}
+        else if(action==='install-help'){installHelpExpanded=true;renderInstallGate();}
+        else if(action==='continue-installed-browser'){setInstallGateLock(false);modalRoot.innerHTML='';}
         else if(action==='reminder-tab'){state.reminderTab=['pending','followup','hidden'].includes(button.dataset.tab)?button.dataset.tab:'pending';state.query='';renderApp();}
         else if(action==='confirm-reminder'){await confirmReminderSent(button.dataset.id);}
         else if(action==='pause-reminders'){await setCustomerRemindersPaused(button.dataset.id,true);}
@@ -1493,11 +1531,11 @@
     if(firebaseConfigured()) {
       try {
         const fbApp=initializeApp(firebaseConfig);state.auth=getAuth(fbApp);state.db=getFirestore(fbApp);firebaseReady=true;
-        onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
       } catch(error){console.error('Firebase init error',error);}
     }
-    window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;});
-    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installPhase='installed';if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';setInstallGateLock(false);});
+    window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installPhase='instructions';void maybeShowInstallPrompt();});
     if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('SW register failed',err));
     if(firebaseReady) renderLoading(); else renderLanding();
   </script>

@@ -38,15 +38,19 @@ function chooseGeneralProgram(barber) {
     || programs.find(p => p && p.audience === 'all')
     || programs.find(Boolean)
     || DEFAULT_PROGRAM;
-  const oldRewards = cleanRewards(chosen.rewards) || [];
-  const wasLegacyDefault = oldRewards.length === 3 && oldRewards[0]?.cut === 2 && oldRewards[0]?.discount === 30 && oldRewards[1]?.cut === 4 && oldRewards[1]?.discount === 50 && oldRewards[2]?.cut === 6 && oldRewards[2]?.discount === 70;
-  const sourceRewards = wasLegacyDefault ? DEFAULT_PROGRAM.rewards : oldRewards;
-  const rewards = [2, 4, 6].map(cut => {
-    const existing = sourceRewards.find(r => Number(r.cut) === cut) || sourceRewards[[2,4,6].indexOf(cut)];
-    const discount = Number(existing?.discount) || DEFAULT_PROGRAM.rewards.find(r => r.cut === cut).discount;
-    return { cut, discount: Math.min(100, Math.max(1, discount)), label: `${Math.min(100, Math.max(1, discount))}% OFF` };
-  });
-  return { id: cleanId(chosen.id), name: text(chosen.name, 60) || 'Programa de premios', audience: 'all', customerIds: [], rewards };
+  const rewards = cleanRewards(chosen.rewards);
+  const normalized = rewards.length ? rewards : DEFAULT_PROGRAM.rewards;
+  return {
+    id: cleanId(chosen.id),
+    name: text(chosen.name, 60) || 'Programa de premios',
+    audience: 'all',
+    customerIds: [],
+    rewards: normalized.map(r => ({
+      cut: Number(r.cut),
+      discount: Math.min(100, Math.max(1, Number(r.discount))),
+      label: `${Math.min(100, Math.max(1, Number(r.discount)))}% OFF`
+    }))
+  };
 }
 async function migrateToSingleProgram(database, barberRef, source) {
   const oldPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
@@ -92,13 +96,13 @@ async function migrateToSingleProgram(database, barberRef, source) {
 function normalizeSubmitted(raw) {
   const id = cleanId(raw.id, 'program-general');
   const name = text(raw.name, 60) || 'Programa de premios';
-  if (!Array.isArray(raw.rewards) || raw.rewards.length !== 3) throw new Error('El ciclo debe tener las tres etapas fijas: 2, 4 y 6 cortes.');
-  const rewards = [2, 4, 6].map(cut => {
-    const row = raw.rewards.find(r => Number(r.cut) === cut);
-    const discount = Number(row?.discount);
-    if (!Number.isInteger(discount) || discount < 1 || discount > 100) throw new Error('Los descuentos de los cortes 2, 4 y 6 deben estar entre 1% y 100%.');
-    return { cut, discount, label: `${discount}% OFF` };
-  });
+  if (!Array.isArray(raw.rewards) || raw.rewards.length < 1 || raw.rewards.length > 10) {
+    throw new Error('Configurá entre 1 y 10 hitos para el ciclo de fidelización.');
+  }
+  const rewards = cleanRewards(raw.rewards);
+  if (!rewards.length || rewards.length !== raw.rewards.length) {
+    throw new Error('Revisá los hitos: deben ser únicos, estar ordenados y tener una cantidad de visitas entre 1 y 50 y descuentos entre 1% y 100%.');
+  }
   return { id, name, audience: 'all', customerIds: [], rewards };
 }
 

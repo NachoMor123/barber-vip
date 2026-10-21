@@ -621,7 +621,6 @@
     function renderLanding() {
       const signupRequested = new URLSearchParams(location.search).get('signup') === '1';
       if (signupRequested) {
-        try { localStorage.setItem('barberVipStartSignup', '1'); } catch (_) {}
         renderLogin('barber-signup');
         return;
       }
@@ -890,7 +889,6 @@
       else { syncReminderClock(); renderCustomer(); }
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
-      maybeShowInstallPrompt();
     }
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
@@ -1300,10 +1298,10 @@
           if(input){if(input.hasAttribute('data-mask-password')){const reveal=input.dataset.masked!=='false';input.style.webkitTextSecurity=reveal?'none':'disc';input.dataset.masked=reveal?'false':'true';button.textContent=reveal?'Ocultar':'Ver';button.setAttribute('aria-label',reveal?'Ocultar contraseña':'Mostrar contraseña');}else{const visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'Ocultar':'Ver';button.setAttribute('aria-label',visible?'Ocultar contraseña':'Mostrar contraseña');}}
         }
         else if(action==='choose-login'){if(!firebaseConfigured()){toast('Primero configurá Firebase en index.html y volvé a cargar.','error');return;}renderLogin(button.dataset.mode);}
-        else if(action==='start-customer-signup'){void renderCustomerSignup();maybeShowInstallPrompt();}
+        else if(action==='start-customer-signup'){void renderCustomerSignup();}
         else if(action==='cancel-customer-signup'){renderLanding();}
         else if(action==='start-customer-login'){renderLogin('customer');}
-        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');}catch(_){}try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else modalRoot.innerHTML='';}
+        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else modalRoot.innerHTML='';}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
         else if(action==='nav'){state.section=button.dataset.section;state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);if(state.section==='home')refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}
         else if(action==='open-pip-help'){openPipHelp();}
@@ -1480,7 +1478,7 @@
     if(firebaseConfigured()) {
       try {
         const fbApp=initializeApp(firebaseConfig);state.auth=getAuth(fbApp);state.db=getFirestore(fbApp);firebaseReady=true;
-        onAuthStateChanged(state.auth,user=>{const wasResolved=state.authResolved;state.authResolved=true;if(state.manualLogin)return;const signupRequested=new URLSearchParams(location.search).get('signup')==='1';if(user){renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
       } catch(error){console.error('Firebase init error',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;});

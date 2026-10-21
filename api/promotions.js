@@ -29,8 +29,8 @@ module.exports = async function handler(req, res) {
         if (!barberSnap.data()?.promotionsInitialized && subscription(barberSnap.data() || {}).status !== 'suspended') {
           const now = admin().firestore.FieldValue.serverTimestamp();
           const examples = [
-            { title:'Promo de bienvenida', description:'Un detalle especial para tu próxima visita.', conditions:'Mostrá esta promoción al barbero.', audience:'all', customerIds:[], active:true, createdAt:now, updatedAt:now },
-            { title:'Días de la semana', description:'Consultá en la barbería si hay una promo vigente para días tranquilos.', conditions:'Consultar disponibilidad antes del servicio.', audience:'all', customerIds:[], active:false, createdAt:now, updatedAt:now }
+            { title:'Promo de bienvenida', description:'Un detalle especial para tu próxima visita.', conditions:'Mostrá esta promoción a tu profesional.', audience:'all', customerIds:[], active:true, createdAt:now, updatedAt:now },
+            { title:'Días de la semana', description:'Consultá con tu profesional si hay una promo vigente para días tranquilos.', conditions:'Consultar disponibilidad antes del servicio.', audience:'all', customerIds:[], active:false, createdAt:now, updatedAt:now }
           ];
           const batch = ctx.db.batch(); examples.forEach(promo => batch.set(promosRef.doc(), promo)); batch.update(barberRef, { promotionsInitialized:true }); await batch.commit();
         }
@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
     const ctx = await requireBarber(req, res); if (!ctx) return;
     if (req.method === 'POST') {
       const barberSnap = await ctx.db.collection('barbers').doc(ctx.uid).get();
-      if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil del barbero.'});
+      if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil profesional.'});
       if (subscription(barberSnap.data()).status === 'suspended') return send(res, 402, {ok:false,error:'Tu cuenta está vencida. Renovala para crear promociones nuevas.'});
     }
     const data = body(req);

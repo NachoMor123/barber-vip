@@ -112,7 +112,7 @@ module.exports = async function handler(req, res) {
     if (!ctx) return;
     const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
     const barberSnap = await barberRef.get();
-    if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil del barbero.' });
+    if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil profesional.' });
     const current = await migrateToSingleProgram(ctx.db, barberRef, barberSnap.data());
 
     if (req.method === 'GET') {
@@ -150,6 +150,6 @@ module.exports = async function handler(req, res) {
     return send(res, 200, { ok: true, programs: [program], defaultLoyaltyProgramId: program.id, updatedCustomers: affected.size });
   } catch (error) {
     console.error('loyalty error', error);
-    return send(res, 400, { ok: false, error: error.message || 'No se pudo guardar la fidelización. Revisá los números de corte y descuentos.' });
+    return send(res, 400, { ok: false, error: error.message || 'No se pudo guardar la fidelización. Revisá los hitos de visitas y sus descuentos.' });
   }
 };

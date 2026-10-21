@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#030610">
   <meta name="description" content="Barber VIP: fidelización, visitas y beneficios y contacto directo con tu profesional.">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/icon-512.png" type="image/png" sizes="512x512">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
   <title>Barber VIP</title>
   <style>
@@ -1280,6 +1280,11 @@
       else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
     },true);
     async function maybeShowInstallPrompt(){
+      if(installPhase==='browser-allowed'){
+        setInstallGateLock(false);
+        if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        return;
+      }
       if(isStandaloneApp()){
         if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
         setInstallGateLock(false);
@@ -1365,7 +1370,7 @@
         else if(action==='start-signup'){state.pendingSignup=null;renderLogin('barber-signup');}
         else if(action==='install-app'){await startInstallPrompt();}
         else if(action==='install-help'){installHelpExpanded=true;renderInstallGate();}
-        else if(action==='continue-installed-browser'){setInstallGateLock(false);modalRoot.innerHTML='';}
+        else if(action==='continue-installed-browser'){installPhase='browser-allowed';setInstallGateLock(false);modalRoot.innerHTML='';}
         else if(action==='reminder-tab'){state.reminderTab=['pending','followup','hidden'].includes(button.dataset.tab)?button.dataset.tab:'pending';state.query='';renderApp();}
         else if(action==='confirm-reminder'){await confirmReminderSent(button.dataset.id);}
         else if(action==='pause-reminders'){await setCustomerRemindersPaused(button.dataset.id,true);}

@@ -26,7 +26,7 @@ module.exports = async function handler(req, res) {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: [{ id: 'barber-vip-monthly', title: 'Orvello — suscripción mensual', description: 'Acceso mensual a Orvello', quantity: 1, currency_id: 'ARS', unit_price: price }],
+        items: [{ id: 'barber-vip-monthly', title: 'Kelvori — suscripción mensual', description: 'Acceso mensual a Kelvori', quantity: 1, currency_id: 'ARS', unit_price: price }],
         external_reference: ctx.uid,
         metadata: { barber_uid: ctx.uid, product: 'barber-vip-monthly', billing_action: skipTrial ? 'skip-trial' : 'renew' },
         back_urls: { success: `${appUrl}/?payment=success`, failure: `${appUrl}/?payment=failure`, pending: `${appUrl}/?payment=pending` },

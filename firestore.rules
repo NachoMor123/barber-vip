@@ -19,8 +19,9 @@ service cloud.firestore {
     }
 
     match /barbers/{barberId} {
-      // Clientes de esa barbería solo pueden leer el perfil público de la barbería.
-      allow get: if isBarber(barberId) || isActiveCustomer(barberId);
+      // El documento padre contiene configuración interna y solo lo lee el barbero.
+      // Los clientes reciben un perfil público filtrado por la API del servidor.
+      allow get: if isBarber(barberId);
       allow list, create, update, delete: if false;
 
       match /customers/{customerId} {

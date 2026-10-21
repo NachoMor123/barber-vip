@@ -142,7 +142,7 @@ module.exports = async function handler(req, res) {
           ];
           if (!freshBarberSnap.exists) {
             transaction.set(barberRef, {
-              uid:decoded.uid, displayName, barberName:'', activityType:'barberia', whatsapp:'', instagramUrl:'', mapsUrl:'',
+              uid:decoded.uid, displayName, barberName:'', activityType:'otro', whatsapp:'', instagramUrl:'', mapsUrl:'',
               schedule:{mode:'mixed',days:[]}, barberCode,
               theme:{accent:'#3478ff',density:'comfortable'},
               loyaltyPrograms:[{id:'program-246',name:'Programa de premios',audience:'all',customerIds:[],rewards:fallbackRewards}],
@@ -214,7 +214,7 @@ module.exports = async function handler(req, res) {
     const existingSnap = await ref.get();
     const existing = existingSnap.exists ? existingSnap.data() : {};
     const allowedActivityTypes = ['barberia','peluqueria','unas','estetica','masajes','otro'];
-    let activityType = allowedActivityTypes.includes(existing.activityType) ? existing.activityType : 'barberia';
+    let activityType = allowedActivityTypes.includes(existing.activityType) ? existing.activityType : 'otro';
     if (data.activityType !== undefined) {
       activityType = text(data.activityType, 30);
       if (!allowedActivityTypes.includes(activityType)) return send(res, 400, {ok:false,error:'Elegí un tipo de actividad válido.'});

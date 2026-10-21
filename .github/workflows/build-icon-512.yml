@@ -1,0 +1,54 @@
+name: Build high-resolution Barber VIP icon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "assets/icon-192.png"
+      - ".github/workflows/build-icon-512.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-icon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Render 512x512 from the exact Barber VIP artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          source = Path("assets/icon-192.png")
+          target = Path("assets/icon-512.png")
+          with Image.open(source) as image:
+              image.load()
+              if image.size != (192, 192):
+                  raise SystemExit(f"Unexpected source icon dimensions: {image.size}")
+              image.convert("RGB").resize((512, 512), Image.Resampling.LANCZOS).save(target, "PNG", optimize=True)
+          with Image.open(target) as image:
+              image.load()
+              if image.size != (512, 512):
+                  raise SystemExit(f"Unexpected output dimensions: {image.size}")
+          print(f"Created {target} ({target.stat().st_size} bytes)")
+          PY
+
+      - name: Commit generated PNG
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/icon-512.png
+          if git diff --cached --quiet; then
+            echo "512 icon is already current."
+            exit 0
+          fi
+          git commit -m "Generate 512px Barber VIP install icon"
+          git push

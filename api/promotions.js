@@ -48,7 +48,8 @@ module.exports = async function handler(req, res) {
           const assigned = p.audience === 'all' || (Array.isArray(p.customerIds) && p.customerIds.includes(decoded.uid));
           return assigned && start <= now && end >= now;
         });
-        return send(res, 200, { ok:true, promotions:promos });
+        const publicPromos = promos.map(promo => { const { customerIds, ...safePromo } = promo; return safePromo; });
+        return send(res, 200, { ok:true, promotions:publicPromos });
       }
       return send(res, 403, { ok:false, error:'No tenés permiso para ver estas promociones.' });
     }

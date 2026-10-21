@@ -7,7 +7,7 @@
   <meta name="description" content="Barber VIP: fidelización, visitas y beneficios y contacto directo con tu profesional.">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/assets/icon-512.png" type="image/png" sizes="512x512">
-  <link rel="apple-touch-icon" href="/assets/icon-192.png">
+  <link rel="apple-touch-icon" href="/assets/icon-512.png">
   <title>Barber VIP</title>
   <style>
     :root{--bg:#0b0a12;--panel:#12111c;--panel2:#181625;--line:rgba(255,255,255,.09);--text:#f7f4ff;--muted:#aaa5bc;--accent:#b69cff;--accent2:#6d48dc;--green:#65e6b0;--yellow:#ffce76;--red:#ff7189;--radius:22px;--shadow:0 24px 80px rgba(0,0,0,.34)}
@@ -1297,10 +1297,12 @@
         return;
       }
       if(installed){
-        if(!['waiting','instructions','installed'].includes(installPhase))installPhase='already-installed';
-      }else if(!['waiting','instructions','installed'].includes(installPhase)){
-        installPhase='prompt';
+        installPhase='installed';
+        if(modalRoot.querySelector('.install-nudge-backdrop'))modalRoot.innerHTML='';
+        setInstallGateLock(false);
+        return;
       }
+      if(!['waiting','instructions'].includes(installPhase))installPhase='prompt';
       renderInstallGate();
     }
     async function startInstallPrompt(){
@@ -1540,7 +1542,7 @@
       } catch(error){console.error('Firebase init error',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
-    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installPhase='instructions';void maybeShowInstallPrompt();});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='instructions';renderInstallGate();});
     if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('SW register failed',err));
     if(firebaseReady) renderLoading(); else renderLanding();
   </script>

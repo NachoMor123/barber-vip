@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "assets/icon-192.png"
+      - "assets/icon-192.webp"
       - ".github/workflows/build-icon-512.yml"
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
           python3 - <<'PY'
           from PIL import Image
           from pathlib import Path
-          source = Path("assets/icon-192.png")
+          source = Path("assets/icon-192.webp")
           target = Path("assets/icon-512.png")
           with Image.open(source) as image:
               image.load()

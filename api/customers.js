@@ -1,6 +1,6 @@
 const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
-const { requireBarber } = require('../lib/security');
+const { requireBarber, subscription } = require('../lib/security');
 const crypto = require('crypto');
 
 function validRequired(value, fallback, max = 1000) {
@@ -13,9 +13,14 @@ module.exports = async function handler(req, res) {
   try {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;
-    const data = body(req);
     const database = ctx.db;
     const barberRef = database.collection('barbers').doc(ctx.uid);
+    const barberSnap = await barberRef.get();
+    if (!barberSnap.exists) return send(res, 404, {ok:false,error:'No se encontró el perfil profesional.'});
+    if (subscription(barberSnap.data()).status === 'suspended') {
+      return send(res, 402, {ok:false,error:'Tu plan está vencido. Renovalo para modificar clientes y recordatorios.'});
+    }
+    const data = body(req);
     const customers = barberRef.collection('customers');
 
     if (req.method === 'POST') {

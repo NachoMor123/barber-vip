@@ -36,11 +36,19 @@ function publicBarberProfile(source) {
       rewards: safeProgramRewards(program.rewards)
     }));
   const services = source.showServices === true && Array.isArray(source.services)
-    ? source.services.slice(0, 20).map(service => ({
-        name: String(service && service.name || '').slice(0, 80),
-        description: String(service && service.description || '').slice(0, 180),
-        price: Number.isFinite(Number(service && service.price)) ? Math.max(0, Math.min(100000000, Number(service.price))) : null
-      })).filter(service => service.name)
+    ? source.services.slice(0, 20).map(service => {
+        const rawPrice = service && service.price;
+        const price = rawPrice === null || rawPrice === undefined || rawPrice === ''
+          ? null
+          : (Number.isFinite(Number(rawPrice)) ? Math.max(0, Math.min(100000000, Number(rawPrice))) : null);
+        return {
+          id: String(service && service.id || '').slice(0, 80),
+          name: String(service && service.name || '').slice(0, 80),
+          description: String(service && service.description || '').slice(0, 180),
+          price,
+          active: !service || service.active !== false
+        };
+      }).filter(service => service.name)
     : [];
   const themeSource = source.theme && typeof source.theme === 'object' ? source.theme : {};
   return {

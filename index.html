@@ -904,7 +904,24 @@
     async function updatePresence(active){if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;try{await api(`/api/me?presence=${active?'1':'0'}`);}catch(error){console.debug('presence update skipped',error.message);}}
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
     function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'){sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,300000);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,30000);}
-    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible')sendPresencePing();else updatePresence(false);});
+    async function refreshCustomerContext(){
+      if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
+      state.refreshingCustomerContext=true;
+      try{
+        const fresh=await api('/api/me');
+        if(fresh.role!=='customer'||state.role!=='customer'||fresh.uid!==state.user.uid)return;
+        const previousRevision=state.promotionsVersion;
+        const nextRevision=promotionRevisionKey(fresh.barber?.promotionsUpdatedAt);
+        state.customer=fresh.customer;
+        state.barber=fresh.barber||{};
+        state.promotionsVersion=nextRevision;
+        applyTheme(state.barber.theme);
+        if(previousRevision!==null&&previousRevision!==nextRevision)await loadPromotions();
+        renderApp();
+      }catch(error){console.debug('public profile refresh skipped',error.message);}
+      finally{state.refreshingCustomerContext=false;}
+    }
+    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){sendPresencePing();void refreshCustomerContext();}else updatePresence(false);});
     window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
@@ -951,7 +968,6 @@
       } else {
         state.customer=me.customer; state.barber=me.barber; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
-        const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
           const fresh={uid:snap.id,...snap.data()};
@@ -964,7 +980,6 @@
           if(!presenceOnly)renderApp();
         },err=>console.warn('customer snapshot',err)));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
-        state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const nextRevision=promotionRevisionKey(fresh.promotionsUpdatedAt);const shouldReloadPromos=state.promotionsVersion!==null&&nextRevision!==state.promotionsVersion;state.barber=fresh;state.promotionsVersion=nextRevision;applyTheme(state.barber.theme);renderApp();if(shouldReloadPromos)loadPromotions().then(()=>{if(state.role==='customer')renderApp();});}},err=>console.warn('barber profile snapshot',err)));
         renderApp();
       }
       const payment=new URLSearchParams(location.search).get('payment');

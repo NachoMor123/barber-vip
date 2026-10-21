@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
+const { subscription } = require('../lib/security');
 
 
 function cleanBarberCode(value) {
@@ -65,6 +66,7 @@ module.exports = async function handler(req, res) {
       if (barberQuery.empty) return send(res, 404, { ok: false, error: 'No encontramos ese código. Revisalo con tu profesional y probá nuevamente.' });
       const barberUid = barberQuery.docs[0].id;
       const barber = barberQuery.docs[0].data();
+      if (subscription(barber).status === 'suspended') return send(res, 402, {ok:false,error:'El acceso para nuevas cuentas está pausado porque el plan del profesional está vencido. Consultá con el profesional.'});
       const barberRef = database.collection('barbers').doc(barberUid);
       const customersRef = barberRef.collection('customers');
       const [duplicateNames, duplicatePhones] = await Promise.all([

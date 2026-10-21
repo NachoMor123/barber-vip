@@ -19,6 +19,48 @@ function safeProgramRewards(input) {
   }
   return out;
 }
+function publicBarberProfile(source) {
+  const dateIso = value => {
+    if (!value) return null;
+    const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  };
+  const programs = (Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [])
+    .filter(program => program && program.audience === 'all')
+    .slice(0, 1)
+    .map(program => ({
+      id: cleanProgramId(program.id),
+      name: String(program.name || 'Programa de premios').slice(0, 60),
+      audience: 'all',
+      customerIds: [],
+      rewards: safeProgramRewards(program.rewards)
+    }));
+  const services = source.showServices === true && Array.isArray(source.services)
+    ? source.services.slice(0, 20).map(service => ({
+        name: String(service && service.name || '').slice(0, 80),
+        description: String(service && service.description || '').slice(0, 180),
+        price: Number.isFinite(Number(service && service.price)) ? Math.max(0, Math.min(100000000, Number(service.price))) : null
+      })).filter(service => service.name)
+    : [];
+  const themeSource = source.theme && typeof source.theme === 'object' ? source.theme : {};
+  return {
+    displayName: String(source.displayName || 'Tu profesional').slice(0, 80),
+    barberName: String(source.barberName || '').slice(0, 100),
+    activityType: 'barberia',
+    barberCode: String(source.barberCode || '').slice(0, 16),
+    whatsapp: String(source.whatsapp || '').slice(0, 40),
+    instagramUrl: String(source.instagramUrl || '').slice(0, 500),
+    mapsUrl: String(source.mapsUrl || '').slice(0, 1000),
+    schedule: source.schedule && typeof source.schedule === 'object' ? source.schedule : {},
+    services,
+    showServices: source.showServices === true,
+    theme: { accent: '#3478ff', density: themeSource.density === 'compact' ? 'compact' : 'comfortable' },
+    loyaltyPrograms: programs,
+    defaultLoyaltyProgramId: cleanProgramId(source.defaultLoyaltyProgramId),
+    promotionsUpdatedAt: dateIso(source.promotionsUpdatedAt)
+  };
+}
+
 async function sanitizeBarberLoyalty(database, barberRef, source) {
   const oldPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
   const chosen = oldPrograms.find(p => p && p.id === source.defaultLoyaltyProgramId)
@@ -111,7 +153,7 @@ module.exports = async function handler(req, res) {
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el espacio profesional asociado.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
-      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber, subscriptionPrice: getSubscriptionPrice() });
+      return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber: publicBarberProfile(barber) });
     }
     return send(res, 403, { ok: false, error: 'El tipo de cuenta no está configurado correctamente.' });
   } catch (error) {

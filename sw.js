@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v31';
+const CACHE_NAME = 'barber-vip-shell-v32';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

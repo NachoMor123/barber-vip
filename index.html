@@ -1520,7 +1520,7 @@
         event.preventDefault();
         if(!firebaseReady){toast('Firebase no está listo. Recargá la aplicación e intentá nuevamente.','error');return;}
         const fd=new FormData(form),button=$('button[type="submit"]',form);
-        const payload={action:'register',fullName:String(fd.get('fullName')||'').trim(),whatsapp:whatsappNumber(String(fd.get('whatsapp')||'').trim()),approximateVisitDays:Number(fd.get('approximateVisitDays')),password:String(fd.get('password')||''),barberCode:String(fd.get('barberCode')||'').trim()};
+        const payload={action:'register',fullName:String($('#selfCustomerName',form)?.value||'').trim(),whatsapp:whatsappNumber(String($('#selfCustomerWhatsapp',form)?.value||'').trim()),approximateVisitDays:Number($('#selfCustomerFrequency',form)?.value),password:String($('#selfCustomerPassword',form)?.value||''),barberCode:String($('#customerSignupBarberCode',form)?.value||'').trim()};
         if(payload.fullName.split(/\s+/).filter(Boolean).length<2){toast('Ingresá nombre y apellido.','error');return;}
         if(payload.password.length<6){toast('La contraseña debe tener al menos 6 caracteres.','error');return;}
         button.disabled=true;button.textContent='Creando cuenta…';state.manualLogin=true;
@@ -1595,6 +1595,8 @@
       if(form.id==='walkInForm'){event.preventDefault();const fd=new FormData(form),btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Registrando…';try{await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'walk-in',customerName:$('#walkInName',form)?.value||''})});modalRoot.innerHTML='';toast('Visita rápida registrado en el historial.','success');await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Registrar visita rápido';}return;}
       if(form.id==='customerForm'){event.preventDefault();await saveCustomerForm(form);}
     });
+
+    document.addEventListener('focusout',event=>{const target=event.target;if(target instanceof HTMLInputElement&&target.matches('[data-argentina-mobile]')){const raw=String(target.value||'').trim();if(raw&&validWhatsapp(raw))target.value=argentinaLocalNumber(raw);}});
 
     document.addEventListener('input',event=>{
       const target=event.target;

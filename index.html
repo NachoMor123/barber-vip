@@ -989,7 +989,7 @@
       },1000);
     }
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'){state.presenceTimer=setInterval(sendPresencePing,600000);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,30000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible')state.presenceTimer=setInterval(sendPresencePing,600000);if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,30000);}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;
@@ -1007,13 +1007,13 @@
       }catch(error){console.debug('public profile refresh skipped',error.message);}
       finally{state.refreshingCustomerContext=false;}
     }
-    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){sendPresencePing();void refreshCustomerContext();}else updatePresence(false);});
-    window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
+    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){if(!state.presenceTimer)state.presenceTimer=setInterval(sendPresencePing,600000);void sendPresencePing();void refreshCustomerContext();}else{if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;}void updatePresence(false);}});
+    window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;if(lastPresenceWriteValue===false&&Date.now()-lastPresenceWriteAt<10000)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat(); if(me.role==='customer') await updatePresence(true);
+      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat(); if(me.role==='customer'&&document.visibilityState==='visible') await updatePresence(true);
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         try { const loyalty=await api('/api/loyalty'); state.barber={...state.barber,loyaltyPrograms:loyalty.programs,defaultLoyaltyProgramId:loyalty.defaultLoyaltyProgramId}; }
@@ -1218,10 +1218,10 @@
     async function sendReminderToWhatsApp(id){
       const c=state.customers.find(x=>x.uid===id);if(!c)return;const number=whatsappNumber(c.whatsapp);if(!validWhatsapp(c.whatsapp)){toast('Este cliente no tiene un WhatsApp válido.','error');return;}
       const info=reminderInfo(c);if(info.count>=info.maxMessages){toast('Ya alcanzaste el máximo configurado. El seguimiento continúa hasta que se registre una nueva visita.','error');return;}
-      const url=`https://wa.me/${number}?text=${encodeURIComponent(reminderMessage(c))}`;const opened=window.open(url,'_blank');
+      const url=`https://wa.me/${number}`;const opened=window.open(url,'_blank');
       if(!opened){toast('El navegador bloqueó WhatsApp. Permití las ventanas emergentes y probá otra vez.','error');return;}
       try{opened.opener=null;}catch(_){}
-      state.reminderPrepared[id]=true;renderApp();toast('WhatsApp se abrió con el mensaje preparado. Después de enviarlo, volvé y tocá «Confirmar envío».','success');
+      state.reminderPrepared[id]=true;renderApp();toast('WhatsApp se abrió sin mensaje preescrito. Después de enviar tu mensaje, volvé y tocá «Confirmar envío».','success');
     }
 
     async function setCustomerRemindersPaused(id, paused){

@@ -1,7 +1,7 @@
 const { send, method } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 
-const PRESENCE_WINDOW_MS = 11 * 60 * 1000;
+const PRESENCE_WINDOW_MS = 6 * 60 * 1000;
 const PRESENCE_QUERY_LIMIT = 1000;
 
 module.exports = async function handler(req, res) {

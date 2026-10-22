@@ -984,9 +984,9 @@
             const recent=!!seen&&now-seen.getTime()>=0&&now-seen.getTime()<staleMs;
             return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:recent&&fresh.isOnline===true};
           }
-          const last=asDate(customer.lastSeenAt);
-          if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
-          return customer;
+          // El endpoint devuelve solo actividad reciente. Si un cliente no aparece,
+          // conservamos su última fecha conocida, pero no lo dejamos marcado en línea.
+          return {...customer,isOnline:false};
         });
         renderApp();
         toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');

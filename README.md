@@ -16,11 +16,11 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: WhatsApp se abre sin texto preescrito; la app muestra una sugerencia opcional y el profesional confirma que intentó contactar manualmente. Esto no verifica la entrega del mensaje.
-- Presencia: Firestore actualiza la lista en tiempo real. El cliente envía un pulso al entrar/volver al primer plano y luego cada 3 minutos mientras la app está visible; si no hay pulso durante 5 minutos, el estado pasa a «Última conexión». Al cerrar sesión o pasar a segundo plano se intenta marcar la salida de inmediato.
-- El botón circular de refresco está junto al contador de clientes. Consulta el endpoint de presencia y muestra una cuenta regresiva de 10 a 1 antes de permitir otra consulta; no recarga toda la base ni sustituye el listener automático. Si el sistema operativo mata la app sin notificar el cierre, el estado vence en aproximadamente 5 minutos.
+- Presencia de bajo consumo: los pulsos del cliente se guardan en `barbers/{barberUid}/presence/{customerUid}`, separados de la lista de clientes para que cada pulso no vuelva a leer el listado completo. El pulso ocurre cada 5 minutos mientras la app está visible; la fecha en la ficha general se copia cada 10 minutos y al salir. La interfaz actualiza el texto relativo localmente cada 15 segundos, sin lecturas de Firestore.
+- El botón circular de refresco junto al contador consulta solo la actividad reciente (ventana de 12 minutos), no toda la colección de clientes. Se mantiene manual, con cuenta regresiva de 10 segundos, para evitar sondeos constantes.
 - La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
-- Historial de visitas retenido durante 60 días con limpieza programada.
+- Historial de visitas retenido durante 60 días con limpieza programada. No se carga automáticamente al abrir el panel: el administrador lo trae cuando elige «Ver historial», evitando hasta 100 lecturas en cada inicio. Se eliminó el conteo total de cortes que no se mostraba en la interfaz.
 
 ## Arquitectura
 
@@ -49,7 +49,7 @@ Conservar los valores privados existentes. El nombre visible de la marca no obli
 
 ## Costos, límites y escalabilidad
 
-El plan gratuito de Firestore tiene límites diarios/mensuales y no representa capacidad ilimitada. Las consultas, listeners en tiempo real, escrituras de presencia e índices consumen recursos. Revisar las métricas reales de Firestore y las invocaciones de funciones de Vercel antes de aumentar usuarios.
+El nivel gratuito de Firestore Standard ofrece 50.000 lecturas de documentos al día (20.000 corresponde a escrituras) y 20.000 escrituras al día. Barber VIP evita conteos agregados no usados y carga el historial solo cuando se abre. Las promociones del cliente escuchan un documento mínimo de versión, con una comprobación de baja frecuencia solo si las reglas de Firestore aún no permiten esa lectura. Medir Usage en Firebase después de desplegar las reglas; el código no puede atribuir retroactivamente las lecturas que ya figuran en el panel.
 
 Vercel Hobby está destinado a usos personales/no comerciales según las condiciones vigentes. Si se vende el servicio, revisar el plan o proveedor de hosting permitido para uso comercial.
 

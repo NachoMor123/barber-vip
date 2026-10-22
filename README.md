@@ -15,8 +15,9 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Registro de visitas desde el panel profesional y acceso separado para cada cliente.
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.
-- Recordatorios de seguimiento: la app prepara el contacto por WhatsApp y el profesional confirma su envío.
-- Presencia aproximada: pulso cada 15 minutos solo mientras el cliente tiene la pestaña visible; el indicador considera en línea una actualización de los últimos 16 minutos.
+- Recordatorios de seguimiento: WhatsApp se abre sin texto preescrito; la app muestra una sugerencia opcional y el profesional confirma el contacto manualmente.
+- Presencia: Firestore actualiza la lista en tiempo real. El cliente envía un pulso al entrar/volver al primer plano y luego cada 10 minutos mientras la pestaña está visible; el estado vence a los 11 minutos. Al ocultarse, se marca la salida y se detiene el temporizador.
+- El botón Actualizar de Clientes consulta solo perfiles con actividad reciente y aplica una pausa de 10 segundos; no recarga toda la base ni sustituye el listener automático.
 - La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
 - Historial de visitas retenido durante 60 días con limpieza programada.

@@ -513,6 +513,31 @@
     .phone-input input{min-width:0;flex:1;border-top-left-radius:0!important;border-bottom-left-radius:0!important}
     @media(max-width:600px){.phone-prefix{padding-inline:10px}}
 </style>
+  <style id="barber-vip-clients-refresh-fix">
+    /* En Clientes: actualizar ocupa un rincón; Crear cliente conserva todo el ancho disponible. */
+    .main-area > .page-head:has(.clients-head-actions){padding-right:0!important;display:block!important}
+    .main-area > .page-head:has(.clients-head-actions) > div:first-child{padding-right:142px!important;flex:initial!important;width:100%!important}
+    .main-area .page-head:has(.clients-head-actions) .page-actions{display:block!important;width:100%!important;max-width:none!important;margin:12px 0 0!important;padding:0!important;justify-content:initial!important}
+    .clients-head-actions{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important;gap:8px!important;padding-top:36px!important}
+    .clients-refresh-btn{position:absolute!important;right:0!important;top:0!important;display:grid!important;place-items:center!important;grid-template-columns:1fr!important;gap:0!important;width:36px!important;min-width:36px!important;max-width:36px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:10px!important;overflow:visible!important}
+    .clients-refresh-btn [data-refresh-label]{display:none!important}
+    .clients-refresh-icon{font-size:21px!important;line-height:1!important;transition:transform .2s ease!important}
+    .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
+    .clients-refresh-btn.is-busy .clients-refresh-icon{animation:clientsRefreshSpin .8s linear infinite!important}
+    .clients-refresh-countdown{position:absolute!important;right:-6px!important;top:-7px!important;display:grid!important;place-items:center!important;min-width:17px!important;height:17px!important;padding:0 3px!important;border:1px solid rgba(128,185,255,.9)!important;border-radius:6px!important;background:#102b61!important;color:#fff!important;font-size:10px!important;line-height:1!important;font-weight:950!important;font-variant-numeric:tabular-nums!important;box-shadow:0 2px 9px rgba(0,0,0,.4)!important}
+    .clients-refresh-countdown:empty{display:none!important}
+    .clients-create-btn{display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:54px!important;justify-content:center!important;align-items:center!important;padding:14px 18px!important;font-size:14px!important;font-weight:900!important;letter-spacing:.01em!important}
+    @keyframes clientsRefreshSpin{to{transform:rotate(360deg)}}
+    .activity-type-label,.attendance-status{display:none!important}
+    @media(max-width:600px){
+      .main-area > .page-head:has(.clients-head-actions){padding-right:0!important}
+      .main-area > .page-head:has(.clients-head-actions) > div:first-child{padding-right:106px!important}
+      .main-area .page-head:has(.clients-head-actions) .page-actions{width:100%!important;margin-right:0!important}
+      .clients-head-actions{width:100%!important;justify-content:initial!important}
+      .clients-create-btn{width:100%!important;min-height:54px!important}
+    }
+    @media(prefers-reduced-motion:reduce){.clients-refresh-btn.is-busy .clients-refresh-icon{animation:none!important}}
+  </style>
 </head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -812,7 +837,7 @@
     }
     function clientsView() {
       const list=filteredCustomers();
-      const actions=`<div class="clients-head-actions"><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar estados de conexión" aria-label="Actualizar estados de conexión"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span data-refresh-label>Actualizar</span><span class="clients-refresh-countdown" data-refresh-countdown></span></button><button class="btn btn-primary" data-action="new-client">＋ Crear cliente</button></div>`;
+      const actions=`<div class="clients-head-actions"><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar conexión ahora" aria-label="Actualizar estado de conexión ahora"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" data-refresh-countdown aria-hidden="true"></span></button><button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button></div>`;
       return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} clientes</span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
     function remindersView() {
@@ -885,13 +910,13 @@
       startPromoCountdowns();
             if(state.customerSection==='barber'){
         const schedule=scheduleMarkup(b.schedule);const hasInsta=safeExternalUrl(b.instagramUrl,['instagram.com']),hasMaps=safeExternalUrl(b.mapsUrl,['google.com','maps.app.goo.gl','goo.gl']),hasWhats=validWhatsapp(b.whatsapp);
-        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">TU CONEXIÓN VIP</div><h1>Datos de tu profesional</h1><p>Tu tarjeta, tus visitas y tus beneficios están vinculados a este espacio.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p><small class="activity-type-label">${escapeHtml(activityTypeLabel(b.activityType))}</small>${attendanceMarkup(b.schedule)}</div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Asociados a este profesional</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">TU CONEXIÓN VIP</div><h1>Datos de tu profesional</h1><p>Tu tarjeta, tus visitas y tus beneficios están vinculados a este espacio.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p></div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Asociados a este profesional</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
         return;
       }
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Aplicado en tu última visita':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
       const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${p.endsAt?`<div class="customer-promo-countdown-wrap"><small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown customer-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong></div>`:''}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuento disponible</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · hito ${Number(r.cut||'')}</span>`).join('')}</div><small>Este beneficio corresponde a la visita que alcanzó el hito.</small></div>`:finalApplied?`<div class="available-discounts"><strong>✓ Ciclo completado</strong><div><span class="discount-chip">${escapeHtml(finalRewardLabel)} · hito ${max}/${max}</span></div><small>El descuento ya se aplicó en esta visita. El próximo ciclo comienza con tu siguiente visita.</small></div>`:lastApplied?`<div class="available-discounts"><strong>✓ Descuento aplicado</strong><div><span class="discount-chip">${escapeHtml(lastApplied.label)} · hito ${lastApplied.cut}</span></div><small>El descuento quedó aplicado en tu última visita. El progreso corresponde al siguiente ciclo.</small></div>`:'';
-      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p>${attendanceMarkup(b.schedule)}</section><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?(daysBetween(c.lastCutAt)===0?'Hoy':`${daysBetween(c.lastCutAt)} d`):'—','◷',escapeHtml(last))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?(daysBetween(c.lastCutAt)===0?'Hoy':`${daysBetween(c.lastCutAt)} d`):'—','◷',escapeHtml(last))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
     }
 
         function refreshReminderClock(){
@@ -948,32 +973,45 @@
       if(remaining>0){paintPresenceRefreshButton();return;}
       state.presenceRefreshing=true;
       state.presenceRefreshCooldownUntil=Date.now()+10000;
-      paintPresenceRefreshButton();
       startPresenceRefreshCooldownTicker();
       try{
+        paintPresenceRefreshButton();
+        // Consulta el estado actual del servidor sin esperar al siguiente heartbeat.
         const result=await api('/api/presence');
-        const freshByUid=new Map((Array.isArray(result.presence)?result.presence:[]).map(item=>[item.uid,item]));
+        if(!result||!Array.isArray(result.presence))throw new Error('El servidor no devolvió estados de conexión válidos.');
+        const freshByUid=new Map(result.presence.map(item=>[item.uid,item]));
         const now=Date.now(),staleMs=360000;
         state.customers=(state.customers||[]).map(customer=>{
           const fresh=freshByUid.get(customer.uid);
-          if(fresh)return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:fresh.isOnline===true};
+          if(fresh){
+            const seen=asDate(fresh.lastSeenAt);
+            const recent=!!seen&&now-seen.getTime()>=0&&now-seen.getTime()<staleMs;
+            return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:recent&&fresh.isOnline===true};
+          }
           const last=asDate(customer.lastSeenAt);
           if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
           return customer;
         });
         renderApp();
-        toast(result.partial?'Estado actualizado. Se consultaron los perfiles con actividad más reciente.':'Estado de conexión actualizado. La lista sigue sincronizándose automáticamente.','success');
-      }catch(error){toast(error.message||'No se pudieron actualizar los estados. La sincronización automática sigue activa.','error');}
-      finally{state.presenceRefreshing=false;paintPresenceRefreshButton();}
+        toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
+      }catch(error){
+        console.error('No se pudo actualizar la presencia:',error);
+        toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
+      }finally{
+        state.presenceRefreshing=false;
+        paintPresenceRefreshButton();
+      }
     }
     function paintPresenceRefreshButton(){
       const seconds=Math.max(0,Math.ceil((Number(state.presenceRefreshCooldownUntil||0)-Date.now())/1000));
-      $('[data-action="refresh-presence"]').forEach(button=>{
+      $('.clients-refresh-btn[data-action="refresh-presence"]').forEach(button=>{
         button.disabled=!!state.presenceRefreshing||seconds>0;
-        const label=$('[data-refresh-label]',button),count=$('[data-refresh-countdown]',button);
-        if(label)label.textContent=state.presenceRefreshing?'Actualizando…':'Actualizar';
-        if(count)count.textContent=seconds>0?' '+seconds+'s':'';
-        button.setAttribute('aria-label',seconds>0?'Actualizar estados de conexión en '+seconds+' segundos':'Actualizar estados de conexión');
+        button.classList.toggle('is-counting',seconds>0);
+        button.classList.toggle('is-busy',!!state.presenceRefreshing);
+        const count=$('[data-refresh-countdown]',button);
+        if(count)count.textContent=seconds>0?String(seconds):'';
+        button.setAttribute('aria-label',state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Actualizar estados de conexión en '+seconds+' segundos':'Actualizar estados de conexión ahora');
+        button.title=state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Podrás volver a actualizar en '+seconds+' segundos':'Actualizar estados de conexión ahora';
       });
     }
     function startPresenceRefreshCooldownTicker(){
@@ -1007,6 +1045,28 @@
       }catch(error){console.debug('public profile refresh skipped',error.message);}
       finally{state.refreshingCustomerContext=false;}
     }
+    // En una PWA instalada se puede confirmar Atrás y el cierre de ventana. El sistema operativo aún puede forzar el cierre.
+    (function installStandaloneExitGuard(){
+      const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+      if(!standalone)return;
+      let exitConfirmed=false;
+      const restoreGuard=()=>history.pushState({barberVipExitGuard:true},'',location.href);
+      restoreGuard();
+      window.addEventListener('popstate',()=>{
+        if(exitConfirmed)return;
+        if(window.confirm('¿Querés salir de Barber VIP?')){
+          exitConfirmed=true;
+          return;
+        }
+        restoreGuard();
+      });
+      window.addEventListener('beforeunload',event=>{
+        if(exitConfirmed)return;
+        event.preventDefault();
+        event.returnValue='';
+      });
+    })();
+
     document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){if(!state.presenceTimer)state.presenceTimer=setInterval(sendPresencePing,300000);void sendPresencePing();void refreshCustomerContext();}else{if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;}void updatePresence(false);}});
     window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;if(lastPresenceWriteValue===false&&Date.now()-lastPresenceWriteAt<10000)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 

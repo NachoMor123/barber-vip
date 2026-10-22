@@ -23,11 +23,13 @@ module.exports = async function handler(req, res) {
     const presence = [];
     for (const doc of snap.docs) {
       const customer = doc.data();
-      if (customer.active === false || customer.isOnline !== true) continue;
+      if (customer.active === false) continue;
       const raw = customer.lastSeenAt;
       const seen = raw && typeof raw.toMillis === 'function' ? raw.toMillis() : 0;
       if (!seen || now - seen < 0 || now - seen >= PRESENCE_WINDOW_MS) continue;
-      presence.push({ uid: doc.id, lastSeenAt: new Date(seen).toISOString(), isOnline: true });
+      // Return both fresh online and fresh offline updates so a manual refresh can
+      // correct a missed snapshot without scanning the entire customer collection.
+      presence.push({ uid: doc.id, lastSeenAt: new Date(seen).toISOString(), isOnline: customer.isOnline === true });
     }
     return send(res, 200, { ok: true, presence, windowSeconds: PRESENCE_WINDOW_MS / 1000, partial: snap.size === PRESENCE_QUERY_LIMIT });
   } catch (error) {

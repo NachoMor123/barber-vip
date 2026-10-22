@@ -976,8 +976,10 @@
       const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
       if(remaining>0){paintPresenceRefreshButton();return;}
       state.presenceRefreshing=true;
-      state.presenceRefreshCooldownUntil=Date.now()+10000;
-      startPresenceRefreshCooldownTicker();
+      if(!automatic){
+        state.presenceRefreshCooldownUntil=Date.now()+10000;
+        startPresenceRefreshCooldownTicker();
+      }
       try{
         paintPresenceRefreshButton();
         // Consulta el estado actual del servidor sin esperar al siguiente heartbeat.

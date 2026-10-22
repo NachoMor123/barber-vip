@@ -2,7 +2,6 @@ const { send, method } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 
 const PRESENCE_WINDOW_MS = 5 * 60 * 1000;
-const PRESENCE_QUERY_LIMIT = 1000;
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET'])) return;
@@ -10,31 +9,39 @@ module.exports = async function handler(req, res) {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;
 
-    // Manual refresh returns each active client, not only recent pings. This lets
-    // the UI reliably turn stale "online" labels into "last connection" labels.
-    const snap = await ctx.db.collection('barbers').doc(ctx.uid).collection('customers')
-      .limit(PRESENCE_QUERY_LIMIT)
+    // Presence refresh must not scan the full customer collection.
+    // Only read records with activity inside the online window; old lastSeenAt
+    // values are already held by the client list and remain available for display.
+    const cutoff = new Date(Date.now() - PRESENCE_WINDOW_MS);
+    const snap = await ctx.db
+      .collection('barbers')
+      .doc(ctx.uid)
+      .collection('presence')
+      .where('lastSeenAt', '>=', cutoff)
+      .orderBy('lastSeenAt', 'desc')
       .get();
 
-    const now = Date.now();
     const presence = [];
     for (const doc of snap.docs) {
       const customer = doc.data();
       if (customer.active === false) continue;
       const raw = customer.lastSeenAt;
       const seen = raw && typeof raw.toMillis === 'function' ? raw.toMillis() : 0;
-      const fresh = seen > 0 && now - seen >= 0 && now - seen < PRESENCE_WINDOW_MS;
+      const age = Date.now() - seen;
+      if (!seen || age < 0 || age >= PRESENCE_WINDOW_MS) continue;
       presence.push({
         uid: doc.id,
-        lastSeenAt: seen ? new Date(seen).toISOString() : null,
-        isOnline: fresh && customer.isOnline === true
+        lastSeenAt: new Date(seen).toISOString(),
+        isOnline: customer.isOnline === true
       });
     }
+
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     return send(res, 200, {
       ok: true,
       presence,
       windowSeconds: PRESENCE_WINDOW_MS / 1000,
-      partial: snap.size === PRESENCE_QUERY_LIMIT
+      scope: 'recent-activity'
     });
   } catch (error) {
     console.error('presence refresh failed', error);

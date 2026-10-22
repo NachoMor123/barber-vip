@@ -16,8 +16,8 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: WhatsApp se abre sin texto preescrito; la app muestra una sugerencia opcional y el profesional confirma que intentó contactar manualmente. Esto no verifica la entrega del mensaje.
-- Presencia: Firestore actualiza la lista en tiempo real. El cliente envía un pulso al entrar/volver al primer plano y luego cada 3 minutos mientras la app está visible; si no hay pulso durante 5 minutos, el estado pasa a «Última conexión». Al cerrar sesión o pasar a segundo plano se intenta marcar la salida de inmediato.
-- El botón circular de refresco está junto al contador de clientes. Consulta el endpoint de presencia y muestra una cuenta regresiva de 10 a 1 antes de permitir otra consulta; no recarga toda la base ni sustituye el listener automático. Si el sistema operativo mata la app sin notificar el cierre, el estado vence en aproximadamente 5 minutos.
+- Presencia: el cliente envía un pulso al entrar/volver al primer plano y luego cada 3 minutos mientras la app está visible; si no hay pulso durante 5 minutos, deja de figurar en línea. Al cerrar sesión o pasar a segundo plano se intenta marcar la salida de inmediato.
+- La presencia se guarda en `barbers/{barberUid}/presence/{customerUid}`, separada de los datos del cliente para que cada pulso no dispare el listener en tiempo real de toda la colección de clientes. El cliente envía un pulso cada 3 minutos mientras está visible; la última conexión se persiste en el documento del cliente cada 6 minutos y al salir. El panel del barbero sincroniza presencia al cargar la lista y luego cada 5 minutos; el texto relativo se actualiza localmente cada 15 segundos. El botón circular permite una actualización manual inmediata y conserva la cuenta regresiva de 10 segundos. La consulta automática lee solo actividad reciente; los estados viejos quedan fuera de línea sin borrar su última fecha conocida.
 - La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
 - Historial de visitas retenido durante 60 días con limpieza programada.
@@ -49,7 +49,9 @@ Conservar los valores privados existentes. El nombre visible de la marca no obli
 
 ## Costos, límites y escalabilidad
 
-El plan gratuito de Firestore tiene límites diarios/mensuales y no representa capacidad ilimitada. Las consultas, listeners en tiempo real, escrituras de presencia e índices consumen recursos. Revisar las métricas reales de Firestore y las invocaciones de funciones de Vercel antes de aumentar usuarios.
+El plan gratuito de Firestore tiene límites diarios/mensuales y no representa capacidad ilimitada. Las consultas, listeners en tiempo real, escrituras de presencia e índices consumen recursos. La presencia se separó de los documentos de clientes para evitar lecturas del listener de clientes en cada pulso; aun así, los pulsos autenticados, las consultas de presencia y los listeners activos siguen consumiendo recursos. Revisar las métricas reales de Firestore y las invocaciones de funciones de Vercel antes de aumentar usuarios.
+
+La API de visitas evita agregaciones que la pantalla no necesita: fuera de Inicio no calcula estadísticas del panel, no calcula el total completo de visitas (no se muestra en la interfaz) y omite el conteo del período cuando el historial está oculto. Las acciones de edición de clientes también evitan una lectura inmediata del mismo documento solo para devolver los campos recién guardados.
 
 Vercel Hobby está destinado a usos personales/no comerciales según las condiciones vigentes. Si se vende el servicio, revisar el plan o proveedor de hosting permitido para uso comercial.
 

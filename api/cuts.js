@@ -86,21 +86,29 @@ module.exports = async function handler(req, res) {
       const rangeTsFrom = admin().firestore.Timestamp.fromDate(rangeFrom);
       const rangeTsTo = admin().firestore.Timestamp.fromDate(rangeTo);
       const rangeQuery = cutCollection.where('createdAt', '>=', rangeTsFrom).where('createdAt', '<', rangeTsTo);
-      const countRange = await getCount(rangeQuery);
-      let countToday;
-      if (String(req.query && req.query.includeToday || '') === '1') {
-        const todayStart = startOfDay(argentinaDateString());
-        countToday = await getCount(cutCollection
-          .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(todayStart))
-          .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(todayStart))));
-      }
+      // The history screen only needs the bounded history query. Skip four
+      // aggregation queries there; dashboard statistics are loaded on Home.
+      const includeStats = String(req.query && req.query.stats || '1') !== '0';
+      const includeHistory = String(req.query && req.query.history || '1') !== '0';
+      let countRange, countToday, countMonth;
+      if (includeStats) {
+        // The period count is only shown with the history panel. Don't calculate it
+        // while history is hidden, and don't count the entire collection: the UI never
+        // displays countTotal, so that aggregation was pure read cost.
+        if (includeHistory) countRange = await getCount(rangeQuery);
+        if (String(req.query && req.query.includeToday || '') === '1') {
+          const todayStart = startOfDay(argentinaDateString());
+          countToday = await getCount(cutCollection
+            .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(todayStart))
+            .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(todayStart))));
+        }
 
-      const monthStart = argentinaMonthStart();
-      const monthEnd = nextMonthStart(monthStart);
-      const countMonth = await getCount(cutCollection
-        .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
-        .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
-      const countTotal = await getCount(cutCollection);
+        const monthStart = argentinaMonthStart();
+        const monthEnd = nextMonthStart(monthStart);
+        countMonth = await getCount(cutCollection
+          .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
+          .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
+      }
       let history = [];
       if (String(req.query && req.query.history || '1') !== '0') {
         const snap = await rangeQuery.orderBy('createdAt', 'desc').limit(HISTORY_LIMIT).get();

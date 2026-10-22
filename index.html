@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, presenceTimer:null, presenceUiTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, presenceTimer:null, presenceUiTimer:null, lastPresenceCheckpointAt:0, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -578,7 +578,7 @@
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
     function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<PRESENCE_STALE_MS&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
-    function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});}
+    function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
       let n=String(input||'').trim().replace(/\D/g,'');
@@ -793,7 +793,7 @@
       }
       const chip=hidden?'Oculto':reminder?(followup?'En seguimiento':`${info.days??'—'} días sin venir`):status[0];
       const chipClass=hidden?'warn':reminder?(followup?'good':'danger'):status[1]==='danger'?'danger':status[1]==='warn'?'warn':'';
-      return `<article class="client-row ${reminder?'reminder-client-row':''} ${hidden?'hidden-reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong>${reminder||hidden?`<span class="status-chip ${chipClass}">${escapeHtml(chip)}</span>`:``}</div><div class="client-meta"><span>✦ <b>${Number(c.totalCuts||0)}</b> visitas totales</span><span>Última visita: <b>${escapeHtml(lastCut)}</b></span>${reminder&&!hidden?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:reminder&&hidden?`<span>Este cliente sigue activo; solo se ocultó de Recordatorios.</span>`:`<span>Estado: <b><span class="presence-live" data-presence-customer="${escapeHtml(c.uid)}" data-presence-value="${escapeHtml(presenceIso(c.lastSeenAt))}" data-presence-online="${c.isOnline===true?'true':c.isOnline===false?'false':''}">${presenceMarkup(c.lastSeenAt,c.isOnline)}</span></b></span>${info.paused&&!reminder?'<span>⌁ Recordatorios ocultos</span>':''}`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${displayCycleCount}/${cycleMax} · ${rewardLine}</div>${reminder&&!hidden?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar una nueva visita.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:hidden?`<div class="reminder-tip-box tiny muted">No aparecerá en Por contactar ni en Seguimiento hasta que lo reactives o registre una nueva visita.</div>${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`${c.remindersPaused?`<button class="btn btn-soft btn-mini" data-action="resume-reminders" data-id="${escapeHtml(c.uid)}">↻ Reactivar recordatorios</button>`:''}<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Visita</button><button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button><button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}" aria-label="Eliminar cliente" title="Eliminar cliente">⌫</button></div></article>`;
+      return `<article class="client-row ${reminder?'reminder-client-row':''} ${hidden?'hidden-reminder-client-row':''}" data-search="${escapeHtml(normalizeName(`${c.fullName} ${c.whatsapp}`))}"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div class="client-info"><div class="client-name-line"><strong>${escapeHtml(c.fullName)}</strong>${reminder||hidden?`<span class="status-chip ${chipClass}">${escapeHtml(chip)}</span>`:``}</div><div class="client-meta"><span>✦ <b>${Number(c.totalCuts||0)}</b> visitas totales</span><span>Última visita: <b><span class="last-cut-relative" data-last-cut-at="${escapeHtml(presenceIso(c.lastCutAt))}">${escapeHtml(lastCut)}</span></b></span>${reminder&&!hidden?`<span>${followup?'Último contacto':'Frecuencia habitual'}: <b style="color:var(--accent)">${followup?escapeHtml(dateTimeLabel(c.reminderLastContactAt)):`cada ${info.interval} días + ${info.threshold} de margen`}</b></span>`:reminder&&hidden?`<span>Este cliente sigue activo; solo se ocultó de Recordatorios.</span>`:`<span>Estado: <b><span class="presence-live" data-presence-customer="${escapeHtml(c.uid)}" data-presence-value="${escapeHtml(presenceIso(c.lastSeenAt))}" data-presence-online="${c.isOnline===true?'true':c.isOnline===false?'false':''}">${presenceMarkup(c.lastSeenAt,c.isOnline)}</span></b></span>${info.paused&&!reminder?'<span>⌁ Recordatorios ocultos</span>':''}`}</div><div class="progress-mini"><span style="width:${pct}%"></span></div><div class="tiny muted" style="margin-top:5px">Ciclo ${displayCycleCount}/${cycleMax} · ${rewardLine}</div>${reminder&&!hidden?`<div class="reminder-tip-box tiny muted">${escapeHtml(reminderMessage(c))}</div>${followup?`<div class="tiny muted" style="margin-top:6px">Recordatorios confirmados: ${info.count}/${info.maxMessages}. ${info.limitReached?'No se enviarán más hasta registrar una nueva visita.':'Podés volver a contactar si hace falta.'}</div>`:''}${reminderActions}`:hidden?`<div class="reminder-tip-box tiny muted">No aparecerá en Por contactar ni en Seguimiento hasta que lo reactives o registre una nueva visita.</div>${reminderActions}`:''}</div><div class="client-actions">${reminder?'':`${c.remindersPaused?`<button class="btn btn-soft btn-mini" data-action="resume-reminders" data-id="${escapeHtml(c.uid)}">↻ Reactivar recordatorios</button>`:''}<button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}">+ Visita</button><button class="btn btn-ghost btn-mini" data-action="contact" data-id="${escapeHtml(c.uid)}">Contactar</button>`}<button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(c.uid)}">Ver</button><button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(c.uid)}" aria-label="Editar cliente">Editar</button><button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}" aria-label="Eliminar cliente" title="Eliminar cliente">⌫</button></div></article>`;
     }
 
             function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
@@ -910,7 +910,7 @@
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Aplicado en tu última visita':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
       const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${p.endsAt?`<div class="customer-promo-countdown-wrap"><small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown customer-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong></div>`:''}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuento disponible</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · hito ${Number(r.cut||'')}</span>`).join('')}</div><small>Este beneficio corresponde a la visita que alcanzó el hito.</small></div>`:finalApplied?`<div class="available-discounts"><strong>✓ Ciclo completado</strong><div><span class="discount-chip">${escapeHtml(finalRewardLabel)} · hito ${max}/${max}</span></div><small>El descuento ya se aplicó en esta visita. El próximo ciclo comienza con tu siguiente visita.</small></div>`:lastApplied?`<div class="available-discounts"><strong>✓ Descuento aplicado</strong><div><span class="discount-chip">${escapeHtml(lastApplied.label)} · hito ${lastApplied.cut}</span></div><small>El descuento quedó aplicado en tu última visita. El progreso corresponde al siguiente ciclo.</small></div>`:'';
-      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?(daysBetween(c.lastCutAt)===0?'Hoy':`${daysBetween(c.lastCutAt)} d`):'—','◷',escapeHtml(last))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(presenceIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
     }
 
         function refreshReminderClock(){
@@ -934,6 +934,8 @@
       applyTheme(state.role==='barber'?state.barber?.theme:state.barber?.theme);
       if(state.role==='barber') { appRoot.innerHTML=adminShell(); startPromoCountdowns(); syncReminderClock(); }
       else { syncReminderClock(); renderCustomer(); }
+      // Refresh local relative-time labels immediately after rebuilding the DOM.
+      refreshPresenceLabels();
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
       void maybeShowInstallPrompt();
@@ -941,35 +943,45 @@
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
       try {
-        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(state.role==='barber'&&state.section==='home')u.searchParams.set('includeToday','1');
+        const isBarberHome=state.role==='barber'&&state.section==='home';
+        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(!isBarberHome)u.searchParams.set('stats','0'); if(isBarberHome)u.searchParams.set('includeToday','1');
         const data=await api(u.pathname+u.search);
-        state.stats={...state.stats,countSince:data.countRange||0,countRange:data.countRange||0,countMonth:data.countMonth||0,countTotal:data.countTotal||0,countToday:data.countToday??state.stats.countToday??0};
+        // Statistics are intentionally omitted by the API outside Home; don't overwrite
+        // valid dashboard numbers with zeros when only refreshing the history list.
+        if(data.countRange!==undefined||data.countMonth!==undefined||data.countToday!==undefined)state.stats={...state.stats,countSince:data.countRange??state.stats.countSince??0,countRange:data.countRange??state.stats.countRange??0,countMonth:data.countMonth??state.stats.countMonth??0,countTotal:data.countTotal??state.stats.countTotal??0,countToday:data.countToday??state.stats.countToday??0};
         if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
         state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
     const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
+    const PRESENCE_AUTO_REFRESH_MS=300000; // Consulta cada 5 minutos; el reloj de estado se actualiza localmente.
     const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
+    const PRESENCE_CHECKPOINT_MS=360000; // Guardar última conexión cada 6 minutos (cada dos pulsos).
     let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
     async function updatePresence(active){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
       if(presenceWritePromise)await presenceWritePromise.catch(()=>{});
       const now=Date.now(),minGap=active?30000:5000;
       if(lastPresenceWriteValue===active&&now-lastPresenceWriteAt<minGap)return;
-      const operation=api('/api/me?presence='+(active?'1':'0')).then(()=>{
+      const persistCheckpoint=!active||!state.lastPresenceCheckpointAt||now-state.lastPresenceCheckpointAt>=PRESENCE_CHECKPOINT_MS;
+      const url='/api/me?presence='+(active?'1':'0')+(persistCheckpoint?'&persist=1':'');
+      const operation=api(url).then(()=>{
         lastPresenceWriteAt=Date.now();lastPresenceWriteValue=active;
+        if(persistCheckpoint)state.lastPresenceCheckpointAt=Date.now();
       }).catch(error=>{console.debug('presence update skipped',error.message);});
       presenceWritePromise=operation;
       try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
     }
-    async function refreshPresenceStatus(){
+    async function refreshPresenceStatus({automatic=false}={}){
       if(state.role!=='barber'||state.presenceRefreshing)return;
       const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
       if(remaining>0){paintPresenceRefreshButton();return;}
       state.presenceRefreshing=true;
-      state.presenceRefreshCooldownUntil=Date.now()+10000;
-      startPresenceRefreshCooldownTicker();
+      if(!automatic){
+        state.presenceRefreshCooldownUntil=Date.now()+10000;
+        startPresenceRefreshCooldownTicker();
+      }
       try{
         paintPresenceRefreshButton();
         // Consulta el estado actual del servidor sin esperar al siguiente heartbeat.
@@ -984,15 +996,15 @@
             const recent=!!seen&&now-seen.getTime()>=0&&now-seen.getTime()<staleMs;
             return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:recent&&fresh.isOnline===true};
           }
-          const last=asDate(customer.lastSeenAt);
-          if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
-          return customer;
+          // El endpoint devuelve solo actividad reciente. Si un cliente no aparece,
+          // conservamos su última fecha conocida, pero no lo dejamos marcado en línea.
+          return {...customer,isOnline:false};
         });
         renderApp();
-        toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
+        if(!automatic)toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
       }catch(error){
         console.error('No se pudo actualizar la presencia:',error);
-        toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
+        if(!automatic)toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
       }finally{
         state.presenceRefreshing=false;
         paintPresenceRefreshButton();
@@ -1023,7 +1035,7 @@
       },1000);
     }
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber'){state.presenceTimer=setInterval(()=>{if(document.visibilityState==='visible')void refreshPresenceStatus({automatic:true});},PRESENCE_AUTO_REFRESH_MS);state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}else if(state.role==='customer'){state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;
@@ -1078,6 +1090,7 @@
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
         const clientsRef=collection(state.db,'barbers',me.barberUid,'customers');
+        let initialCustomerSnapshot=true;
         state.unsubscribers.push(onSnapshot(clientsRef,snap=>{
           const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
           const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
@@ -1092,6 +1105,9 @@
           });
           state.customers=next;
           if(state.role!=='barber')return;
+          // Fetch current presence once after the initial customer list loads.
+          // Subsequent presence changes no longer trigger reads on this collection.
+          if(initialCustomerSnapshot){initialCustomerSnapshot=false;void refreshPresenceStatus({automatic:true});}
           if(presenceOnly){
             const changedIds=new Set(changes.map(change=>change.doc.id));
             for(const customer of next){

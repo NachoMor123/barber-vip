@@ -20,6 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           find api lib -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --test
           python3 - <<'PY'
           import json, re
           from pathlib import Path
@@ -41,7 +42,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/barber-vip-app"
           cp index.html manifest.webmanifest sw.js package.json firestore.rules vercel.json env.example README.md invitacion.html "$RUNNER_TEMP/barber-vip-app/"
-          cp -R api lib assets "$RUNNER_TEMP/barber-vip-app/"
+          cp -R api lib assets tests "$RUNNER_TEMP/barber-vip-app/"
           if find "$RUNNER_TEMP/barber-vip-app" -iname '*comercial*' | grep -q .; then
             echo "Unexpected commercial file found in app package" >&2
             exit 1

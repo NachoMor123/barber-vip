@@ -1136,7 +1136,15 @@
         const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
         state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
           const version=snap.exists()?promotionRevisionKey(snap.data().updatedAt):'';
-          if(promotionMetaInitial){promotionMetaInitial=false;state.promoMetaVersion=version;return;}
+          if(promotionMetaInitial){
+            promotionMetaInitial=false;state.promoMetaVersion=version;
+            // If the app fetched the profile just before a promotion was changed, catch up once.
+            const profileRevision=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
+            if(snap.exists()&&version&&profileRevision&&version!==profileRevision){
+              void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});
+            }
+            return;
+          }
           if(!snap.exists()||!version||version===state.promoMetaVersion)return;
           state.promoMetaVersion=version;
           void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});

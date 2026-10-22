@@ -86,23 +86,27 @@ module.exports = async function handler(req, res) {
       const rangeTsFrom = admin().firestore.Timestamp.fromDate(rangeFrom);
       const rangeTsTo = admin().firestore.Timestamp.fromDate(rangeTo);
       const rangeQuery = cutCollection.where('createdAt', '>=', rangeTsFrom).where('createdAt', '<', rangeTsTo);
-      const countRange = await getCount(rangeQuery);
-      let countToday;
-      if (String(req.query && req.query.includeToday || '') === '1') {
-        const todayStart = startOfDay(argentinaDateString());
-        countToday = await getCount(cutCollection
-          .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(todayStart))
-          .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(todayStart))));
+      const includeStats = String(req.query && req.query.stats || '1') !== '0';
+      const includeHistory = String(req.query && req.query.history || '1') !== '0';
+      let countRange, countToday, countMonth;
+      if (includeStats) {
+        // Period count is only required when the history is actually visible.
+        if (includeHistory) countRange = await getCount(rangeQuery);
+        if (String(req.query && req.query.includeToday || '') === '1') {
+          const todayStart = startOfDay(argentinaDateString());
+          countToday = await getCount(cutCollection
+            .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(todayStart))
+            .where('createdAt', '<', admin().firestore.Timestamp.fromDate(nextDay(todayStart))));
+        }
+        const monthStart = argentinaMonthStart();
+        const monthEnd = nextMonthStart(monthStart);
+        countMonth = await getCount(cutCollection
+          .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
+          .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
       }
 
-      const monthStart = argentinaMonthStart();
-      const monthEnd = nextMonthStart(monthStart);
-      const countMonth = await getCount(cutCollection
-        .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
-        .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
-      const countTotal = await getCount(cutCollection);
       let history = [];
-      if (String(req.query && req.query.history || '1') !== '0') {
+      if (includeHistory) {
         const snap = await rangeQuery.orderBy('createdAt', 'desc').limit(HISTORY_LIMIT).get();
         history = snap.docs.map(doc => {
           const data = doc.data();
@@ -117,7 +121,7 @@ module.exports = async function handler(req, res) {
           };
         });
       }
-      return send(res, 200, { ok: true, countRange, countMonth, countTotal, ...(countToday === undefined ? {} : { countToday }), from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
+      return send(res, 200, { ok: true, ...(countRange === undefined ? {} : {countRange}), ...(countMonth === undefined ? {} : {countMonth}), ...(countToday === undefined ? {} : {countToday}), from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
     }
 
     const data = body(req);

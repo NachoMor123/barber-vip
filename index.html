@@ -499,6 +499,14 @@
     .customer-promo-countdown-wrap{padding:8px 0 0!important;margin:12px 0 0!important}
     .customer-promo-countdown-wrap .promo-countdown,.promo-time-block .promo-countdown{padding:0!important;margin:0!important}
     .reminder-tabs{padding:0!important}
+
+    .clients-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+    .clients-refresh-btn{gap:6px;white-space:nowrap;min-width:118px}
+    .clients-refresh-icon{font-size:19px;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:transform .25s}
+    .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
+    .clients-refresh-countdown{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11px}
+    .reminder-explainer strong{display:block;margin-bottom:4px;color:var(--text)}
+    @media(max-width:600px){.clients-head-actions{width:100%;justify-content:stretch}.clients-head-actions>.btn{flex:1;justify-content:center}.clients-refresh-btn{min-width:0}}
 </style>
 </head>
 <body>
@@ -545,7 +553,7 @@
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<960000&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
+    function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<660000&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
     function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function whatsappNumber(input) {
@@ -614,7 +622,7 @@
       return data;
     };
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; };
-    const cleanupContext = () => { clearListeners(); if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.presenceUiTimer){clearInterval(state.presenceUiTimer);state.presenceUiTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} if(state.promotionsRefreshTimer){clearInterval(state.promotionsRefreshTimer);state.promotionsRefreshTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.presenceUiTimer){clearInterval(state.presenceUiTimer);state.presenceUiTimer=null;} if(state.presenceRefreshCooldownTimer){clearInterval(state.presenceRefreshCooldownTimer);state.presenceRefreshCooldownTimer=null;} state.presenceRefreshing=false; state.presenceRefreshCooldownUntil=0; if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} if(state.promotionsRefreshTimer){clearInterval(state.promotionsRefreshTimer);state.promotionsRefreshTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -790,7 +798,7 @@
     }
     function clientsView() {
       const list=filteredCustomers();
-      const actions=`<button class="btn btn-primary" data-action="new-client">＋ Crear cliente</button>`;
+      const actions=`<div class="clients-head-actions"><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar estados de conexión" aria-label="Actualizar estados de conexión"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span data-refresh-label>Actualizar</span><span class="clients-refresh-countdown" data-refresh-countdown></span></button><button class="btn btn-primary" data-action="new-client">＋ Crear cliente</button></div>`;
       return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} clientes</span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
     function remindersView() {
@@ -799,7 +807,7 @@
       const followupCount=state.customers.filter(c=>c.active!==false&&!c.remindersPaused&&reminderInfo(c).followup).length;
       const hiddenCount=state.customers.filter(c=>c.active!==false&&c.remindersPaused).length;
       const list=filteredCustomers({remindersOnly:tab==='pending',followupOnly:followup,hiddenOnly:hidden});
-      return `${sectionHeading('FIDELIZACIÓN','Recordatorios','Contactá cuando corresponda y confirmá el envío para pasar a seguimiento.','<button class="btn btn-primary" data-action="nav" data-section="clients">👥 Ver clientes</button>')}<p class="reminder-explainer">Ocultar no elimina al cliente. Reactivalo desde Ocultos; una nueva visita también reinicia sus recordatorios.</p><div class="reminder-tabs"><button class="reminder-tab ${tab==='pending'?'active':''}" data-action="reminder-tab" data-tab="pending">⏳ Por contactar <b>${pendingCount}</b></button><button class="reminder-tab ${tab==='followup'?'active':''}" data-action="reminder-tab" data-tab="followup">📩 Seguimiento <b>${followupCount}</b></button><button class="reminder-tab ${tab==='hidden'?'active':''}" data-action="reminder-tab" data-tab="hidden">⌁ Ocultos <b>${hiddenCount}</b></button></div><div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕ Buscar cliente…" value="${escapeHtml(state.query)}"><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} ${hidden?'ocultos':followup?'en seguimiento':'por contactar'}</span></div><div id="customerResults">${customerResultsMarkup(list,true,followup,hidden)}</div>`;
+      return `${sectionHeading('FIDELIZACIÓN','Recordatorios','La app detecta cuándo alguien supera su frecuencia habitual más el margen configurado.','<button class="btn btn-primary" data-action="nav" data-section="clients">👥 Ver clientes</button>')}<div class="reminder-explainer"><strong>Cómo funciona:</strong> <span>1. En Por contactar, abrí WhatsApp. 2. Después del contacto, confirmá el envío para que pase a Seguimiento. 3. En Ocultos, podés pausar clientes sin darlos de baja. Una nueva visita reinicia su seguimiento.</span></div><div class="reminder-tabs"><button class="reminder-tab ${tab==='pending'?'active':''}" data-action="reminder-tab" data-tab="pending">⏳ Por contactar <b>${pendingCount}</b></button><button class="reminder-tab ${tab==='followup'?'active':''}" data-action="reminder-tab" data-tab="followup">📩 Seguimiento <b>${followupCount}</b></button><button class="reminder-tab ${tab==='hidden'?'active':''}" data-action="reminder-tab" data-tab="hidden">⌁ Ocultos <b>${hiddenCount}</b></button></div><div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕ Buscar cliente…" value="${escapeHtml(state.query)}"><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} ${hidden?'ocultos':followup?'en seguimiento':'por contactar'}</span></div><div id="customerResults">${customerResultsMarkup(list,true,followup,hidden)}</div>`;
     }
 
             const WEEKDAYS=[['mon','Lunes'],['tue','Martes'],['wed','Miércoles'],['thu','Jueves'],['fri','Viernes'],['sat','Sábado'],['sun','Domingo']];
@@ -908,9 +916,66 @@
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
-    async function updatePresence(active){if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;try{await api(`/api/me?presence=${active?'1':'0'}`);}catch(error){console.debug('presence update skipped',error.message);}}
+    let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
+    async function updatePresence(active){
+      if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
+      if(presenceWritePromise)await presenceWritePromise.catch(()=>{});
+      const now=Date.now(),minGap=active?30000:5000;
+      if(lastPresenceWriteValue===active&&now-lastPresenceWriteAt<minGap)return;
+      const operation=api('/api/me?presence='+(active?'1':'0')).then(()=>{
+        lastPresenceWriteAt=Date.now();lastPresenceWriteValue=active;
+      }).catch(error=>{console.debug('presence update skipped',error.message);});
+      presenceWritePromise=operation;
+      try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
+    }
+    async function refreshPresenceStatus(){
+      if(state.role!=='barber'||state.presenceRefreshing)return;
+      const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
+      if(remaining>0){paintPresenceRefreshButton();return;}
+      state.presenceRefreshing=true;
+      state.presenceRefreshCooldownUntil=Date.now()+10000;
+      paintPresenceRefreshButton();
+      startPresenceRefreshCooldownTicker();
+      try{
+        const result=await api('/api/presence');
+        const freshByUid=new Map((Array.isArray(result.presence)?result.presence:[]).map(item=>[item.uid,item]));
+        const now=Date.now(),staleMs=660000;
+        state.customers=(state.customers||[]).map(customer=>{
+          const fresh=freshByUid.get(customer.uid);
+          if(fresh)return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:true};
+          const last=asDate(customer.lastSeenAt);
+          if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
+          return customer;
+        });
+        renderApp();
+        toast(result.partial?'Estado actualizado. Se consultaron los perfiles con actividad más reciente.':'Estado de conexión actualizado. La lista sigue sincronizándose automáticamente.','success');
+      }catch(error){toast(error.message||'No se pudieron actualizar los estados. La sincronización automática sigue activa.','error');}
+      finally{state.presenceRefreshing=false;paintPresenceRefreshButton();}
+    }
+    function paintPresenceRefreshButton(){
+      const seconds=Math.max(0,Math.ceil((Number(state.presenceRefreshCooldownUntil||0)-Date.now())/1000));
+      $('[data-action="refresh-presence"]').forEach(button=>{
+        button.disabled=!!state.presenceRefreshing||seconds>0;
+        const label=$('[data-refresh-label]',button),count=$('[data-refresh-countdown]',button);
+        if(label)label.textContent=state.presenceRefreshing?'Actualizando…':'Actualizar';
+        if(count)count.textContent=seconds>0?' '+seconds+'s':'';
+        button.setAttribute('aria-label',seconds>0?'Actualizar estados de conexión en '+seconds+' segundos':'Actualizar estados de conexión');
+      });
+    }
+    function startPresenceRefreshCooldownTicker(){
+      if(state.presenceRefreshCooldownTimer)clearInterval(state.presenceRefreshCooldownTimer);
+      paintPresenceRefreshButton();
+      state.presenceRefreshCooldownTimer=setInterval(()=>{
+        paintPresenceRefreshButton();
+        if(Date.now()>=Number(state.presenceRefreshCooldownUntil||0)){
+          clearInterval(state.presenceRefreshCooldownTimer);
+          state.presenceRefreshCooldownTimer=null;
+          paintPresenceRefreshButton();
+        }
+      },1000);
+    }
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'){sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,900000);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,30000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'){state.presenceTimer=setInterval(sendPresencePing,600000);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,30000);}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;
@@ -934,7 +999,7 @@
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat();
+      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat(); if(me.role==='customer') await updatePresence(true);
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         try { const loyalty=await api('/api/loyalty'); state.barber={...state.barber,loyaltyPrograms:loyalty.programs,defaultLoyaltyProgramId:loyalty.defaultLoyaltyProgramId}; }
@@ -1378,6 +1443,7 @@
         else if(action==='pause-reminders'){await setCustomerRemindersPaused(button.dataset.id,true);}
         else if(action==='resume-reminders'){await setCustomerRemindersPaused(button.dataset.id,false);}
         else if(action==='new-client'){openCustomerModal();}
+        else if(action==='refresh-presence'){await refreshPresenceStatus();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
         else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}

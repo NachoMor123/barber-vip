@@ -953,6 +953,7 @@
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
     const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
+    const PRESENCE_AUTO_REFRESH_MS=180000; // El panel del barbero sincroniza presencia cada 3 minutos.
     const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
     let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
     async function updatePresence(active){
@@ -966,7 +967,7 @@
       presenceWritePromise=operation;
       try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
     }
-    async function refreshPresenceStatus(){
+    async function refreshPresenceStatus({automatic=false}={}){
       if(state.role!=='barber'||state.presenceRefreshing)return;
       const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
       if(remaining>0){paintPresenceRefreshButton();return;}
@@ -992,10 +993,10 @@
           return {...customer,isOnline:false};
         });
         renderApp();
-        toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
+        if(!automatic)toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
       }catch(error){
         console.error('No se pudo actualizar la presencia:',error);
-        toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
+        if(!automatic)toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
       }finally{
         state.presenceRefreshing=false;
         paintPresenceRefreshButton();
@@ -1026,7 +1027,7 @@
       },1000);
     }
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber'){state.presenceTimer=setInterval(()=>{if(document.visibilityState==='visible')void refreshPresenceStatus({automatic:true});},PRESENCE_AUTO_REFRESH_MS);state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;

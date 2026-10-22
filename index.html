@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, presenceTimer:null, presenceUiTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, promoMetaVersion:'', presenceTimer:null, presenceUiTimer:null, lastPresenceCheckpointAt:0, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -655,7 +655,7 @@
       return data;
     };
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; };
-    const cleanupContext = () => { clearListeners(); if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.presenceUiTimer){clearInterval(state.presenceUiTimer);state.presenceUiTimer=null;} if(state.presenceRefreshCooldownTimer){clearInterval(state.presenceRefreshCooldownTimer);state.presenceRefreshCooldownTimer=null;} state.presenceRefreshing=false; state.presenceRefreshCooldownUntil=0; if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} if(state.promotionsRefreshTimer){clearInterval(state.promotionsRefreshTimer);state.promotionsRefreshTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); state.lastPresenceCheckpointAt=0; state.promoMetaVersion=''; if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.presenceUiTimer){clearInterval(state.presenceUiTimer);state.presenceUiTimer=null;} if(state.presenceRefreshCooldownTimer){clearInterval(state.presenceRefreshCooldownTimer);state.presenceRefreshCooldownTimer=null;} state.presenceRefreshing=false; state.presenceRefreshCooldownUntil=0; if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.reminderTimer){clearInterval(state.reminderTimer);state.reminderTimer=null;} if(state.promotionsRefreshTimer){clearInterval(state.promotionsRefreshTimer);state.promotionsRefreshTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -671,7 +671,7 @@
         void maybeShowInstallPrompt();
         return;
       }
-      appRoot.innerHTML = `<main class="landing"><div class="landing-top">${brand}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Una experiencia VIP para cada visita</span></div><h1>Tu estilo.<br><span>Tu recompensa.</span></h1><div class="hero-points"><span><b>✓</b> Seguimiento de visitas</span><span><b>✓</b> Premios automáticos</span><span><b>✓</b> Contacto directo</span></div></div><div class="choice-panel"><div class="choice-top"><div><h2>Un buen servicio atrae. Una razón para volver fideliza.</h2><p>Entrá a tu espacio de trabajo o consultá tu tarjeta de visitas y beneficios.</p></div><div class="choice-icon">✦</div></div><button class="role-choice" data-action="choose-login" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Soy administrador</strong><small>Gestioná clientes, visitas y promociones.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-login" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Soy cliente</strong><small>Consultá tus visitas y beneficios.</small></span><span class="role-arrow">↗</span></button><div class="choice-foot">🔒 Acceso privado para cada profesional y sus clientes.</div>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>`:''}</div></section><footer class="landing-footer"><span>© 2026 Barber VIP · Cada visita puede ser el motivo para volver.</span></footer></main>`;
+      appRoot.innerHTML = `<main class="landing"><div class="landing-top">${brand}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Una experiencia VIP para cada visita</span></div><h1>Tu estilo.<br><span>Tu recompensa.</span></h1><div class="hero-points"><span><b>✓</b> Seguimiento de visitas</span><span><b>✓</b> Premios automáticos</span><span><b>✓</b> Contacto directo</span></div></div><div class="choice-panel"><button class="role-choice" data-action="choose-login" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Soy administrador</strong><small>Gestioná clientes, visitas y promociones.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-login" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Soy cliente</strong><small>Consultá tus visitas y beneficios.</small></span><span class="role-arrow">↗</span></button>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>`:''}</div></section><footer class="landing-footer"><span>© 2026 Barber VIP · Cada visita puede ser el motivo para volver.</span></footer></main>`;
       void maybeShowInstallPrompt();
     }
     function renderLogin(mode) {
@@ -943,24 +943,31 @@
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
       try {
-        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(state.role==='barber'&&state.section==='home')u.searchParams.set('includeToday','1');
+        const isBarberHome=state.role==='barber'&&state.section==='home';
+        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(!isBarberHome)u.searchParams.set('stats','0'); if(isBarberHome)u.searchParams.set('includeToday','1');
         const data=await api(u.pathname+u.search);
-        state.stats={...state.stats,countSince:data.countRange||0,countRange:data.countRange||0,countMonth:data.countMonth||0,countTotal:data.countTotal||0,countToday:data.countToday??state.stats.countToday??0};
+        if(data.countRange!==undefined||data.countMonth!==undefined||data.countToday!==undefined){
+          state.stats={...state.stats,countSince:data.countRange??state.stats.countSince??0,countRange:data.countRange??state.stats.countRange??0,countMonth:data.countMonth??state.stats.countMonth??0,countToday:data.countToday??state.stats.countToday??0};
+        }
         if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
         state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
-    const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
-    const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
+    const PRESENCE_HEARTBEAT_MS=300000; // Pulso cada 5 minutos mientras el cliente usa la app.
+    const PRESENCE_STALE_MS=720000; // 12 minutos sin pulso: tolera pausas del navegador sin consultas constantes.
+    const PRESENCE_CHECKPOINT_MS=600000; // Escribir la fecha en la lista general cada 10 minutos, no en cada pulso.
     let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
     async function updatePresence(active){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
       if(presenceWritePromise)await presenceWritePromise.catch(()=>{});
       const now=Date.now(),minGap=active?30000:5000;
       if(lastPresenceWriteValue===active&&now-lastPresenceWriteAt<minGap)return;
-      const operation=api('/api/me?presence='+(active?'1':'0')).then(()=>{
+      const persistCheckpoint=!active||!state.lastPresenceCheckpointAt||now-state.lastPresenceCheckpointAt>=PRESENCE_CHECKPOINT_MS;
+      const url='/api/me?presence='+(active?'1':'0')+(persistCheckpoint?'&persist=1':'');
+      const operation=api(url).then(()=>{
         lastPresenceWriteAt=Date.now();lastPresenceWriteValue=active;
+        if(persistCheckpoint)state.lastPresenceCheckpointAt=Date.now();
       }).catch(error=>{console.debug('presence update skipped',error.message);});
       presenceWritePromise=operation;
       try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
@@ -1123,6 +1130,17 @@
           state.customer=fresh;
           if(!presenceOnly)renderApp();
         },err=>console.warn('customer snapshot',err)));
+        // Watch only a safe, tiny revision document. Promotions are reloaded when the barber changes one,
+        // not by polling Firestore on a timer and not by asking the customer to press Refresh.
+        let promotionMetaInitial=true;
+        const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
+        state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
+          const version=snap.exists()?promotionRevisionKey(snap.data().updatedAt):'';
+          if(promotionMetaInitial){promotionMetaInitial=false;state.promoMetaVersion=version;return;}
+          if(!snap.exists()||!version||version===state.promoMetaVersion)return;
+          state.promoMetaVersion=version;
+          void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});
+        },err=>console.debug('promotion revision listener unavailable',err.message)));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
         renderApp();
       }
@@ -1540,7 +1558,7 @@
         }
         else if(action==='open-cut-modal'){openCutModal();}
         else if(action==='load-more-history'){await loadMoreHistory();}
-        else if(action==='toggle-history'){state.historyHidden=!state.historyHidden;try{localStorage.setItem('barberVipHistoryHidden',String(state.historyHidden));}catch(_){}renderApp();if(!state.historyHidden)await refreshStats(state.historyFrom,state.historyTo,{loadHistory:true});}
+        else if(action==='toggle-history'){state.historyHidden=!state.historyHidden;try{localStorage.setItem('barberVipHistoryHiddenV2',String(state.historyHidden));}catch(_){}renderApp();if(!state.historyHidden)await refreshStats(state.historyFrom,state.historyTo,{loadHistory:true});}
         else if(action==='filter-history'){const from=$('#historyFrom')?.value||'',to=$('#historyTo')?.value||'';if(!from||!to){toast('Elegí las dos fechas para filtrar el historial.','error');return;}if(from>to){toast('La fecha «Desde» no puede ser posterior a «Hasta».','error');return;}state.historyFrom=from;state.historyTo=to;await refreshStats(from,to,{loadHistory:true});}
         else if(action==='reset-history'){const today=new Date(),from=new Date();from.setDate(from.getDate()-59);state.historyFrom=localDateInput(from);state.historyTo=localDateInput(today);await refreshStats(state.historyFrom,state.historyTo,{loadHistory:true});renderApp();}
         else if(action==='prepare-delete-history'){openHistoryDeleteConfirmation();}

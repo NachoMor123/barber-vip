@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
     const snap = await ctx.db
       .collection('barbers')
       .doc(ctx.uid)
-      .collection('customers')
+      .collection('presence')
       .where('lastSeenAt', '>=', cutoff)
       .orderBy('lastSeenAt', 'desc')
       .get();

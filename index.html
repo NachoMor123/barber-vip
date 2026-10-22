@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, presenceTimer:null, presenceUiTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, presenceTimer:null, presenceUiTimer:null, lastPresenceCheckpointAt:0, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, reminderTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null,  reminderPrepared:{}, reminderSaving:{}, reminderTab:'pending', historyHidden:(()=>{try{return localStorage.getItem('barberVipHistoryHidden')==='true'}catch(_){return false}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -953,16 +953,20 @@
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
     const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
-    const PRESENCE_AUTO_REFRESH_MS=180000; // El panel del barbero sincroniza presencia cada 3 minutos.
+    const PRESENCE_AUTO_REFRESH_MS=300000; // Consulta cada 5 minutos; el reloj de estado se actualiza localmente.
     const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
+    const PRESENCE_CHECKPOINT_MS=900000; // Guardar última conexión en el documento del cliente cada 15 minutos.
     let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
     async function updatePresence(active){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
       if(presenceWritePromise)await presenceWritePromise.catch(()=>{});
       const now=Date.now(),minGap=active?30000:5000;
       if(lastPresenceWriteValue===active&&now-lastPresenceWriteAt<minGap)return;
-      const operation=api('/api/me?presence='+(active?'1':'0')).then(()=>{
+      const persistCheckpoint=!active||!state.lastPresenceCheckpointAt||now-state.lastPresenceCheckpointAt>=PRESENCE_CHECKPOINT_MS;
+      const url='/api/me?presence='+(active?'1':'0')+(persistCheckpoint?'&persist=1':'');
+      const operation=api(url).then(()=>{
         lastPresenceWriteAt=Date.now();lastPresenceWriteValue=active;
+        if(persistCheckpoint)state.lastPresenceCheckpointAt=Date.now();
       }).catch(error=>{console.debug('presence update skipped',error.message);});
       presenceWritePromise=operation;
       try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
@@ -1082,6 +1086,7 @@
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
         const clientsRef=collection(state.db,'barbers',me.barberUid,'customers');
+        let initialCustomerSnapshot=true;
         state.unsubscribers.push(onSnapshot(clientsRef,snap=>{
           const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
           const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
@@ -1096,6 +1101,9 @@
           });
           state.customers=next;
           if(state.role!=='barber')return;
+          // Fetch current presence once after the initial customer list loads.
+          // Subsequent presence changes no longer trigger reads on this collection.
+          if(initialCustomerSnapshot){initialCustomerSnapshot=false;void refreshPresenceStatus({automatic:true});}
           if(presenceOnly){
             const changedIds=new Set(changes.map(change=>change.doc.id));
             for(const customer of next){

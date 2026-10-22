@@ -941,9 +941,12 @@
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
       try {
-        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(state.role==='barber'&&state.section==='home')u.searchParams.set('includeToday','1');
+        const isBarberHome=state.role==='barber'&&state.section==='home';
+        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(!isBarberHome)u.searchParams.set('stats','0'); if(isBarberHome)u.searchParams.set('includeToday','1');
         const data=await api(u.pathname+u.search);
-        state.stats={...state.stats,countSince:data.countRange||0,countRange:data.countRange||0,countMonth:data.countMonth||0,countTotal:data.countTotal||0,countToday:data.countToday??state.stats.countToday??0};
+        // Statistics are intentionally omitted by the API outside Home; don't overwrite
+        // valid dashboard numbers with zeros when only refreshing the history list.
+        if(data.countRange!==undefined)state.stats={...state.stats,countSince:data.countRange,countRange:data.countRange,countMonth:data.countMonth??state.stats.countMonth??0,countTotal:data.countTotal??state.stats.countTotal??0,countToday:data.countToday??state.stats.countToday??0};
         if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
         state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();

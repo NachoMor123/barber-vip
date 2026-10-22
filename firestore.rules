@@ -24,6 +24,18 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Tiny promotion revision marker. Customers can read only their linked barber's marker;
+      // the actual promotion payload still comes from the server API.
+      function isLinkedCustomer(barberIdForCheck) {
+        return signedIn()
+          && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'customer'
+          && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.barberUid == barberIdForCheck;
+      }
+      match /publicMeta/{metaId} {
+        allow get: if metaId == 'promotions' && (isBarber(barberId) || isLinkedCustomer(barberId));
+        allow list, create, update, delete: if false;
+      }
+
       match /cuts/{cutId} {
         allow read: if isBarber(barberId);
         allow write: if false;

@@ -12,6 +12,11 @@ const view = doc => {
   const date = v => v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v || null;
   return { id: doc.id, ...d, startsAt: date(d.startsAt), endsAt: date(d.endsAt), createdAt: date(d.createdAt), updatedAt: date(d.updatedAt) };
 };
+async function touchPromotionRevision(barberRef) {
+  await barberRef.collection('publicMeta').doc('promotions').set({
+    updatedAt: admin().firestore.FieldValue.serverTimestamp()
+  });
+}
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST', 'PUT', 'DELETE'])) return;
   try {
@@ -22,8 +27,9 @@ module.exports = async function handler(req, res) {
       if (!profileSnap.exists) return send(res, 403, { ok:false, error:'No se encontró tu perfil.' });
       const profile = profileSnap.data();
       if (profile.role === 'barber') {
-        const ctx = await requireBarber(req, res); if (!ctx) return;
-        const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
+        if (profile.role !== 'barber') return send(res, 403, { ok:false, error:'Esta acción es exclusiva del administrador de la barbería.' });
+        // profileSnap already authorized this identity; do not read userProfiles a second time.
+        const barberRef = database.collection('barbers').doc(decoded.uid);
         const promosRef = barberRef.collection('promotions');
         const barberSnap = await barberRef.get();
         if (!barberSnap.data()?.promotionsInitialized && subscription(barberSnap.data() || {}).status !== 'suspended') {
@@ -32,7 +38,8 @@ module.exports = async function handler(req, res) {
             { title:'Promo de bienvenida', description:'Un detalle especial para tu próxima visita.', conditions:'Mostrá esta promoción a tu profesional.', audience:'all', customerIds:[], active:true, createdAt:now, updatedAt:now },
             { title:'Días de la semana', description:'Consultá con tu profesional si hay una promo vigente para días tranquilos.', conditions:'Consultar disponibilidad antes del servicio.', audience:'all', customerIds:[], active:false, createdAt:now, updatedAt:now }
           ];
-          const batch = ctx.db.batch(); examples.forEach(promo => batch.set(promosRef.doc(), promo)); batch.update(barberRef, { promotionsInitialized:true }); await batch.commit();
+          const batch = database.batch(); examples.forEach(promo => batch.set(promosRef.doc(), promo)); batch.update(barberRef, { promotionsInitialized:true }); await batch.commit();
+          await touchPromotionRevision(barberRef);
         }
         const snap = await promosRef.orderBy('createdAt','desc').limit(100).get();
         return send(res, 200, { ok:true, promotions:snap.docs.map(view) });
@@ -66,7 +73,7 @@ module.exports = async function handler(req, res) {
     if (req.method === 'DELETE') {
       if (!id) return send(res, 400, {ok:false,error:'Falta identificar la promoción.'});
       await collection.doc(id).delete();
-      await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      await touchPromotionRevision(barberRef);
       return send(res, 200, {ok:true});
     }
     const title = text(data.title, 80), description = text(data.description, 500), conditions = text(data.conditions, 300);
@@ -84,12 +91,12 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
       payload.createdAt = now;
       const ref = await collection.add(payload);
-      await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      await touchPromotionRevision(barberRef);
       return send(res, 201, {ok:true,id:ref.id});
     }
     if (!id) return send(res, 400, {ok:false,error:'Falta identificar la promoción.'});
     await collection.doc(id).update(payload);
-    await barberRef.update({ promotionsUpdatedAt: admin().firestore.FieldValue.serverTimestamp() });
+    await touchPromotionRevision(barberRef);
     return send(res, 200, {ok:true,id});
   } catch (error) {
     console.error('promotions error', error);

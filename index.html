@@ -542,7 +542,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, deleteUser, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-    import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+    import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
     // Firebase: reemplazá estos valores por los de Configuración del proyecto > Tus apps > SDK web.
     const firebaseConfig = {
@@ -944,10 +944,16 @@
         const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(state.role==='barber'&&state.section==='home')u.searchParams.set('includeToday','1');
         const data=await api(u.pathname+u.search);
         state.stats={...state.stats,countSince:data.countRange||0,countRange:data.countRange||0,countMonth:data.countMonth||0,countTotal:data.countTotal||0,countToday:data.countToday??state.stats.countToday??0};
-        if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
-        state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
+        if(loadHistory){state.history=Array.isArray(data.history)?data.history:[];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);}
+        state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo;
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
+    }
+    function addHistoryItemLocally(item){
+      if(!item||state.historyHidden||!Array.isArray(state.history))return;
+      const date=asDate(item.createdAt),day=date?localDateInput(date):'';
+      if(!day||day<state.historyFrom||day>state.historyTo)return;
+      state.history=[item,...state.history.filter(entry=>entry.id!==item.id)].slice(0,100);
     }
     const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
     const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
@@ -965,65 +971,37 @@
     }
     async function refreshPresenceStatus(){
       if(state.role!=='barber'||state.presenceRefreshing)return;
-      const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
-      if(remaining>0){paintPresenceRefreshButton();return;}
       state.presenceRefreshing=true;
-      state.presenceRefreshCooldownUntil=Date.now()+10000;
-      startPresenceRefreshCooldownTicker();
       try{
-        paintPresenceRefreshButton();
-        // Consulta el estado actual del servidor sin esperar al siguiente heartbeat.
-        const result=await api('/api/presence');
-        if(!result||!Array.isArray(result.presence))throw new Error('El servidor no devolvió estados de conexión válidos.');
-        const freshByUid=new Map(result.presence.map(item=>[item.uid,item]));
+        // onSnapshot ya sincroniza los documentos en tiempo real. El botón solo
+        // recalcula los vencimientos locales; no hace una consulta Firestore.
         const now=Date.now(),staleMs=PRESENCE_STALE_MS;
         state.customers=(state.customers||[]).map(customer=>{
-          const fresh=freshByUid.get(customer.uid);
-          if(fresh){
-            const seen=asDate(fresh.lastSeenAt);
-            const recent=!!seen&&now-seen.getTime()>=0&&now-seen.getTime()<staleMs;
-            return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:recent&&fresh.isOnline===true};
-          }
           const last=asDate(customer.lastSeenAt);
-          if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
-          return customer;
+          const recent=!!last&&now>=last.getTime()&&now-last.getTime()<staleMs;
+          return {...customer,isOnline:recent&&customer.isOnline===true};
         });
-        renderApp();
-        toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
+        refreshPresenceLabels();
+        toast('Vista actualizada. La conexión se sincroniza automáticamente.','success');
       }catch(error){
-        console.error('No se pudo actualizar la presencia:',error);
-        toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
+        console.error('No se pudo actualizar la vista de presencia:',error);
+        toast('No se pudo actualizar la vista. Los estados automáticos siguen activos.','error');
       }finally{
         state.presenceRefreshing=false;
         paintPresenceRefreshButton();
       }
     }
     function paintPresenceRefreshButton(){
-      const seconds=Math.max(0,Math.ceil((Number(state.presenceRefreshCooldownUntil||0)-Date.now())/1000));
       $$('.clients-refresh-btn[data-action="refresh-presence"]').forEach(button=>{
-        button.disabled=!!state.presenceRefreshing||seconds>0;
-        button.classList.toggle('is-counting',seconds>0);
+        button.disabled=!!state.presenceRefreshing;
+        button.classList.remove('is-counting');
         button.classList.toggle('is-busy',!!state.presenceRefreshing);
         const count=$('[data-refresh-countdown]',button);
-        if(count)count.textContent=seconds>0?String(seconds):'';
-        button.setAttribute('aria-label',state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Actualizar estados de conexión en '+seconds+' segundos':'Actualizar estados de conexión ahora');
-        button.title=state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Podrás volver a actualizar en '+seconds+' segundos':'Actualizar estados de conexión ahora';
+        if(count)count.textContent='';
+        button.setAttribute('aria-label',state.presenceRefreshing?'Actualizando la vista de conexión':'Recalcular estados de conexión');
+        button.title=state.presenceRefreshing?'Actualizando la vista de conexión':'Recalcular estados de conexión (sin consultar la base de datos)';
       });
     }
-    function startPresenceRefreshCooldownTicker(){
-      if(state.presenceRefreshCooldownTimer)clearInterval(state.presenceRefreshCooldownTimer);
-      paintPresenceRefreshButton();
-      state.presenceRefreshCooldownTimer=setInterval(()=>{
-        paintPresenceRefreshButton();
-        if(Date.now()>=Number(state.presenceRefreshCooldownUntil||0)){
-          clearInterval(state.presenceRefreshCooldownTimer);
-          state.presenceRefreshCooldownTimer=null;
-          paintPresenceRefreshButton();
-        }
-      },1000);
-    }
-    async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;
@@ -1072,13 +1050,13 @@
       clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat(); if(me.role==='customer'&&document.visibilityState==='visible') await updatePresence(true);
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
-        try { const loyalty=await api('/api/loyalty'); state.barber={...state.barber,loyaltyPrograms:loyalty.programs,defaultLoyaltyProgramId:loyalty.defaultLoyaltyProgramId}; }
-        catch(error) { console.warn('loyalty programs could not be loaded',error.message); }
+        // /api/me ya devuelve el programa de fidelización normalizado; no volver a leerlo.
         await loadPromotions();
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
         const clientsRef=collection(state.db,'barbers',me.barberUid,'customers');
-        state.unsubscribers.push(onSnapshot(clientsRef,snap=>{
+        const activeClientsQuery=query(clientsRef,where('active','==',true));
+        state.unsubscribers.push(onSnapshot(activeClientsQuery,snap=>{
           const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
           const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
           const changes=snap.docChanges();
@@ -1252,9 +1230,10 @@
     async function addCut(id) {
       state.cutSaving=state.cutSaving||{};if(state.cutSaving[id])return;state.cutSaving[id]=true;
       try { const c=state.customers.find(x=>x.uid===id); if(!c)return; const result=await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'add',customerId:id})});
+        addHistoryItemLocally(result.historyItem);
         const earned=availableRewards(result.customer).filter(r=>!availableRewards(c).some(old=>Number(old.cut)===Number(r.cut)));toast(result.message||('Visita registrada para '+c.fullName+'. '+(earned.length?`Desbloqueó ${earned.map(r=>r.label).join(', ')} en esta visita.`:'')),'success');
         if(modalRoot.innerHTML) { const wasPicker=$('#cutSearch',modalRoot); if(wasPicker){openCutModal();}else modalRoot.innerHTML=''; }
-        await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
+        await refreshStats(state.historyFrom,state.historyTo,{loadHistory:false});
       } catch(error){toast(error.message,'error');}
       finally{delete state.cutSaving[id];}
     }
@@ -1497,7 +1476,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else modalRoot.innerHTML='';}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){state.section=button.dataset.section;state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);if(state.section==='home')refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}
+        else if(action==='nav'){state.section=button.dataset.section;state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);if(state.section==='home')refreshStats(state.historyFrom,state.historyTo,{loadHistory:false});}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
@@ -1648,7 +1627,7 @@
         }finally{if(state.manualLogin)state.manualLogin=false;}
       }
 
-      if(form.id==='walkInForm'){event.preventDefault();const fd=new FormData(form),btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Registrando…';try{await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'walk-in',customerName:$('#walkInName',form)?.value||''})});modalRoot.innerHTML='';toast('Visita rápida registrado en el historial.','success');await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Registrar visita rápido';}return;}
+      if(form.id==='walkInForm'){event.preventDefault();const fd=new FormData(form),btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Registrando…';try{const result=await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'walk-in',customerName:$('#walkInName',form)?.value||''})});addHistoryItemLocally(result.historyItem);modalRoot.innerHTML='';toast('Visita rápida registrada en el historial.','success');await refreshStats(state.historyFrom,state.historyTo,{loadHistory:false});}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Registrar visita rápido';}return;}
       if(form.id==='customerForm'){event.preventDefault();await saveCustomerForm(form);}
     });
 

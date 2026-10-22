@@ -22,8 +22,9 @@ module.exports = async function handler(req, res) {
       if (!profileSnap.exists) return send(res, 403, { ok:false, error:'No se encontró tu perfil.' });
       const profile = profileSnap.data();
       if (profile.role === 'barber') {
-        const ctx = await requireBarber(req, res); if (!ctx) return;
-        const barberRef = ctx.db.collection('barbers').doc(ctx.uid);
+        // El rol ya se verificó en el documento userProfiles de este GET.
+        // No volver a invocar requireBarber: duplica una lectura del mismo documento.
+        const barberRef = database.collection('barbers').doc(decoded.uid);
         const promosRef = barberRef.collection('promotions');
         const barberSnap = await barberRef.get();
         if (!barberSnap.data()?.promotionsInitialized && subscription(barberSnap.data() || {}).status !== 'suspended') {
@@ -32,7 +33,7 @@ module.exports = async function handler(req, res) {
             { title:'Promo de bienvenida', description:'Un detalle especial para tu próxima visita.', conditions:'Mostrá esta promoción a tu profesional.', audience:'all', customerIds:[], active:true, createdAt:now, updatedAt:now },
             { title:'Días de la semana', description:'Consultá con tu profesional si hay una promo vigente para días tranquilos.', conditions:'Consultar disponibilidad antes del servicio.', audience:'all', customerIds:[], active:false, createdAt:now, updatedAt:now }
           ];
-          const batch = ctx.db.batch(); examples.forEach(promo => batch.set(promosRef.doc(), promo)); batch.update(barberRef, { promotionsInitialized:true }); await batch.commit();
+          const batch = database.batch(); examples.forEach(promo => batch.set(promosRef.doc(), promo)); batch.update(barberRef, { promotionsInitialized:true }); await batch.commit();
         }
         const snap = await promosRef.orderBy('createdAt','desc').limit(100).get();
         return send(res, 200, { ok:true, promotions:snap.docs.map(view) });

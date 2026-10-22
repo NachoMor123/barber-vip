@@ -514,29 +514,23 @@
     @media(max-width:600px){.phone-prefix{padding-inline:10px}}
 </style>
   <style id="barber-vip-clients-refresh-fix">
-    /* En Clientes: actualizar ocupa un rincón; Crear cliente conserva todo el ancho disponible. */
-    .main-area > .page-head:has(.clients-head-actions){padding-right:0!important;display:block!important}
-    .main-area > .page-head:has(.clients-head-actions) > div:first-child{padding-right:142px!important;flex:initial!important;width:100%!important}
-    .main-area .page-head:has(.clients-head-actions) .page-actions{display:block!important;width:100%!important;max-width:none!important;margin:12px 0 0!important;padding:0!important;justify-content:initial!important}
-    .clients-head-actions{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important;gap:8px!important;padding-top:36px!important}
-    .clients-refresh-btn{position:absolute!important;right:0!important;top:0!important;display:grid!important;place-items:center!important;grid-template-columns:1fr!important;gap:0!important;width:36px!important;min-width:36px!important;max-width:36px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:10px!important;overflow:visible!important}
-    .clients-refresh-btn [data-refresh-label]{display:none!important}
-    .clients-refresh-icon{font-size:21px!important;line-height:1!important;transition:transform .2s ease!important}
-    .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
-    .clients-refresh-btn.is-busy .clients-refresh-icon{animation:clientsRefreshSpin .8s linear infinite!important}
-    .clients-refresh-countdown{position:absolute!important;right:-6px!important;top:-7px!important;display:grid!important;place-items:center!important;min-width:17px!important;height:17px!important;padding:0 3px!important;border:1px solid rgba(128,185,255,.9)!important;border-radius:6px!important;background:#102b61!important;color:#fff!important;font-size:10px!important;line-height:1!important;font-weight:950!important;font-variant-numeric:tabular-nums!important;box-shadow:0 2px 9px rgba(0,0,0,.4)!important}
-    .clients-refresh-countdown:empty{display:none!important}
-    .clients-create-btn{display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:54px!important;justify-content:center!important;align-items:center!important;padding:14px 18px!important;font-size:14px!important;font-weight:900!important;letter-spacing:.01em!important}
+    /* The customer counter owns the compact manual refresh control; Create client stays full width. */
+    .main-area > .page-head .clients-create-btn{display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:54px!important;justify-content:center!important;align-items:center!important;padding:14px 18px!important;font-size:14px!important;font-weight:900!important;letter-spacing:.01em!important}
+    .result-count-cluster{display:inline-flex!important;align-items:center!important;justify-content:flex-end!important;gap:8px!important;margin-left:auto!important;flex:0 0 auto!important;white-space:nowrap!important}
+    .result-count-cluster .result-count{margin:0!important;white-space:nowrap!important}
+    .toolbar .clients-refresh-btn{position:relative!important;display:inline-grid!important;place-items:center!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;margin:0!important;border-radius:50%!important;overflow:visible!important;line-height:1!important;background:#050b18!important;border:1px solid rgba(79,151,255,.85)!important;color:#dcecff!important;box-shadow:0 0 11px rgba(52,120,255,.14)!important}
+    .toolbar .clients-refresh-btn:disabled{opacity:.9!important;cursor:wait!important}
+    .toolbar .clients-refresh-icon{display:block!important;font-size:18px!important;line-height:1!important;transition:transform .16s ease!important}
+    .toolbar .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
+    .toolbar .clients-refresh-btn.is-busy .clients-refresh-icon{animation:clientsRefreshSpin .8s linear infinite!important}
+    .toolbar .clients-refresh-countdown{position:absolute!important;right:-6px!important;top:-6px!important;display:grid!important;place-items:center!important;min-width:15px!important;width:15px!important;height:15px!important;padding:0!important;border:1px solid rgba(147,199,255,.95)!important;border-radius:50%!important;background:#12336d!important;color:#fff!important;font-size:9px!important;line-height:1!important;font-weight:950!important;font-variant-numeric:tabular-nums!important;box-shadow:0 2px 7px rgba(0,0,0,.45)!important}
+    .toolbar .clients-refresh-countdown:empty{display:none!important}
     @keyframes clientsRefreshSpin{to{transform:rotate(360deg)}}
-    .activity-type-label,.attendance-status{display:none!important}
     @media(max-width:600px){
-      .main-area > .page-head:has(.clients-head-actions){padding-right:0!important}
-      .main-area > .page-head:has(.clients-head-actions) > div:first-child{padding-right:106px!important}
-      .main-area .page-head:has(.clients-head-actions) .page-actions{width:100%!important;margin-right:0!important}
-      .clients-head-actions{width:100%!important;justify-content:initial!important}
-      .clients-create-btn{width:100%!important;min-height:54px!important}
+      .main-area > .page-head .clients-create-btn{width:100%!important;min-height:54px!important}
+      .result-count-cluster{margin-left:auto!important}
     }
-    @media(prefers-reduced-motion:reduce){.clients-refresh-btn.is-busy .clients-refresh-icon{animation:none!important}}
+    @media(prefers-reduced-motion:reduce){.toolbar .clients-refresh-btn.is-busy .clients-refresh-icon{animation:none!important}}
   </style>
 </head>
 <body>
@@ -583,7 +577,7 @@
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<360000&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
+    function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<PRESENCE_STALE_MS&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
     function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
@@ -837,8 +831,8 @@
     }
     function clientsView() {
       const list=filteredCustomers();
-      const actions=`<div class="clients-head-actions"><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar conexión ahora" aria-label="Actualizar estado de conexión ahora"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" data-refresh-countdown aria-hidden="true"></span></button><button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button></div>`;
-      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count">${list.length} clientes</span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
+      const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
+      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count-cluster"><span class="result-count">${list.length} clientes</span><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar estados de conexión ahora" aria-label="Actualizar estados de conexión ahora"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" data-refresh-countdown aria-hidden="true"></span></button></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
     function remindersView() {
       const tab=state.reminderTab||'pending';const followup=tab==='followup',hidden=tab==='hidden';
@@ -955,6 +949,8 @@
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
+    const PRESENCE_HEARTBEAT_MS=180000; // 3 minutos mientras la app del cliente está visible.
+    const PRESENCE_STALE_MS=300000; // 5 minutos sin pulso: pasa a Última conexión.
     let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
     async function updatePresence(active){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
@@ -980,7 +976,7 @@
         const result=await api('/api/presence');
         if(!result||!Array.isArray(result.presence))throw new Error('El servidor no devolvió estados de conexión válidos.');
         const freshByUid=new Map(result.presence.map(item=>[item.uid,item]));
-        const now=Date.now(),staleMs=360000;
+        const now=Date.now(),staleMs=PRESENCE_STALE_MS;
         state.customers=(state.customers||[]).map(customer=>{
           const fresh=freshByUid.get(customer.uid);
           if(fresh){
@@ -1027,7 +1023,7 @@
       },1000);
     }
     async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,300000);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
+    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
     async function refreshCustomerContext(){
       if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
       state.refreshingCustomerContext=true;
@@ -1067,7 +1063,7 @@
       });
     })();
 
-    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){if(!state.presenceTimer)state.presenceTimer=setInterval(sendPresencePing,300000);void sendPresencePing();void refreshCustomerContext();}else{if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;}void updatePresence(false);}});
+    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){if(!state.presenceTimer)state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);void sendPresencePing();void refreshCustomerContext();}else{if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;}void updatePresence(false);}});
     window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;if(lastPresenceWriteValue===false&&Date.now()-lastPresenceWriteAt<10000)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
@@ -1151,7 +1147,7 @@
       }
     }
 
-    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function signOutAndReturn() { state.manualLogin=true; if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.role==='customer')await updatePresence(false); clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;

@@ -200,7 +200,7 @@ module.exports = async function handler(req, res) {
       let resultCustomer = null;
       const cutRef = cutCollection.doc();
       const createdAtIso = new Date().toISOString();
-      let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
+      let outcome = { appliedReward: null, cycleCut: 0, cycleLength: 6, programName: '', cyclePausedAtMax: false, cycleReset: false };
       await ctx.db.runTransaction(async transaction => {
         const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
         if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
@@ -275,7 +275,7 @@ module.exports = async function handler(req, res) {
           lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null,
           lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null
         };
-        outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
+        outcome = { appliedReward, cycleCut: cycleForVisit, cycleLength: cycleMax, programName: program.name || '', cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });
       let message = 'Visita registrada correctamente.';
       if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en esta visita.'; }
@@ -285,10 +285,10 @@ module.exports = async function handler(req, res) {
         historyItem: {
           id: cutRef.id, type: 'cut', customerId,
           customerName: text(resultCustomer.fullName || '', 70),
-          cycleCut: outcome.cycleCut, cycleLength: Math.max(1, ...((Array.isArray(resultCustomer.availableRewards) ? resultCustomer.availableRewards : []).map(r => Number(r.cut) || 1)), Number(outcome.cycleCut) || 6),
+          cycleCut: outcome.cycleCut, cycleLength: outcome.cycleLength || 6,
           rewardLabel: outcome.appliedReward ? text(outcome.appliedReward.label || `${Number(outcome.appliedReward.discount)||0}% OFF`, 50) : '',
           unlockedRewardLabel: '', rewardAction: outcome.appliedReward ? 'applied' : '',
-          programName: text(resultCustomer.loyaltyProgramName || '', 60),
+          programName: text(outcome.programName || '', 60),
           createdAt: createdAtIso
         }
       });

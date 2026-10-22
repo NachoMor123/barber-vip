@@ -946,7 +946,7 @@
         const data=await api(u.pathname+u.search);
         // Statistics are intentionally omitted by the API outside Home; don't overwrite
         // valid dashboard numbers with zeros when only refreshing the history list.
-        if(data.countRange!==undefined)state.stats={...state.stats,countSince:data.countRange,countRange:data.countRange,countMonth:data.countMonth??state.stats.countMonth??0,countTotal:data.countTotal??state.stats.countTotal??0,countToday:data.countToday??state.stats.countToday??0};
+        if(data.countRange!==undefined||data.countMonth!==undefined||data.countToday!==undefined)state.stats={...state.stats,countSince:data.countRange??state.stats.countSince??0,countRange:data.countRange??state.stats.countRange??0,countMonth:data.countMonth??state.stats.countMonth??0,countTotal:data.countTotal??state.stats.countTotal??0,countToday:data.countToday??state.stats.countToday??0};
         if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
         state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();

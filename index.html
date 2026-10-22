@@ -1148,7 +1148,14 @@
           if(!snap.exists()||!version||version===state.promoMetaVersion)return;
           state.promoMetaVersion=version;
           void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});
-        },err=>console.debug('promotion revision listener unavailable',err.message)));
+        },err=>{
+          // If Firebase rules have not been published yet, fall back to a low-frequency check,
+          // only while the customer app is visible. With the rule enabled, this timer never runs.
+          console.debug('promotion revision listener unavailable',err.message);
+          if(!state.promotionsRefreshTimer)state.promotionsRefreshTimer=setInterval(()=>{
+            if(state.role==='customer'&&document.visibilityState==='visible')void refreshCustomerContext();
+          },30*60*1000);
+        }));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
         renderApp();
       }

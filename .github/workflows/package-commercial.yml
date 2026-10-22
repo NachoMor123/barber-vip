@@ -1,0 +1,53 @@
+name: Package independent Barber VIP commercial website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web-comercial/**"
+      - ".github/workflows/package-commercial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Assemble standalone static website
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/barber-vip-commercial"
+          mkdir -p "$out"
+          cp web-comercial/index.html "$out/index.html"
+          cat > "$out/README.md" <<'EOF'
+          # Barber VIP — web comercial
+
+          Sitio estático independiente. El archivo index.html debe quedar en la raíz del repositorio que conectes a Vercel.
+
+          ## Publicarlo en Vercel
+          1. Creá un repositorio GitHub nuevo, por ejemplo barber-vip-web.
+          2. Subí index.html y este README a la raíz del repositorio (no subas la carpeta contenedora).
+          3. En Vercel, importá ese repositorio.
+          4. Elegí framework Other; no hace falta comando de instalación, build ni directorio de salida.
+          5. Publicá. Los botones comerciales apuntan a https://barber-vip-three.vercel.app/?signup=1.
+
+          Este repositorio es solo la página comercial; no incluye claves, configuración privada ni código de Firebase.
+          EOF
+          test -s "$out/index.html"
+          grep -q 'https://barber-vip-three.vercel.app/?signup=1' "$out/index.html"
+          cd "$out"
+          zip -qr "$GITHUB_WORKSPACE/BarberVIP-WebComercial.zip" .
+
+      - name: Upload standalone website ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: BarberVIP-WebComercial
+          path: BarberVIP-WebComercial.zip
+          if-no-files-found: error
+          retention-days: 7

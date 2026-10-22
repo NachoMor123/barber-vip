@@ -5,7 +5,7 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await Promise.all(APP_SHELL.map(async path => {
-      const response = await fetch(new Request(path, { cache: 'reload' }));
+      const response = await fetch(new Request(new URL(path, self.location.origin), { cache: 'reload' }));
       if (!response.ok) throw new Error(`Could not refresh app shell: ${path}`);
       await cache.put(path, response);
     }));

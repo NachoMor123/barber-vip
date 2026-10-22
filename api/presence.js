@@ -2,7 +2,8 @@ const { send, method } = require('../lib/http');
 const { requireBarber } = require('../lib/security');
 
 const PRESENCE_WINDOW_MS = 5 * 60 * 1000;
-const PRESENCE_QUERY_LIMIT = 1000;
+// La vista normal usa onSnapshot. Este endpoint de respaldo solo busca actividad reciente.
+const PRESENCE_QUERY_LIMIT = 250;
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET'])) return;
@@ -10,13 +11,16 @@ module.exports = async function handler(req, res) {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;
 
-    // Manual refresh returns each active client, not only recent pings. This lets
-    // the UI reliably turn stale "online" labels into "last connection" labels.
+    // Nunca escanear toda la cartera para un refresco de presencia.
+    // Los clientes sin actividad en los últimos 5 minutos no pueden estar en línea.
+    const now = Date.now();
+    const cutoff = ctx.admin.firestore.Timestamp.fromMillis(now - PRESENCE_WINDOW_MS);
     const snap = await ctx.db.collection('barbers').doc(ctx.uid).collection('customers')
+      .where('lastSeenAt', '>=', cutoff)
+      .orderBy('lastSeenAt', 'desc')
       .limit(PRESENCE_QUERY_LIMIT)
       .get();
 
-    const now = Date.now();
     const presence = [];
     for (const doc of snap.docs) {
       const customer = doc.data();

@@ -956,7 +956,7 @@
         const now=Date.now(),staleMs=660000;
         state.customers=(state.customers||[]).map(customer=>{
           const fresh=freshByUid.get(customer.uid);
-          if(fresh)return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:true};
+          if(fresh)return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:fresh.isOnline===true};
           const last=asDate(customer.lastSeenAt);
           if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
           return customer;

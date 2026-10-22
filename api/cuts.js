@@ -45,6 +45,21 @@ function iso(value) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+function encodeHistoryCursor(doc) {
+  const value = doc.get('createdAt');
+  const millis = value && typeof value.toMillis === 'function' ? value.toMillis() : NaN;
+  if (!Number.isSafeInteger(millis) || millis < 0) return null;
+  return Buffer.from(JSON.stringify({ createdAt: millis, id: doc.id }), 'utf8').toString('base64url');
+}
+function decodeHistoryCursor(token) {
+  try {
+    const value = JSON.parse(Buffer.from(String(token || ''), 'base64url').toString('utf8'));
+    const createdAt = Number(value && value.createdAt);
+    const id = String(value && value.id || '');
+    if (!Number.isSafeInteger(createdAt) || createdAt < 0 || !/^[A-Za-z0-9_-]{1,150}$/.test(id)) return null;
+    return { createdAt, id };
+  } catch (_) { return null; }
+}
 
 function defaultProgram(barber) {
   const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];
@@ -101,10 +116,20 @@ module.exports = async function handler(req, res) {
         .where('createdAt', '>=', admin().firestore.Timestamp.fromDate(monthStart))
         .where('createdAt', '<', admin().firestore.Timestamp.fromDate(monthEnd)));
       const countTotal = await getCount(cutCollection);
-      let history = [];
+      let history = [], historyNextCursor = null, historyHasMore = false;
       if (String(req.query && req.query.history || '1') !== '0') {
-        const snap = await rangeQuery.orderBy('createdAt', 'desc').limit(HISTORY_LIMIT).get();
-        history = snap.docs.map(doc => {
+        const cursorToken = text(req.query && req.query.cursor, 500);
+        const cursor = cursorToken ? decodeHistoryCursor(cursorToken) : null;
+        if (cursorToken && !cursor) return send(res, 400, { ok: false, error: 'El cursor del historial no es válido. Volvé a filtrar las fechas.' });
+        let historyQuery = rangeQuery
+          .orderBy('createdAt', 'desc')
+          .orderBy(admin().firestore.FieldPath.documentId(), 'desc');
+        if (cursor) historyQuery = historyQuery.startAfter(admin().firestore.Timestamp.fromMillis(cursor.createdAt), cursor.id);
+        const page = await historyQuery.limit(HISTORY_LIMIT + 1).get();
+        historyHasMore = page.docs.length > HISTORY_LIMIT;
+        const pageDocs = page.docs.slice(0, HISTORY_LIMIT);
+        if (historyHasMore && pageDocs.length) historyNextCursor = encodeHistoryCursor(pageDocs[pageDocs.length - 1]);
+        history = pageDocs.map(doc => {
           const data = doc.data();
           return {
             id: doc.id,
@@ -117,7 +142,7 @@ module.exports = async function handler(req, res) {
           };
         });
       }
-      return send(res, 200, { ok: true, countRange, countMonth, countTotal, ...(countToday === undefined ? {} : { countToday }), from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT });
+      return send(res, 200, { ok: true, countRange, countMonth, countTotal, ...(countToday === undefined ? {} : { countToday }), from: from || rangeFrom.toISOString().slice(0,10), to: to || fallbackTo, history, historyLimit: HISTORY_LIMIT, historyNextCursor, historyHasMore });
     }
 
     const data = body(req);
@@ -158,8 +183,12 @@ module.exports = async function handler(req, res) {
       const customerName = text(data.customerName, 70) || 'Cliente de paso';
       const cutRef = cutCollection.doc();
       const now = admin().firestore.FieldValue.serverTimestamp();
+      const createdAtIso = new Date().toISOString();
       await cutRef.set({ id: cutRef.id, type: 'walk-in', customerId: null, customerName, cycleCut: null, createdAt: now });
-      return send(res, 200, { ok: true, id: cutRef.id, customerName, message: 'Visita rápida registrada.' });
+      return send(res, 200, {
+        ok: true, id: cutRef.id, customerName, message: 'Visita rápida registrada.',
+        historyItem: { id: cutRef.id, type: 'walk-in', customerId: null, customerName, cycleCut: null, cycleLength: 6, rewardLabel: '', unlockedRewardLabel: '', rewardAction: '', programName: '', createdAt: createdAtIso }
+      });
     }
 
     const customerId = text(data.customerId, 100);
@@ -170,6 +199,7 @@ module.exports = async function handler(req, res) {
       if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.' });
       let resultCustomer = null;
       const cutRef = cutCollection.doc();
+      const createdAtIso = new Date().toISOString();
       let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
       await ctx.db.runTransaction(async transaction => {
         const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
@@ -250,7 +280,18 @@ module.exports = async function handler(req, res) {
       let message = 'Visita registrada correctamente.';
       if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en esta visita.'; }
       if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
-      return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
+      return send(res, 200, {
+        ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message,
+        historyItem: {
+          id: cutRef.id, type: 'cut', customerId,
+          customerName: text(resultCustomer.fullName || '', 70),
+          cycleCut: outcome.cycleCut, cycleLength: Math.max(1, ...((Array.isArray(resultCustomer.availableRewards) ? resultCustomer.availableRewards : []).map(r => Number(r.cut) || 1)), Number(outcome.cycleCut) || 6),
+          rewardLabel: outcome.appliedReward ? text(outcome.appliedReward.label || `${Number(outcome.appliedReward.discount)||0}% OFF`, 50) : '',
+          unlockedRewardLabel: '', rewardAction: outcome.appliedReward ? 'applied' : '',
+          programName: text(resultCustomer.loyaltyProgramName || '', 60),
+          createdAt: createdAtIso
+        }
+      });
     }
 
     return send(res, 400, { ok: false, error: 'Acción de visita desconocida.' });

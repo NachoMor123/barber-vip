@@ -137,7 +137,7 @@ module.exports = async function handler(req, res) {
           uid: decoded.uid,
           barberUid: profile.barberUid,
           lastSeenAt: now,
-          isOnline: presenceParam === '1',
+          isOnline: presenceParam === '1' && profile.disabled !== true,
           active: profile.disabled !== true
         }, { merge: true });
 
@@ -148,7 +148,7 @@ module.exports = async function handler(req, res) {
         if (persistLastSeen) {
           await barberRef.collection('customers').doc(decoded.uid).update({
             lastSeenAt: now,
-            isOnline: presenceParam === '1'
+            isOnline: presenceParam === '1' && profile.disabled !== true
           });
         }
       }

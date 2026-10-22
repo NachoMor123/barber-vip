@@ -1000,7 +1000,7 @@
     }
     function paintPresenceRefreshButton(){
       const seconds=Math.max(0,Math.ceil((Number(state.presenceRefreshCooldownUntil||0)-Date.now())/1000));
-      $('.clients-refresh-btn[data-action="refresh-presence"]').forEach(button=>{
+      $$('.clients-refresh-btn[data-action="refresh-presence"]').forEach(button=>{
         button.disabled=!!state.presenceRefreshing||seconds>0;
         button.classList.toggle('is-counting',seconds>0);
         button.classList.toggle('is-busy',!!state.presenceRefreshing);

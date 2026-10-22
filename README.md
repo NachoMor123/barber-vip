@@ -51,6 +51,8 @@ Conservar los valores privados existentes. El nombre visible de la marca no obli
 
 El plan gratuito de Firestore tiene límites diarios/mensuales y no representa capacidad ilimitada. Las consultas, listeners en tiempo real, escrituras de presencia e índices consumen recursos. Revisar las métricas reales de Firestore y las invocaciones de funciones de Vercel antes de aumentar usuarios.
 
+La API de visitas evita agregaciones que la pantalla no necesita: fuera de Inicio no calcula estadísticas del panel, no calcula el total completo de visitas (no se muestra en la interfaz) y omite el conteo del período cuando el historial está oculto. Las acciones de edición de clientes también evitan una lectura inmediata del mismo documento solo para devolver los campos recién guardados.
+
 Vercel Hobby está destinado a usos personales/no comerciales según las condiciones vigentes. Si se vende el servicio, revisar el plan o proveedor de hosting permitido para uso comercial.
 
 ## Lista previa al lanzamiento

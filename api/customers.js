@@ -74,8 +74,11 @@ module.exports = async function handler(req, res) {
       }
       // Follow-up is intentionally persistent: it ends only when a new cut is registered.
       await barberRef.update(changes);
-      const saved = await barberRef.get();
-      return send(res, 200, {ok:true, settings:{reminderThresholdDays:threshold,reminderMaxMessages:maxMessages,reminderMessageTemplate:saved.data().reminderMessageTemplate||''}});
+      return send(res, 200, {ok:true, settings:{
+        reminderThresholdDays:threshold,
+        reminderMaxMessages:maxMessages,
+        reminderMessageTemplate:changes.reminderMessageTemplate ?? barberSnap.data().reminderMessageTemplate ?? ''
+      }});
     }
 
     const customerId = text(data.customerId, 100);
@@ -91,8 +94,8 @@ module.exports = async function handler(req, res) {
         ? { remindersPaused:true, remindersPausedAt:now, updatedAt:now }
         : { remindersPaused:false, remindersPausedAt:null, reminderCount:0, reminderStatus:null, reminderFollowUpUntil:null, reminderLastContactAt:null, updatedAt:now };
       await customerRef.update(updates);
-      const saved = await customerRef.get();
-      return send(res, 200, {ok:true, customer:saved.data()});
+      // customerSnap was already read above; avoid a second read just to echo the saved form.
+      return send(res, 200, {ok:true, customer:{...customerSnap.data(),...updates,updatedAt:new Date().toISOString()}});
     }
 
     if (req.method === 'PUT' && data.action === 'record-reminder') {
@@ -173,8 +176,8 @@ module.exports = async function handler(req, res) {
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
     }
     await customerRef.update(updates);
-    const saved = await customerRef.get();
-    return send(res, 200, { ok: true, customer: saved.data() });
+    // customerSnap was already read above; echo the updated fields instead of reading again.
+    return send(res, 200, { ok: true, customer: { ...current, ...updates, updatedAt: new Date().toISOString() } });
   } catch (error) {
     console.error('customers error', error);
     if (error && error.code === 'auth/email-already-exists') return send(res, 409, { ok: false, error: 'No se pudo crear el usuario del cliente; probá otra vez.' });

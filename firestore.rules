@@ -7,6 +7,11 @@ service cloud.firestore {
     function isBarber(barberId) {
       return signedIn() && request.auth.uid == barberId;
     }
+    function isLinkedCustomer(barberId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'customer'
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.barberUid == barberId;
+    }
     // Los perfiles internos y los cambios se administran desde las API del servidor.
     match /userProfiles/{uid} {
       allow read, write: if false;
@@ -26,11 +31,6 @@ service cloud.firestore {
 
       // Tiny promotion revision marker. Customers can read only their linked barber's marker;
       // the actual promotion payload still comes from the server API.
-      function isLinkedCustomer(barberIdForCheck) {
-        return signedIn()
-          && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'customer'
-          && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.barberUid == barberIdForCheck;
-      }
       match /publicMeta/{metaId} {
         allow get: if metaId == 'promotions' && (isBarber(barberId) || isLinkedCustomer(barberId));
         allow list, create, update, delete: if false;

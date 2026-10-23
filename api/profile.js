@@ -148,7 +148,6 @@ module.exports = async function handler(req, res) {
               loyaltyPrograms:[{id:'program-246',name:'Programa de premios',audience:'all',customerIds:[],rewards:fallbackRewards}],
               defaultLoyaltyProgramId:'program-246', rewards:fallbackRewards,
               subscriptionExpiresAt:trialExpiry, hasPaidSubscription:false,
-              reminderThresholdDays:3, reminderFollowUpDays:7, reminderMaxMessages:2, reminderMessageTemplate:'',
               trialStartedAt:claim && claim.claimedAt ? claim.claimedAt : now,
               createdAt:now, updatedAt:now
             });
@@ -223,13 +222,7 @@ module.exports = async function handler(req, res) {
     try { services = cleanServices(data.services === undefined ? existing.services : data.services); }
     catch (error) { return send(res, 400, { ok:false, error:error.message }); }
     const showServices = data.showServices === undefined ? existing.showServices === true : data.showServices === true;
-    const thresholdInput = data.reminderThresholdDays === undefined ? existing.reminderThresholdDays : data.reminderThresholdDays;
-    const maxInput = data.reminderMaxMessages === undefined ? existing.reminderMaxMessages : data.reminderMaxMessages;
-    const thresholdNumber = Number(thresholdInput ?? 3);
-    const maxMessageNumber = Number(maxInput ?? 2);
-    const reminderThresholdDays = Number.isInteger(thresholdNumber) ? Math.max(0,Math.min(30,thresholdNumber)) : 3;
-    const reminderMaxMessages = [1,2,3].includes(maxMessageNumber) ? maxMessageNumber : 2;
-    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},reminderThresholdDays,reminderMaxMessages,updatedAt:admin().firestore.FieldValue.serverTimestamp()});
+    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},updatedAt:admin().firestore.FieldValue.serverTimestamp()});
     const fresh = await ref.get();
     return send(res, 200, {ok:true,profile:profileView(fresh.data()),subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {

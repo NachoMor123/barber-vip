@@ -120,41 +120,14 @@ module.exports = async function handler(req, res) {
   try {
     const decoded = await requireUser(req, res);
     if (!decoded) return;
+    // Legacy installed clients may still send presence pings. Acknowledge without Firestore reads or writes.
+    const legacyPresence = String(req.query && req.query.presence || '');
+    if (legacyPresence === '1' || legacyPresence === '0') return send(res, 200, { ok:true, online:false });
     const database = db();
     const profileRef = database.collection('userProfiles').doc(decoded.uid);
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil de esta cuenta. Volvé a ingresar.' });
     const profile = profileSnap.data();
-    const presenceParam = String(req.query && req.query.presence || '');
-    // Presence pings are deliberately lightweight: no full barber/customer payload, and no profile write.
-    if (presenceParam === '1' || presenceParam === '0') {
-      if (profile.role === 'customer' && profile.barberUid) {
-        const barberRef = database.collection('barbers').doc(profile.barberUid);
-        const now = admin().firestore.FieldValue.serverTimestamp();
-        // Presence heartbeats live in their own collection so they don't wake the
-        // barber's real-time listener for the entire customer collection.
-        await barberRef.collection('presence').doc(decoded.uid).set({
-          uid: decoded.uid,
-          barberUid: profile.barberUid,
-          lastSeenAt: now,
-          isOnline: presenceParam === '1' && profile.disabled !== true,
-          active: profile.disabled !== true
-        }, { merge: true });
-
-        // Persist the last-seen checkpoint occasionally (and always on exit) so
-        // old/offline customers retain a useful timestamp after the short presence
-        // window expires, without rewriting their customer document every heartbeat.
-        const persistLastSeen = String(req.query && req.query.persist || '') === '1' || presenceParam === '0';
-        if (persistLastSeen) {
-          await barberRef.collection('customers').doc(decoded.uid).update({
-            lastSeenAt: now,
-            isOnline: presenceParam === '1' && profile.disabled !== true
-          });
-        }
-      }
-      return send(res, 200, { ok:true, role:profile.role, online:presenceParam === '1' });
-    }
-
     if (profile.role === 'barber') {
       const barberRef = database.collection('barbers').doc(decoded.uid);
       const barberSnap = await barberRef.get();

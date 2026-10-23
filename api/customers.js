@@ -103,14 +103,6 @@ module.exports = async function handler(req, res) {
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
     }
     await customerRef.update(updates);
-    if (typeof updates.active === 'boolean') {
-      const presenceUpdate = { active: updates.active };
-      if (updates.active === false) {
-        presenceUpdate.isOnline = false;
-        presenceUpdate.lastSeenAt = admin().firestore.FieldValue.serverTimestamp();
-      }
-      await database.collection('barbers').doc(ctx.uid).collection('presence').doc(customerId).set(presenceUpdate, { merge: true });
-    }
     // customerSnap was already read above; echo the updated fields instead of reading again.
     return send(res, 200, { ok: true, customer: { ...current, ...updates, updatedAt: new Date().toISOString() } });
   } catch (error) {

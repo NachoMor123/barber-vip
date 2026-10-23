@@ -577,7 +577,21 @@
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});}
+    function presenceMarkup(value,isOnline){
+      const d=asDate(value);
+      const age=d?Date.now()-d.getTime():Infinity;
+      if(d&&age>=0&&age<660000&&isOnline===true) return '<span class="status-chip good">En línea</span>';
+      if(!d) return '<span class="status-chip warn">Última conexión: sin datos</span>';
+      const elapsed=relativeTime(d).replace(/^Hace/,'hace');
+      return `<span class="status-chip warn">Última conexión: ${escapeHtml(elapsed)}</span>`;
+    }
+    function refreshPresenceLabels(){
+      $('.presence-live').forEach(el=>{
+        const raw=el.dataset.presenceOnline||'';
+        el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');
+      });
+    }
+    function refreshRelativeTimes(){$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();}
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
@@ -775,26 +789,48 @@
       return `${sectionHeading('RESUMEN DE TU ACTIVIDAD',`${greetingForNow()}, ${escapeHtml(state.barber?.displayName||'profesional')} 👋`,'Convertí cada visita en una razón para volver.','<button class="btn btn-primary" data-action="open-cut-modal">✦ Registrar visita</button>')} ${subscriptionBanner()}<section class="quick-actions-section"><div class="quick-section-head"><div><span class="eyebrow">⚡ ACCESO DIRECTO</span><h2>Accesos rápidos</h2><p>Lo que más usás, siempre a mano.</p></div></div><div class="quick-actions"><button class="quick-action" data-action="new-client"><span>＋</span><strong>Crear cliente</strong><small>Sumá una persona a tu comunidad.</small></button><button class="quick-action" data-action="open-cut-modal"><span>✦</span><strong>Registrar visita</strong><small>Cliente registrado o de paso.</small></button><button class="quick-action" data-action="nav" data-section="promotions"><span>✦</span><strong>Promociones</strong><small>Publicá una oferta especial.</small></button><button class="quick-action" data-action="nav" data-section="settings"><span>⚙️</span><strong>Configuración</strong><small>Tu perfil, fidelización y datos profesionales.</small></button></div></section>${historyPanelMarkup()}`;
     }
 
-    // Renderizado de cada cliente: solo usa los datos ya cargados en memoria; no hace lecturas de Firestore.
+    // Renderizado del cliente sin consultas nuevas: se reutiliza el snapshot ya cargado.
     function clientRow(c){
       const id=String(c?.uid||'');
       const name=String(c?.fullName||'Cliente sin nombre');
       const total=Math.max(0,Number(c?.totalCuts)||0);
-      const cycle=cycleCount(c), max=cycleLength(c);
+      const cycle=cycleCount(c), max=cycleLength(c), pct=progress(c);
       const status=clientStatus(c);
-      const last=c?.lastCutAt?relativeTime(c.lastCutAt):'Sin visitas registradas';
+      const lastCut=relativeTime(c?.lastCutAt);
+      const lastSeen=presenceMarkup(c?.lastSeenAt,c?.isOnline);
+      const summary=cycleSummary(c);
+      const nextVisit=rewardForNextVisit(c);
+      const completedFinal=c?.lastRewardAppliedOnFinalMilestone===true;
+      const rewardLine=summary.ready.length
+        ? `Descuento disponible: ${summary.ready.map(r=>escapeHtml(r.label||`${r.discount}% OFF`)).join(', ')}`
+        : completedFinal
+          ? `${escapeHtml(c.lastRewardAppliedLabel||'Premio')} aplicado · ciclo completado`
+          : summary.left===1
+            ? `Falta 1 visita para ${escapeHtml(summary.next.label||'el próximo beneficio')}${nextVisit.length?'; esa visita recibe el descuento.':'.'}`
+            : `Faltan ${summary.left} visitas para ${escapeHtml(summary.next.label||'el próximo beneficio')}`;
       const hasWhats=validWhatsapp(c?.whatsapp);
-      return `<article class="client-row" data-client-id="${escapeHtml(id)}">
+      const lastCutIso=presenceIso(c?.lastCutAt);
+      const lastSeenIso=presenceIso(c?.lastSeenAt);
+      const onlineValue=c?.isOnline===true?'true':c?.isOnline===false?'false':'';
+      return `<article class="client-row" data-client-id="${escapeHtml(id)}" data-search="${escapeHtml(normalizeName(name+' '+(c?.whatsapp||'')))}">
         <div class="avatar" aria-hidden="true">${escapeHtml(nameInitials(name))}</div>
         <div class="client-info">
-          <div class="client-name-line"><strong>${escapeHtml(name)}</strong><span class="status-chip ${status[1]==='good'?'':'warn'}">${escapeHtml(status[0])}</span></div>
-          <div class="client-meta"><span><b>${total}</b> visita${total===1?'':'s'} totales</span><span>Ciclo <b>${cycle}/${max}</b></span><span>Última visita: <b>${escapeHtml(last)}</b></span>${c?.whatsapp?`<span>WhatsApp <b>${escapeHtml(c.whatsapp)}</b></span>`:''}</div>
+          <div class="client-name-line"><strong>${escapeHtml(name)}</strong><span class="status-chip ${status[1]==='good'?'good':'warn'}">${escapeHtml(status[0])}</span></div>
+          <div class="client-meta">
+            <span><b>${total}</b> visita${total===1?'':'s'} totales</span>
+            <span>Última visita: <b><span class="last-cut-relative" data-last-cut-at="${escapeHtml(lastCutIso)}">${escapeHtml(lastCut)}</span></b></span>
+            <span>Estado: <b><span class="presence-live" data-presence-value="${escapeHtml(lastSeenIso)}" data-presence-online="${onlineValue}">${lastSeen}</span></b></span>
+            ${c?.whatsapp?`<span>WhatsApp <b>${escapeHtml(c.whatsapp)}</b></span>`:''}
+          </div>
+          <div class="progress-mini" role="progressbar" aria-label="Progreso de fidelización de ${escapeHtml(name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
+          <div class="tiny muted" style="margin-top:5px">Ciclo ${cycle}/${max} · ${rewardLine}</div>
         </div>
         <div class="client-actions">
           <button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(id)}">＋ Corte</button>
           ${hasWhats? `<button class="btn btn-soft btn-mini" data-action="contact" data-id="${escapeHtml(id)}">WhatsApp</button>`:''}
           <button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(id)}">Ver</button>
           <button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(id)}">Editar</button>
+          <button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(id)}" aria-label="Dar de baja a ${escapeHtml(name)}" title="Dar de baja">⌫</button>
         </div>
       </article>`;
     }
@@ -808,6 +844,29 @@
       ];
       return Math.round(checks.filter(Boolean).length/checks.length*100);
     }
+    async function addCut(id) {
+      state.cutSaving=state.cutSaving||{};
+      if(state.cutSaving[id])return;
+      state.cutSaving[id]=true;
+      try {
+        const c=state.customers.find(x=>x.uid===id);
+        if(!c){toast('No se encontró al cliente seleccionado. Actualizá la lista y probá de nuevo.','error');return;}
+        const result=await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'add',customerId:id})});
+        if(result.customer){
+          state.customers=state.customers.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
+        }
+        toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
+        if($('#cutSearch',modalRoot)) openCutModal();
+        else modalRoot.innerHTML='';
+        renderApp();
+        await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
+      } catch(error) {
+        toast(error.message||'No se pudo registrar la visita. Probá de nuevo.','error');
+      } finally {
+        delete state.cutSaving[id];
+      }
+    }
+
     function contactClient(id,withMessage=false){
       const c=state.customers.find(x=>x.uid===id);
       if(!c||!validWhatsapp(c.whatsapp)){toast('Este cliente no tiene un WhatsApp válido configurado.','error');return;}

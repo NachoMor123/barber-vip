@@ -214,8 +214,7 @@ module.exports = async function handler(req, res) {
           lastRewardAppliedAt: appliedReward ? now : null,
           lastRewardAppliedCut: appliedReward ? Number(appliedReward.cut || 0) : null,
           lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null,
-          reminderCount: 0, reminderStatus: null, reminderFollowUpUntil: null, reminderLastContactAt: null,
-          remindersPaused: false, remindersPausedAt: null, updatedAt: now
+          updatedAt: now
         };
         transaction.update(customerRef, updates);
         transaction.set(cutRef, {

@@ -147,10 +147,14 @@ module.exports = async function handler(req, res) {
       const customerRef = barberRef.collection('customers').doc(decoded.uid);
       const customerSnap = await customerRef.get();
       if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok: false, error: 'Este cliente fue dado de baja. Consultá con tu profesional.' });
-      const customer = customerSnap.data();
+      const customerData = customerSnap.data();
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el espacio profesional asociado.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
+      // Una sola marca de última conexión al abrir/recuperar la sesión; sin sondeo ni lecturas adicionales.
+      const lastSeenAt = new Date().toISOString();
+      await customerRef.update({ lastSeenAt: admin().firestore.FieldValue.serverTimestamp() });
+      const customer = { ...customerData, lastSeenAt };
       return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber: publicBarberProfile(barber) });
     }
     return send(res, 403, { ok: false, error: 'El tipo de cuenta no está configurado correctamente.' });

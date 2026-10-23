@@ -586,12 +586,12 @@
       return `<span class="status-chip warn">Última conexión: ${escapeHtml(elapsed)}</span>`;
     }
     function refreshPresenceLabels(){
-      $('.presence-live').forEach(el=>{
+      $$('.presence-live').forEach(el=>{
         const raw=el.dataset.presenceOnline||'';
         el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');
       });
     }
-    function refreshRelativeTimes(){$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();}
+    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();}
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
@@ -763,7 +763,7 @@
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
     function promoIsActive(p){const now=Date.now(),start=asDate(p.startsAt)?.getTime(),end=asDate(p.endsAt)?.getTime();return p.active!==false&&(!start||start<=now)&&(!end||end>=now);}
     function promoCountdown(value){const d=asDate(value);if(!d)return 'Sin vencimiento';const ms=d.getTime()-Date.now();if(ms<=0)return 'Finalizada';const total=Math.floor(ms/1000),days=Math.floor(total/86400),hours=Math.floor(total%86400/3600),minutes=Math.floor(total%3600/60),seconds=total%60;return days?`${days} d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;}
-    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible||!state.promotions.some(p=>promoIsActive(p)&&p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))return;state.promoTimer=setInterval(()=>{$$('[data-promo-countdown]').forEach(el=>{el.textContent=promoCountdown(el.dataset.promoCountdown);});},1000);}
+    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible||!state.promotions.some(p=>promoIsActive(p)&&p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))return;state.promoTimer=setInterval(()=>{$$$('[data-promo-countdown]').forEach(el=>{el.textContent=promoCountdown(el.dataset.promoCountdown);});},1000);}
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function subscriptionBanner() {
       const s=subStatus(); const cls=s.status; const message=s.status==='active'?(s.isTrial?`Tu prueba gratuita sigue activa por ${s.daysRemaining} día${s.daysRemaining===1?'':'s'}. Podés activar el plan pago cuando quieras.`:`Tu cuenta está activa. Quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} antes del período de gracia.`):s.status==='grace'?`Te quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} de servicio. Pagá para extender el acceso por 30 días.`:'La cuenta está vencida o todavía no tiene fecha de vencimiento. No se pueden registrar visitas hasta renovarla.';

@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
         totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
-        createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
+        createdAt: now, updatedAt: now, lastCutAt: null
       };
       try {
         const batch = database.batch();

@@ -52,13 +52,11 @@ module.exports = async function handler(req, res) {
       const usernameNormalized = normalizeName(fullName);
       const password = String(data.password || '');
       const whatsapp = normalizeArgentinaPhone(data.whatsapp);
-      const visitDays = Number(data.approximateVisitDays);
       if (fullName.length < 3 || !usernameNormalized || usernameNormalized.split(' ').filter(Boolean).length < 2) {
         return send(res, 400, { ok: false, error: 'Ingresá tu nombre y apellido.' });
       }
       if (password.length < 6 || password.length > 128) return send(res, 400, { ok: false, error: 'La contraseña debe tener entre 6 y 128 caracteres.' });
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
-      if (!Number.isInteger(visitDays) || visitDays < 1 || visitDays > 365) return send(res, 400, { ok: false, error: 'Indicá cada cuántos días aproximadamente visitás a tu profesional (1 a 365).'});
 
       const barberCode = cleanBarberCode(data.barberCode);
       if (!barberCode) return send(res, 400, { ok: false, error: 'Completá el código de tu profesional.' });
@@ -89,10 +87,9 @@ module.exports = async function handler(req, res) {
         const now = admin().firestore.FieldValue.serverTimestamp();
         const customer = {
           uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'self',
-          approximateVisitDays: visitDays, cutStyle: '', conversationPreference: '',
+          cutStyle: '', conversationPreference: '',
           totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
           active: true,
-          reminderCount: 0, reminderStatus: null, remindersPaused: false,
           createdAt: now, updatedAt: now, lastCutAt: null, lastSeenAt: null
         };
         const batch = database.batch();

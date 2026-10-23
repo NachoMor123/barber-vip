@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v38-no-reminders-presence';
+const CACHE_NAME = 'barber-vip-shell-v39-client-render-fixes';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, lastCustomerContextRefreshAt:0, promotions:[],  promotionsVersion:null, promoMetaVersion:'', relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -655,7 +655,7 @@
       return data;
     };
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; state.customersLoaded=false; state.customersListenerStarted=false; state.customersLoadPromise=null; };
-    const cleanupContext = () => { clearListeners(); state.lastPresenceCheckpointAt=0; state.promoMetaVersion=''; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.lastCustomerContextRefreshAt=0; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -897,29 +897,6 @@
           const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
           const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
           const changes=snap.docChanges();
-          const presenceOnly=previous.length>0&&changes.length>0&&changes.every(change=>{
-            if(change.type!=='modified')return false;
-            const before=previousById.get(change.doc.id);if(!before)return false;
-            const after={uid:change.doc.id,...change.doc.data()};
-            const oldCore={...before},newCore={...after};
-            delete oldCore.lastSeenAt;delete oldCore.isOnline;delete newCore.lastSeenAt;delete newCore.isOnline;
-            return JSON.stringify(oldCore)===JSON.stringify(newCore);
-          });
-          state.customers=next;state.customersLoaded=true;
-          if(firstSnapshot){firstSnapshot=false;resolve();}
-          if(state.role!=='barber')return;
-          if(presenceOnly){
-            const changedIds=new Set(changes.map(change=>change.doc.id));
-            for(const customer of next){
-              if(!changedIds.has(customer.uid))continue;
-              $$('.presence-live').filter(el=>el.dataset.presenceCustomer===customer.uid).forEach(el=>{
-                el.dataset.presenceValue=presenceIso(customer.lastSeenAt);
-                el.dataset.presenceOnline=customer.isOnline===true?'true':customer.isOnline===false?'false':'';
-                el.innerHTML=presenceMarkup(customer.lastSeenAt,customer.isOnline);
-              });
-            }
-            return;
-          }
           renderApp();
         },err=>{
           console.error(err);state.customersLoaded=false;state.customersListenerStarted=false;
@@ -935,7 +912,7 @@
     }
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; if(me.role==='customer')state.lastCustomerContextRefreshAt=Date.now(); startRelativeTimeClock();
+      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
@@ -1006,7 +983,7 @@
       }
     }
 
-    async function signOutAndReturn() { state.manualLogin=true; if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.role==='customer')await updatePresence(false); clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;

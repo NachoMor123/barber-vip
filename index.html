@@ -1122,6 +1122,7 @@
       modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, tus beneficios y el contacto con tu profesional, sin vueltas.':'Tu asistente rápido: entendé cómo atraer visitas repetidas, mostrar promociones y convertir cada visita en una oportunidad de fidelización.'} Sin chat libre ni consultas externas.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}</section></div>`;
     }
     function showPipTopic(topic){openPipHelp(topic);}
+    function pipEnabled(){try{return localStorage.getItem('barberVipPipVisible')!=='false';}catch(_){return true;}}
     function isStandaloneApp(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;}
     let installedPwaDetectionPromise = null;
     async function isInstalledPwaInBrowser(){

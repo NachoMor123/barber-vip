@@ -850,16 +850,19 @@
     }
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
+      // The dashboard no longer requests aggregate counts. History is fetched only when the user explicitly opens it.
+      if(!loadHistory)return;
       try {
-        if(state.role==='barber'&&state.section==='home'&&state.historyHidden)return;
-        const isBarberHome=state.role==='barber'&&state.section==='home';
-        const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(!isBarberHome)u.searchParams.set('stats','0'); if(isBarberHome)u.searchParams.set('includeToday','1');
+        const u=new URL('/api/cuts',location.origin);
+        if(from)u.searchParams.set('from',from);
+        if(to)u.searchParams.set('to',to);
+        u.searchParams.set('stats','0');
         const data=await api(u.pathname+u.search);
-        if(data.countRange!==undefined||data.countMonth!==undefined||data.countToday!==undefined){
-          state.stats={...state.stats,countSince:data.countRange??state.stats.countSince??0,countRange:data.countRange??state.stats.countRange??0,countMonth:data.countMonth??state.stats.countMonth??0,countToday:data.countToday??state.stats.countToday??0};
-        }
-        if(loadHistory)state.history=Array.isArray(data.history)?data.history:[];
-        state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
+        state.history=Array.isArray(data.history)?data.history:[];
+        state.historyFrom=from||state.historyFrom;
+        state.historyTo=to||state.historyTo;
+        state.historyNextCursor=data.historyNextCursor||null;
+        state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
@@ -885,7 +888,7 @@
       });
     })();
 
-    async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
+    async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);u.searchParams.set('stats','0');const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
     async function ensureAdminCustomersLoaded(){
       if(state.role!=='barber')return;

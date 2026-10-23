@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, lastCustomerContextRefreshAt:0, promotions:[], promotionsRefreshTimer:null, promotionsVersion:null, promoMetaVersion:'', presenceTimer:null, presenceUiTimer:null, lastPresenceCheckpointAt:0, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, lastCustomerContextRefreshAt:0, promotions:[],  promotionsVersion:null, promoMetaVersion:'', relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all', stats:{countSince:0,countMonth:0,countTotal:0,countRange:0,countToday:0}, statsFrom:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -577,8 +577,8 @@
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function presenceMarkup(value,isOnline){const d=asDate(value);const age=d?Date.now()-d.getTime():Infinity;const fresh=!!d&&age>=0&&age<PRESENCE_STALE_MS&&isOnline===true;if(fresh)return '<span class="online-indicator"><i></i>En línea</span>';if(!d)return '<span class="offline-indicator">Última conexión: sin datos</span>';let elapsed;if(age<60000)elapsed='hace menos de 1 min';else if(age<3600000)elapsed=`hace ${Math.floor(age/60000)} min`;else if(age<86400000)elapsed=`hace ${Math.floor(age/3600000)} h`;else {const days=Math.floor(age/86400000);elapsed=days===1?'hace 1 día':`hace ${days} días`;}return `<span class="offline-indicator">Última conexión: ${elapsed}</span>`;}
-    function refreshPresenceLabels(){$$('.presence-live').forEach(el=>{const raw=el.dataset.presenceOnline||'';el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');});$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});}
+    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});}
+    function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
       let n=String(input||'').trim().replace(/\D/g,'');
@@ -655,7 +655,7 @@
       return data;
     };
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; state.customersLoaded=false; state.customersListenerStarted=false; state.customersLoadPromise=null; };
-    const cleanupContext = () => { clearListeners(); state.lastPresenceCheckpointAt=0; state.promoMetaVersion=''; if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;} if(state.presenceUiTimer){clearInterval(state.presenceUiTimer);state.presenceUiTimer=null;} if(state.presenceRefreshCooldownTimer){clearInterval(state.presenceRefreshCooldownTimer);state.presenceRefreshCooldownTimer=null;} state.presenceRefreshing=false; state.presenceRefreshCooldownUntil=0; if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} if(state.promotionsRefreshTimer){clearInterval(state.promotionsRefreshTimer);state.promotionsRefreshTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.lastCustomerContextRefreshAt=0; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); state.lastPresenceCheckpointAt=0; state.promoMetaVersion=''; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.lastCustomerContextRefreshAt=0; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -784,7 +784,7 @@
     function clientsView() {
       const list=filteredCustomers();
       const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
-      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count-cluster"><span class="result-count">${list.length} clientes</span><button type="button" class="btn btn-ghost clients-refresh-btn" data-action="refresh-presence" title="Actualizar estados de conexión ahora" aria-label="Actualizar estados de conexión ahora"><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" data-refresh-countdown aria-hidden="true"></span></button></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
+      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option><option value="legacy" ${state.customerSourceFilter==='legacy'?'selected':''}>Origen antiguo sin dato</option></select><select id="customerRewardFilter" class="sort-select"><option value="all" ${state.customerRewardFilter==='all'?'selected':''}>Todos los estados</option><option value="ready" ${state.customerRewardFilter==='ready'?'selected':''}>🎁 Premio aplicado en la última visita</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="seen-desc" ${state.sort==='seen-desc'?'selected':''}>Actividad: más reciente</option><option value="seen-asc" ${state.sort==='seen-asc'?'selected':''}>Actividad: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="result-count-cluster"><span class="result-count">${list.length} clientes</span></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
     function renderSettings() {
       const b=state.barber||{};const s=subStatus();const pct=profileCompletion(b);const price=subscriptionPrice();const scheduleDays=(b.schedule?.days||[]).filter(d=>d.enabled).length;const wa=validWhatsapp(b.whatsapp)?whatsappNumber(b.whatsapp):'';
@@ -843,7 +843,7 @@
       if(state.role==='barber') { appRoot.innerHTML=adminShell(); startPromoCountdowns(); }
       else { renderCustomer(); }
       // Update relative times immediately after painting; subsequent updates are local-only.
-      refreshPresenceLabels();
+      refreshRelativeTimes();
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
       void maybeShowInstallPrompt();
@@ -861,104 +861,6 @@
         state.historyFrom=from||state.historyFrom; state.historyTo=to||state.historyTo; state.historyNextCursor=data.historyNextCursor||null; state.historyHasMore=Boolean(data.historyHasMore);
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
-    }
-    const PRESENCE_HEARTBEAT_MS=300000; // Pulso cada 5 minutos mientras el cliente usa la app.
-    const PRESENCE_STALE_MS=720000; // 12 minutos sin pulso: tolera pausas del navegador sin consultas constantes.
-    const PRESENCE_CHECKPOINT_MS=600000; // Escribir la fecha en la lista general cada 10 minutos, no en cada pulso.
-    let lastPresenceWriteAt=0,lastPresenceWriteValue=null,presenceWritePromise=null;
-    async function updatePresence(active){
-      if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;
-      if(presenceWritePromise)await presenceWritePromise.catch(()=>{});
-      const now=Date.now(),minGap=active?30000:5000;
-      if(lastPresenceWriteValue===active&&now-lastPresenceWriteAt<minGap)return;
-      const persistCheckpoint=!active||!state.lastPresenceCheckpointAt||now-state.lastPresenceCheckpointAt>=PRESENCE_CHECKPOINT_MS;
-      const url='/api/me?presence='+(active?'1':'0')+(persistCheckpoint?'&persist=1':'');
-      const operation=api(url).then(()=>{
-        lastPresenceWriteAt=Date.now();lastPresenceWriteValue=active;
-        if(persistCheckpoint)state.lastPresenceCheckpointAt=Date.now();
-      }).catch(error=>{console.debug('presence update skipped',error.message);});
-      presenceWritePromise=operation;
-      try{await operation;}finally{if(presenceWritePromise===operation)presenceWritePromise=null;}
-    }
-    async function refreshPresenceStatus(){
-      if(state.role!=='barber'||state.presenceRefreshing)return;
-      const remaining=Number(state.presenceRefreshCooldownUntil||0)-Date.now();
-      if(remaining>0){paintPresenceRefreshButton();return;}
-      state.presenceRefreshing=true;
-      state.presenceRefreshCooldownUntil=Date.now()+10000;
-      startPresenceRefreshCooldownTicker();
-      try{
-        paintPresenceRefreshButton();
-        // Consulta el estado actual del servidor sin esperar al siguiente heartbeat.
-        const result=await api('/api/presence');
-        if(!result||!Array.isArray(result.presence))throw new Error('El servidor no devolvió estados de conexión válidos.');
-        const freshByUid=new Map(result.presence.map(item=>[item.uid,item]));
-        const now=Date.now(),staleMs=PRESENCE_STALE_MS;
-        state.customers=(state.customers||[]).map(customer=>{
-          const fresh=freshByUid.get(customer.uid);
-          if(fresh){
-            const seen=asDate(fresh.lastSeenAt);
-            const recent=!!seen&&now-seen.getTime()>=0&&now-seen.getTime()<staleMs;
-            return {...customer,lastSeenAt:fresh.lastSeenAt,isOnline:recent&&fresh.isOnline===true};
-          }
-          const last=asDate(customer.lastSeenAt);
-          if(!last||now-last.getTime()>=staleMs||now<last.getTime())return {...customer,isOnline:false};
-          return customer;
-        });
-        renderApp();
-        toast(result.partial?'Conexión actualizada. La consulta alcanzó su límite y priorizó la actividad más reciente.':'Estado de conexión actualizado con una consulta al servidor.','success');
-      }catch(error){
-        console.error('No se pudo actualizar la presencia:',error);
-        toast(error.message||'No se pudieron actualizar los estados. Revisá la conexión e intentá nuevamente.','error');
-      }finally{
-        state.presenceRefreshing=false;
-        paintPresenceRefreshButton();
-      }
-    }
-    function paintPresenceRefreshButton(){
-      const seconds=Math.max(0,Math.ceil((Number(state.presenceRefreshCooldownUntil||0)-Date.now())/1000));
-      $$('.clients-refresh-btn[data-action="refresh-presence"]').forEach(button=>{
-        button.disabled=!!state.presenceRefreshing||seconds>0;
-        button.classList.toggle('is-counting',seconds>0);
-        button.classList.toggle('is-busy',!!state.presenceRefreshing);
-        const count=$('[data-refresh-countdown]',button);
-        if(count)count.textContent=seconds>0?String(seconds):'';
-        button.setAttribute('aria-label',state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Actualizar estados de conexión en '+seconds+' segundos':'Actualizar estados de conexión ahora');
-        button.title=state.presenceRefreshing?'Consultando estados de conexión':seconds>0?'Podrás volver a actualizar en '+seconds+' segundos':'Actualizar estados de conexión ahora';
-      });
-    }
-    function startPresenceRefreshCooldownTicker(){
-      if(state.presenceRefreshCooldownTimer)clearInterval(state.presenceRefreshCooldownTimer);
-      paintPresenceRefreshButton();
-      state.presenceRefreshCooldownTimer=setInterval(()=>{
-        paintPresenceRefreshButton();
-        if(Date.now()>=Number(state.presenceRefreshCooldownUntil||0)){
-          clearInterval(state.presenceRefreshCooldownTimer);
-          state.presenceRefreshCooldownTimer=null;
-          paintPresenceRefreshButton();
-        }
-      },1000);
-    }
-    async function sendPresencePing(){if(state.role==='customer'&&document.visibilityState==='visible')await updatePresence(true);}
-    function startPresenceHeartbeat(){if(state.presenceTimer)clearInterval(state.presenceTimer);if(state.presenceUiTimer)clearInterval(state.presenceUiTimer);state.presenceTimer=null;state.presenceUiTimer=null;if(state.role==='customer'&&document.visibilityState==='visible'){void sendPresencePing();state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);}if(state.role==='barber'||state.role==='customer')state.presenceUiTimer=setInterval(refreshPresenceLabels,15000);}
-    async function refreshCustomerContext(){
-      if(state.role!=='customer'||!state.user||!state.auth?.currentUser||state.refreshingCustomerContext)return;
-      if(state.lastCustomerContextRefreshAt&&Date.now()-state.lastCustomerContextRefreshAt<15*60*1000)return;
-      state.refreshingCustomerContext=true;
-      try{
-        const fresh=await api('/api/me');
-        state.lastCustomerContextRefreshAt=Date.now();
-        if(fresh.role!=='customer'||state.role!=='customer'||fresh.uid!==state.user.uid)return;
-        const previousRevision=state.promotionsVersion;
-        const nextRevision=promotionRevisionKey(fresh.barber?.promotionsUpdatedAt);
-        state.customer=fresh.customer;
-        state.barber=fresh.barber||{};
-        state.promotionsVersion=nextRevision;
-        applyTheme(state.barber.theme);
-        if(previousRevision!==null&&previousRevision!==nextRevision)await loadPromotions();
-        renderApp();
-      }catch(error){console.debug('public profile refresh skipped',error.message);}
-      finally{state.refreshingCustomerContext=false;}
     }
     // En una PWA instalada se puede confirmar Atrás y el cierre de ventana. El sistema operativo aún puede forzar el cierre.
     (function installStandaloneExitGuard(){
@@ -981,9 +883,6 @@
         event.returnValue='';
       });
     })();
-
-    document.addEventListener('visibilitychange',()=>{if(!state.user||state.role!=='customer')return;if(document.visibilityState==='visible'){if(!state.presenceTimer)state.presenceTimer=setInterval(sendPresencePing,PRESENCE_HEARTBEAT_MS);void sendPresencePing();void refreshCustomerContext();}else{if(state.presenceTimer){clearInterval(state.presenceTimer);state.presenceTimer=null;}void updatePresence(false);}});
-    window.addEventListener('pagehide',()=>{if(state.role!=='customer'||!state.user||!state.auth?.currentUser)return;if(lastPresenceWriteValue===false&&Date.now()-lastPresenceWriteAt<10000)return;const user=state.auth.currentUser;user.getIdToken().then(token=>fetch('/api/me?presence=0',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',keepalive:true})).catch(()=>{});});
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
@@ -1036,7 +935,7 @@
     }
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; if(me.role==='customer')state.lastCustomerContextRefreshAt=Date.now(); startPresenceHeartbeat(); if(me.role==='customer'&&document.visibilityState==='visible') await updatePresence(true);
+      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; if(me.role==='customer')state.lastCustomerContextRefreshAt=Date.now(); startRelativeTimeClock();
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
@@ -1079,9 +978,7 @@
           // If Firebase rules have not been published yet, fall back to a low-frequency check,
           // only while the customer app is visible. With the rule enabled, this timer never runs.
           console.debug('promotion revision listener unavailable',err.message);
-          if(!state.promotionsRefreshTimer)state.promotionsRefreshTimer=setInterval(()=>{
-            if(state.role==='customer'&&document.visibilityState==='visible')void refreshCustomerContext();
-          },30*60*1000);
+          // No polling fallback: the promotion revision listener is the realtime update path.
         }));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
         renderApp();
@@ -1234,7 +1131,6 @@
       settings:'Completá nombre, WhatsApp, Instagram, ubicación y horarios por día. Compartí el enlace y código de acceso para que tus clientes entren. Configurá el programa de premios desde esta sección.',
       cuts:'Usá Registrar visita cada vez que venga una persona registrada. El ciclo y la tarjeta del cliente se actualizan automáticamente. Para alguien de paso, usá Registrar visita rápido: no crea una cuenta ni cambia el ciclo de nadie.',
       'customer-view':'Después de crear un cliente, cerrá sesión y entrá por Soy cliente usando el código, nombre y contraseña que le asignaste. Así vas a comprobar su tarjeta, progreso, promociones y los datos de contacto que configuraste.',
-      reminders:'Un cliente aparece en Por contactar cuando pasa su frecuencia habitual más el margen de días configurado. Abrí WhatsApp, enviá el texto preparado y volvé a confirmar el envío. Pasará a Seguimiento y se quedará ahí hasta que registres una nueva visita.',
       loyalty:'Hay un solo ciclo para todos los clientes. El profesional define los hitos y el porcentaje de cada premio. El descuento se aplica en la misma visita que alcanza el hito. Al aplicar el último beneficio, comienza un nuevo ciclo.',
       trial:'La cuenta comienza con 15 días de prueba. Ver plan muestra el estado y la fecha de vencimiento. Si querés, podés pagar antes: al aprobarse el pago, comienza un período de 30 días desde esa fecha.',
       roadmap:'Primero, definí una propuesta de fidelización que puedas sostener sin perjudicar tus ingresos. Después completá los datos profesionales, cargá servicios y precios si querés mostrarlos, configurá premios y promociones, y creá el acceso de un cliente. Registrá una visita de prueba y mirá la tarjeta desde la experiencia del cliente. La clave no es descontar en todo: es dar una razón concreta para volver, cumplir lo prometido y facilitar que te recomienden.',
@@ -1410,7 +1306,6 @@
         else if(action==='install-help'){installHelpExpanded=true;renderInstallGate();}
         else if(action==='continue-installed-browser'){installPhase='browser-allowed';setInstallGateLock(false);modalRoot.innerHTML='';}
         else if(action==='new-client'){openCustomerModal();}
-        else if(action==='refresh-presence'){await refreshPresenceStatus();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
         else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}

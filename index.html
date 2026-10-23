@@ -787,7 +787,7 @@
       return `<article class="client-row" data-client-id="${escapeHtml(id)}">
         <div class="avatar" aria-hidden="true">${escapeHtml(nameInitials(name))}</div>
         <div class="client-info">
-          <div class="client-name-line"><strong>${escapeHtml(name)}</strong><span class="status-chip ${status[1]==='good'?'status-good':'status-warn'}">${escapeHtml(status[0])}</span></div>
+          <div class="client-name-line"><strong>${escapeHtml(name)}</strong><span class="status-chip ${status[1]==='good'?'':'warn'}">${escapeHtml(status[0])}</span></div>
           <div class="client-meta"><span><b>${total}</b> visita${total===1?'':'s'} totales</span><span>Ciclo <b>${cycle}/${max}</b></span><span>Última visita: <b>${escapeHtml(last)}</b></span>${c?.whatsapp?`<span>WhatsApp <b>${escapeHtml(c.whatsapp)}</b></span>`:''}</div>
         </div>
         <div class="client-actions">

@@ -1128,7 +1128,7 @@
     }
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startPresenceHeartbeat(); if(me.role==='customer'&&document.visibilityState==='visible') await updatePresence(true);
+      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; if(me.role==='customer')state.lastCustomerContextRefreshAt=Date.now(); startPresenceHeartbeat(); if(me.role==='customer'&&document.visibilityState==='visible') await updatePresence(true);
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.

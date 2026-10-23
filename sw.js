@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v39-client-render-fixes';
+const CACHE_NAME = 'barber-vip-shell-v40-cut-and-client-ui';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

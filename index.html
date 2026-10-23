@@ -261,7 +261,7 @@
     @media(max-width:780px){.main-area > .page-head .page-actions{display:grid!important;grid-template-columns:minmax(0,1fr)!important;place-items:center!important;width:100%!important}.main-area > .page-head .page-actions .btn{width:min(100%,520px)!important}.pip-fab{right:10px;bottom:83px}.customer-pip-fab{bottom:16px}}
     @media(max-width:520px){.main-area{background:transparent!important}.main-area .page-head .page-actions .btn{min-height:47px}.pip-fab{min-height:32px;padding:6px 9px}.customer-pip-fab{bottom:12px}.pip-topic-grid{grid-template-columns:1fr}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
-    /* Presentación compacta de atención y recordatorios. */
+    /* Presentación compacta de atención. */
     .attendance-status{display:inline-flex;align-items:center;gap:9px;padding:9px 12px;border-radius:999px;font-size:11px;font-weight:850;letter-spacing:.01em;border:1px solid rgba(255,113,137,.42);background:rgba(255,113,137,.09);color:#ff9ba9;margin-top:12px}
     .attendance-status .attendance-dot{width:9px;height:9px;border-radius:50%;background:#ff536d;box-shadow:0 0 12px rgba(255,83,109,.65);flex:none}
     .attendance-status.is-open{border-color:rgba(69,230,155,.42);background:rgba(69,230,155,.09);color:#8ff3bf}
@@ -494,7 +494,7 @@
     .customer-promo-countdown-wrap,.customer-promo-countdown-wrap *{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}.customer-promo-countdown-wrap{display:block!important;padding:8px 0 0!important;margin:12px 0 0!important}.customer-promo-countdown-wrap .promo-countdown{padding:0!important;margin:0!important}.reminder-tabs{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:0!important}
     @media(max-width:620px){.service-setting-row{grid-template-columns:minmax(0,1fr) minmax(100px,.75fr) 36px}.service-setting-row .service-active-label{grid-column:1 / 3;grid-row:2}.service-setting-row .service-remove-btn{grid-column:3;grid-row:2;justify-self:end}.service-setting-row .service-active-label{align-self:center}.customer-services-list .service-line{gap:9px}.customer-services-list .service-line strong{font-size:12px}}
   
-    /* Sin marcos internos para la cuenta regresiva de promociones ni para las pestañas de recordatorios. */
+    /* Sin marcos internos para la cuenta regresiva de promociones. */
     .customer-promo-countdown-wrap,.customer-promo-countdown-wrap .promo-countdown,.promo-time-block,.promo-time-block .promo-countdown,.reminder-tabs,.reminder-tab{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
     .customer-promo-countdown-wrap{padding:8px 0 0!important;margin:12px 0 0!important}
     .customer-promo-countdown-wrap .promo-countdown,.promo-time-block .promo-countdown{padding:0!important;margin:0!important}
@@ -851,6 +851,7 @@
 
     async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
       try {
+        if(state.role==='barber'&&state.section==='home'&&state.historyHidden)return;
         const isBarberHome=state.role==='barber'&&state.section==='home';
         const u=new URL('/api/cuts',location.origin); if(from)u.searchParams.set('from',from); if(to)u.searchParams.set('to',to); if(!loadHistory)u.searchParams.set('history','0'); if(!isBarberHome)u.searchParams.set('stats','0'); if(isBarberHome)u.searchParams.set('includeToday','1');
         const data=await api(u.pathname+u.search);
@@ -894,9 +895,10 @@
         let firstSnapshot=true;
         const clientsRef=collection(state.db,'barbers',state.barberUid,'customers');
         const unsubscribe=onSnapshot(clientsRef,snap=>{
-          const previous=state.customers||[], previousById=new Map(previous.map(customer=>[customer.uid,customer]));
           const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
-          const changes=snap.docChanges();
+          state.customers=next;state.customersLoaded=true;
+          if(firstSnapshot){firstSnapshot=false;resolve();}
+          if(state.role!=='barber')return;
           renderApp();
         },err=>{
           console.error(err);state.customersLoaded=false;state.customersListenerStarted=false;
@@ -925,13 +927,8 @@
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
           const fresh={uid:snap.id,...snap.data()};
-          const previous=state.customer;
-          const oldCore=previous?{...previous}:null,newCore={...fresh};
-          if(oldCore){delete oldCore.lastSeenAt;delete oldCore.isOnline;}
-          delete newCore.lastSeenAt;delete newCore.isOnline;
-          const presenceOnly=!!oldCore&&JSON.stringify(oldCore)===JSON.stringify(newCore);
           state.customer=fresh;
-          if(!presenceOnly)renderApp();
+          renderApp();
         },err=>console.warn('customer snapshot',err)));
         // Watch only a safe, tiny revision document. Promotions are reloaded when the barber changes one,
         // not by polling Firestore on a timer and not by asking the customer to press Refresh.

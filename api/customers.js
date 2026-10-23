@@ -3,11 +3,6 @@ const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone
 const { requireBarber, subscription } = require('../lib/security');
 const crypto = require('crypto');
 
-function validRequired(value, fallback, max = 1000) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
-}
-
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST', 'PUT', 'DELETE'])) return;
   try {
@@ -70,9 +65,6 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: admin().firestore.FieldValue.serverTimestamp() });
-      await database.collection('barbers').doc(ctx.uid).collection('presence').doc(customerId).set({
-        active: false, isOnline: false, lastSeenAt: admin().firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
       await database.collection('userProfiles').doc(customerId).set({ disabled: true, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;

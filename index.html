@@ -556,7 +556,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -766,21 +766,6 @@
       return `<div class="subscription-banner ${cls}"><div class="banner-icon">${cls==='active'?'✦':cls==='grace'?'◷':'!'}</div><div style="flex:1;min-width:0"><strong>${escapeHtml(s.label)}</strong><p>${escapeHtml(message)}</p></div><div class="banner-actions"><button class="btn ${cls==='active'?'btn-ghost':'btn-primary'} btn-mini" data-action="pay">${cls==='active'?(s.isTrial?'Ver plan · pagar ahora':'Ver plan'):`Pagar ${money(subscriptionPrice())} ↗`}</button></div></div>`;
     }
     function metricCard(label,value,icon,caption='') { return `<div class="metric-card"><div class="metric-head"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-caption">${caption}</div></div>`; }
-    function historyEntryMarkup(entry) {
-      const customer=entry.customerId?state.customers.find(c=>c.uid===entry.customerId):null;
-      const guest=entry.type==='walk-in';
-      const name=guest?(entry.customerName||'Cliente de paso'):(customer?.fullName||entry.customerName||'Cliente dado de baja');
-      const cycleCut=Number(entry.cycleCut||0);
-      const rewardLabel=entry.rewardLabel||''; const cycleLengthValue=Number(entry.cycleLength||6);
-      const rewardAction=entry.rewardAction||'';const cycleText=guest?'Sin cuenta':cycleCut?`Ciclo ${cycleCut}/${cycleLengthValue}${rewardAction==='applied'&&rewardLabel?` · Aplicado ${rewardLabel}`:rewardAction==='ready'&&rewardLabel?` · Hito alcanzado: ${rewardLabel}`:''}`:'Visita registrada';
-      const service=entry.serviceName?` · ${entry.serviceName}`:'';const price=entry.servicePrice!==null&&entry.servicePrice!==undefined?` · ${money(entry.servicePrice)}`:'';const discount=Number(entry.discountPercent)>0?` · ${Number(entry.discountPercent)}% aplicado` :'';const final=entry.finalPrice!==null&&entry.finalPrice!==undefined?` · Total ${money(entry.finalPrice)}`:'';
-      return `<article class="history-entry"><span class="history-icon">${guest?'＋':'✦'}</span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(dateTimeLabel(entry.createdAt))}${escapeHtml(service)}${escapeHtml(price)}${escapeHtml(discount)}${escapeHtml(final)}${guest?' · Visita rápida':''}</small></div><div class="history-cycle">${escapeHtml(cycleText)}</div></article>`;
-    }
-    function historyPanelMarkup() {
-      const dates=`<div class="history-controls"><div class="history-date"><label for="historyFrom">Desde</label><input id="historyFrom" type="date" value="${escapeHtml(state.historyFrom)}" max="${escapeHtml(state.historyTo||localDateInput())}"></div><div class="history-date"><label for="historyTo">Hasta</label><input id="historyTo" type="date" value="${escapeHtml(state.historyTo)}" min="${escapeHtml(state.historyFrom)}" max="${localDateInput()}"></div><button class="btn btn-primary btn-mini filter-history-button" data-action="filter-history">Filtrar fechas ↗</button><button class="btn btn-ghost btn-mini" data-action="reset-history">Últimos 60 días</button><button class="btn btn-danger btn-mini" data-action="prepare-delete-history">Eliminar rango</button><p class="history-filter-tip">Elegí Desde y Hasta y tocá Filtrar. Eliminar rango borra solo las visitas registradas en esas fechas.</p></div>`;
-      const list=state.history||[];
-      return `<section class="panel history-panel"><div class="panel-head"><div><h2>Historial de visitas</h2><p>Visitas recientes. El detalle antiguo se depura automáticamente; el total de visitas de cada cliente no cambian.</p></div><div class="history-toolbar"><span class="muted">${state.historyHidden?'Oculto':`${list.length} en el período`}</span><button class="btn btn-ghost btn-mini" data-action="toggle-history">${state.historyHidden?'Ver historial':'Ocultar'}</button></div></div>${state.historyHidden?`<div class="history-hidden-note">El historial está oculto. Podés volver a mostrarlo cuando lo necesites.</div>`:`${dates}<div class="history-list">${list.map(historyEntryMarkup).join('')||'<div class="history-empty">No hay visitas registradas en estas fechas.</div>'}</div>${list.length>=100?'<p class="tiny muted" style="margin:12px 0 0">Mostrando por bloques para que el historial no vuelva lenta la pantalla.</p>':''}${state.historyHasMore?'<div class="history-load-more"><button class="btn btn-soft btn-block" data-action="load-more-history">Ver 100 visitas más ↓</button></div>':''}`}</section>`;
-    }
     function dashboardView() {
       return `${sectionHeading('RESUMEN DE TU ACTIVIDAD',`${greetingForNow()}, ${escapeHtml(state.barber?.displayName||'profesional')} 👋`,'Convertí cada visita en una razón para volver.','<button class="btn btn-primary" data-action="open-cut-modal">✦ Registrar visita</button>')} ${subscriptionBanner()}<section class="quick-actions-section"><div class="quick-section-head"><div><span class="eyebrow">⚡ ACCESO DIRECTO</span><h2>Accesos rápidos</h2><p>Lo que más usás, siempre a mano.</p></div></div><div class="quick-actions"><button class="quick-action" data-action="new-client"><span>＋</span><strong>Crear cliente</strong><small>Sumá una persona a tu comunidad.</small></button><button class="quick-action" data-action="open-cut-modal"><span>✦</span><strong>Registrar visita</strong><small>Elegí un cliente y registrá su visita.</small></button><button class="quick-action" data-action="nav" data-section="promotions"><span>✦</span><strong>Promociones</strong><small>Publicá una oferta especial.</small></button><button class="quick-action" data-action="nav" data-section="settings"><span>⚙️</span><strong>Configuración</strong><small>Tu perfil, fidelización y datos profesionales.</small></button></div></section>`;
     }
@@ -851,7 +836,6 @@
         if($('#cutSearch',modalRoot)) openCutModal();
         else {modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();}
         renderApp();
-        await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
       } catch(error) {
         toast(error.message||'No se pudo registrar la visita. Probá de nuevo.','error');
       } finally {
@@ -974,13 +958,6 @@
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
       void maybeShowInstallPrompt();
     }
-
-    async function refreshStats(){
-      // El historial ya no forma parte del producto: no consultar Firestore para cargarlo.
-      return;
-    }
-
-    async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);u.searchParams.set('stats','0');const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
     async function ensureAdminCustomersLoaded(){
       if(state.role!=='barber')return;
@@ -1352,29 +1329,6 @@
         console.warn('PWA install prompt',error);installPhase='prompt';installHelpExpanded=true;renderInstallGate();
       }
     }
-    function openHistoryDeleteConfirmation(){
-      const from=$('#historyFrom')?.value||state.historyFrom||'',to=$('#historyTo')?.value||state.historyTo||'';
-      if(!from||!to){toast('Elegí las fechas Desde y Hasta antes de eliminar el historial.','error');return;}
-      if(from>to){toast('La fecha «Desde» no puede ser posterior a «Hasta».','error');return;}
-      state.pendingHistoryDeletion={from,to};
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card danger-confirm-card" role="dialog" aria-modal="true" aria-labelledby="deleteHistoryTitle"><div class="confirm-logout-icon">⌫</div><span class="eyebrow">HISTORIAL · ACCIÓN IRREVERSIBLE</span><h2 id="deleteHistoryTitle">¿Eliminar estas visitas?</h2><p class="muted">Vas a borrar solo los registros de visitas entre <strong>${escapeHtml(from)}</strong> y <strong>${escapeHtml(to)}</strong>. No se eliminan clientes, premios ni sus cuentas. El sistema solo permite borrar registros dentro de los últimos 60 días.</p><div class="modal-footer"><button class="btn btn-ghost" data-action="cancel-delete-history">Cancelar</button><button class="btn btn-danger" data-action="confirm-delete-history">Eliminar historial</button></div></section></div>`;
-    }
-    async function deleteHistoryRange(){
-      const range=state.pendingHistoryDeletion;if(!range)return;
-      const confirmButton=$('[data-action="confirm-delete-history"]',modalRoot);if(confirmButton){confirmButton.disabled=true;confirmButton.textContent='Eliminando…';}
-      let totalDeleted=0,hasMore=false,calls=0;
-      try{
-        do{
-          const result=await api('/api/cuts',{method:'DELETE',body:JSON.stringify({from:range.from,to:range.to})});
-          totalDeleted+=Number(result.deleted||0);hasMore=Boolean(result.hasMore);calls++;
-        }while(hasMore&&calls<5);
-        state.pendingHistoryDeletion=null;modalRoot.innerHTML='';state.historyFrom=range.from;state.historyTo=range.to;
-        await refreshStats(range.from,range.to,{loadHistory:true});renderApp();
-        if(hasMore)toast(`Se eliminaron ${totalDeleted} registros. Todavía quedan más en ese rango; volvé a confirmar para continuar.`,'error');
-        else toast(`Historial eliminado: ${totalDeleted} registro${totalDeleted===1?'':'s'}. Los perfiles y premios siguen intactos.`,'success');
-      }catch(error){if(confirmButton){confirmButton.disabled=false;confirmButton.textContent='Eliminar historial';}toast(error.message||'No se pudo eliminar el historial seleccionado.','error');}
-    }
-
     // Prevent password managers from filling client-creation fields before the barber focuses them.
     document.addEventListener('focusin',event=>{const input=event.target.closest?.('[data-unlock-on-focus]');if(input)input.removeAttribute('readonly');},true);
 
@@ -1425,13 +1379,6 @@
           if(list&&!$('[data-service-row]',list))list.innerHTML='<div class="service-empty" data-services-empty><strong>Todavía no agregaste servicios</strong><p>Agregá los que ofrecés y el precio que querés mostrar a tus clientes.</p></div>';
         }
         else if(action==='open-cut-modal'){await ensureAdminCustomersLoaded();openCutModal();}
-        else if(action==='load-more-history'){await loadMoreHistory();}
-        else if(action==='toggle-history'){state.historyHidden=!state.historyHidden;try{localStorage.setItem('barberVipHistoryHiddenV2',String(state.historyHidden));}catch(_){}renderApp();if(!state.historyHidden)await refreshStats(state.historyFrom,state.historyTo,{loadHistory:true});}
-        else if(action==='filter-history'){const from=$('#historyFrom')?.value||'',to=$('#historyTo')?.value||'';if(!from||!to){toast('Elegí las dos fechas para filtrar el historial.','error');return;}if(from>to){toast('La fecha «Desde» no puede ser posterior a «Hasta».','error');return;}state.historyFrom=from;state.historyTo=to;await refreshStats(from,to,{loadHistory:true});}
-        else if(action==='reset-history'){const today=new Date(),from=new Date();from.setDate(from.getDate()-59);state.historyFrom=localDateInput(from);state.historyTo=localDateInput(today);await refreshStats(state.historyFrom,state.historyTo,{loadHistory:true});renderApp();}
-        else if(action==='prepare-delete-history'){openHistoryDeleteConfirmation();}
-        else if(action==='cancel-delete-history'){state.pendingHistoryDeletion=null;modalRoot.innerHTML='';}
-        else if(action==='confirm-delete-history'){await deleteHistoryRange();}
         else if(action==='add-cut'){await addCut(button.dataset.id);}
         else if(action==='add-client-reward'){const config=$('#clientLoyaltyConfig',modalRoot);const rows=$$('[data-client-reward-row]',config);if(rows.length>=10){toast('Podés configurar hasta 10 hitos.','error');return;}const max=Math.max(0,...rows.map(r=>Number($('[data-client-reward-cut]',r)?.value)||0));const row=document.createElement('div');row.className='loyalty-custom-row';row.setAttribute('data-client-reward-row','');row.innerHTML=`<label>Visita<input type="number" min="1" max="50" data-client-reward-cut value="${Math.min(50,max+2)}" required></label><label>Descuento (%)<input type="number" min="0" max="100" data-client-reward-discount value="10" required></label><button type="button" class="btn btn-danger btn-mini" data-action="remove-client-reward" aria-label="Eliminar hito">⌫</button>`;$('.loyalty-custom-rows',config).appendChild(row);}
         else if(action==='remove-client-reward'){const config=button.closest('#clientLoyaltyConfig');if($$('[data-client-reward-row]',config).length<=1){toast('El programa personalizado necesita al menos un hito.','error');return;}button.closest('[data-client-reward-row]')?.remove();}

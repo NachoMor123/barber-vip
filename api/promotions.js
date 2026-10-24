@@ -12,6 +12,20 @@ const view = doc => {
   const date = v => v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v || null;
   return { id: doc.id, ...d, startsAt: date(d.startsAt), endsAt: date(d.endsAt), createdAt: date(d.createdAt), updatedAt: date(d.updatedAt) };
 };
+function customerPromotions(snapshot, customerId) {
+  const now = Date.now();
+  return snapshot.docs.map(view).filter(promo => {
+    const start = promo.startsAt ? new Date(promo.startsAt).getTime() : 0;
+    const end = promo.endsAt ? new Date(promo.endsAt).getTime() : Infinity;
+    const assigned = promo.audience === 'all'
+      || (Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId));
+    return assigned && start <= now && end >= now;
+  }).map(promo => {
+    const { customerIds, ...publicPromo } = promo;
+    return publicPromo;
+  });
+}
+
 async function touchPromotionRevision(barberRef) {
   // One tiny write is the signal. Connected clients listen to this document and fetch the
   // actual promotion list only after a revision changes; no periodic polling.
@@ -25,6 +39,21 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const decoded = await requireUser(req, res); if (!decoded) return;
       const database = db();
+      // Customer app passes its linked barber ID. Validate access with the customer's own
+      // document so a promotion refresh does not need an extra userProfiles read.
+      const requestedBarberUid = new URL(req.url || '/', 'https://barber-vip.internal').searchParams.get('barberUid') || '';
+      if (requestedBarberUid) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(requestedBarberUid)) {
+          return send(res, 400, {ok:false,error:'Identificador profesional inválido.'});
+        }
+        const customerSnap = await database.collection('barbers').doc(requestedBarberUid).collection('customers').doc(decoded.uid).get();
+        const customer = customerSnap.exists ? customerSnap.data() : null;
+        if (!customer || customer.active === false || customer.barberUid !== requestedBarberUid) {
+          return send(res, 403, {ok:false,error:'No tenés permiso para ver estas promociones.'});
+        }
+        const promosSnap = await database.collection('barbers').doc(requestedBarberUid).collection('promotions').where('active','==',true).limit(100).get();
+        return send(res, 200, {ok:true,promotions:customerPromotions(promosSnap,decoded.uid)});
+      }
       const profileSnap = await database.collection('userProfiles').doc(decoded.uid).get();
       if (!profileSnap.exists) return send(res, 403, { ok:false, error:'No se encontró tu perfil.' });
       const profile = profileSnap.data();
@@ -50,15 +79,7 @@ module.exports = async function handler(req, res) {
         const customerSnap = await database.collection('barbers').doc(profile.barberUid).collection('customers').doc(decoded.uid).get();
         if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok:false, error:'Este cliente no está activo.' });
         const snap = await database.collection('barbers').doc(profile.barberUid).collection('promotions').where('active','==',true).limit(100).get();
-        const now = Date.now();
-        const promos = snap.docs.map(view).filter(p => {
-          const start = p.startsAt ? new Date(p.startsAt).getTime() : 0;
-          const end = p.endsAt ? new Date(p.endsAt).getTime() : Infinity;
-          const assigned = p.audience === 'all' || (Array.isArray(p.customerIds) && p.customerIds.includes(decoded.uid));
-          return assigned && start <= now && end >= now;
-        });
-        const publicPromos = promos.map(promo => { const { customerIds, ...safePromo } = promo; return safePromo; });
-        return send(res, 200, { ok:true, promotions:publicPromos });
+        return send(res, 200, { ok:true, promotions:customerPromotions(snap,decoded.uid) });
       }
       return send(res, 403, { ok:false, error:'No tenés permiso para ver estas promociones.' });
     }

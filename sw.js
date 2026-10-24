@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v43-no-presence-single-promo-signal';
+const CACHE_NAME = 'barber-vip-shell-v44-schedule-payment-trial-grace';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

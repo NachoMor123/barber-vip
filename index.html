@@ -1620,7 +1620,13 @@
           toast('¡Cuenta creada! Ya podés ver tus visitas y beneficios.','success');
         }catch(error){
           state.manualLogin=false;
-          if(state.auth?.currentUser&&!state.user)await signOut(state.auth).catch(()=>{});
+          if(state.auth?.currentUser&&!state.user){
+            if(isRetryableError(error)){
+              cleanupContext();state.loadError=true;renderSessionError(userFacingError(error,'No se pudo terminar de cargar tu cuenta. Revisá la conexión e intentá nuevamente.'));
+              button.disabled=false;button.textContent='Crear mi cuenta ↗';return;
+            }
+            await signOut(state.auth).catch(()=>{});
+          }
           let message=error.message||'No se pudo crear la cuenta. Probá nuevamente.';
           if(message.includes('auth/email-already-in-use'))message='Ya existe una cuenta para este registro. Probá iniciar sesión o consultá con tu profesional.';
           else if(message.includes('auth/weak-password'))message='Usá una contraseña de al menos 6 caracteres.';
@@ -1668,7 +1674,13 @@
           if(createdCredential&&/ya utilizó una prueba gratuita/i.test(error.message||'')){
             // A trial claim conflict means no profile was created; remove only the account just created in this attempt.
             try{await deleteUser(createdCredential.user);}catch(cleanupError){console.warn('Could not remove uninitialized Firebase account',cleanupError);}
-          }else if(state.auth?.currentUser&&!state.user){await signOut(state.auth).catch(()=>{});}
+          }else if(state.auth?.currentUser&&!state.user){
+            if(isRetryableError(error)){
+              cleanupContext();state.loadError=true;renderSessionError(userFacingError(error,'No se pudo terminar de cargar tu cuenta. Revisá la conexión e intentá nuevamente.'));
+              return;
+            }
+            await signOut(state.auth).catch(()=>{});
+          }
           let message=error.message||'No se pudo completar el acceso.';
           if(message.includes('auth/email-already-in-use'))message='Ya existe una cuenta con ese correo. Iniciá sesión con ella.';
           else if(message.includes('auth/invalid-email'))message='Revisá el formato del correo electrónico.';

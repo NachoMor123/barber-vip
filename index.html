@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -579,8 +579,7 @@
     function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
     function presenceMarkup(value,isOnline){
       const d=asDate(value);
-      const age=d?Date.now()-d.getTime():Infinity;
-      if(isOnline===true&&d&&age>=0&&age<120000) return '<span class="presence-text is-online">En línea</span>';
+      if(isOnline===true) return '<span class="presence-text is-online">En línea</span>';
       if(!d) return '<span class="presence-text is-offline">Última conexión: sin datos</span>';
       const elapsed=relativeTime(d).replace(/^Hace/,'hace');
       return `<span class="presence-text is-offline">Última conexión: ${escapeHtml(elapsed)}</span>`;
@@ -591,7 +590,7 @@
         el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');
       });
     }
-    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();}
+    function refreshRelativeTimes(){$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();const attendance=$('#customer-attendance-live');if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);}
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
@@ -668,8 +667,50 @@
       if(!response.ok || data.ok===false) throw new Error(data.error || `Error ${response.status}.`);
       return data;
     };
+    let lastReportedCustomerPresence = null;
+    let desiredCustomerPresence = null;
+    let presenceSendActive = false;
+    let desiredPresenceKeepalive = false;
+    async function setCustomerPresence(online, options={}) {
+      if (state.role !== 'customer' || !state.auth?.currentUser) return;
+      desiredCustomerPresence = Boolean(online);
+      desiredPresenceKeepalive = desiredPresenceKeepalive || options.keepalive === true;
+      if (presenceSendActive || lastReportedCustomerPresence === desiredCustomerPresence) return;
+      presenceSendActive = true;
+      let failed = false;
+      try {
+        while (state.role === 'customer' && lastReportedCustomerPresence !== desiredCustomerPresence) {
+          const nextState = desiredCustomerPresence;
+          const keepalive = desiredPresenceKeepalive && !nextState;
+          desiredPresenceKeepalive = false;
+          const token = await state.auth.currentUser.getIdToken();
+          const response = await fetch('/api/me?presence=' + (nextState ? '1' : '0'), {
+            method:'GET', headers:{Authorization:'Bearer ' + token}, cache:'no-store', keepalive
+          });
+          const data = await response.json().catch(()=>({ok:false}));
+          if (!response.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + response.status));
+          lastReportedCustomerPresence = nextState;
+        }
+      } catch (error) {
+        failed = true;
+        lastReportedCustomerPresence = null;
+        console.warn('No se pudo actualizar la presencia del cliente:', error?.message || error);
+      } finally {
+        presenceSendActive = false;
+        if (!failed && state.role === 'customer' && lastReportedCustomerPresence !== desiredCustomerPresence) void setCustomerPresence(desiredCustomerPresence, {keepalive:desiredPresenceKeepalive});
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (state.role === 'customer') void setCustomerPresence(document.visibilityState === 'visible', {keepalive:document.visibilityState !== 'visible'});
+    });
+    window.addEventListener('pagehide', () => {
+      if (state.role === 'customer') void setCustomerPresence(false, {keepalive:true});
+    });
+    window.addEventListener('pageshow', () => {
+      if (state.role === 'customer' && document.visibilityState === 'visible') void setCustomerPresence(true);
+    });
     const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; state.customersLoaded=false; state.customersListenerStarted=false; state.customersLoadPromise=null; };
-    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1; lastReportedCustomerPresence=null; desiredCustomerPresence=null; desiredPresenceKeepalive=false; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -753,9 +794,18 @@
       if(!days.some(d=>d.enabled))return {known:false,open:false,label:'Horario no configurado'};
       const now=new Date();const dayKey=['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];const item=days.find(d=>d.day===dayKey&&d.enabled);
       if(!item)return {known:true,open:false,label:'No estoy atendiendo en este momento'};
-      const current=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      const inRange=(a,b)=>!!a&&!!b&&current>=a&&current<b;
-      const open=inRange(item.start1,item.end1)||(item.mode==='double'&&inRange(item.start2,item.end2));
+      const currentMinutes=now.getHours()*60+now.getMinutes();
+      const minutes=value=>{if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||'')))return null;const [h,m]=value.split(':').map(Number);return h*60+m;};
+      const inRange=(a,b)=>{const start=minutes(a),end=minutes(b);if(start===null||end===null||start===end)return false;return start<end?(currentMinutes>=start&&currentMinutes<end):(currentMinutes>=start||currentMinutes<end);};
+      const mode=item.mode||schedule.mode||'continuous';
+      let open=inRange(item.start1,item.end1)||(mode==='double'&&inRange(item.start2,item.end2));
+      const order=['sun','mon','tue','wed','thu','fri','sat'];
+      const prev=days.find(d=>d.day===order[(now.getDay()+6)%7]&&d.enabled);
+      if(!open&&prev){
+        const prevMode=prev.mode||schedule.mode||'continuous';
+        const carries=(a,b)=>{const start=minutes(a),end=minutes(b);return start!==null&&end!==null&&start>end&&currentMinutes<end;};
+        open=carries(prev.start1,prev.end1)||(prevMode==='double'&&carries(prev.start2,prev.end2));
+      }
       return {known:true,open,label:open?'Estoy atendiendo en este momento':'No estoy atendiendo en este momento'};
     }
     function attendanceMarkup(schedule){const status=attendanceStatus(schedule);if(!status.known)return `<div class="attendance-status"><span class="attendance-dot"></span>${status.label}</div>`;return `<div class="attendance-status ${status.open?'is-open':''}" role="status"><span class="attendance-dot"></span>${status.label}</div>`;}
@@ -917,6 +967,17 @@
     }
     function promotionRevisionKey(value){const d=asDate(value);return d?String(d.getTime()):String(value||'');}
     async function loadPromotions(){try{const d=await api('/api/promotions');state.promotions=d.promotions||[];}catch(e){console.warn('promotions',e.message);state.promotions=[];}}
+    async function syncPromotionsAfterRevision(version){
+      const sequence=(state.promotionSyncSequence||0)+1;
+      state.promotionSyncSequence=sequence;
+      try{
+        const data=await api('/api/promotions');
+        if(sequence!==state.promotionSyncSequence)return;
+        state.promotions=Array.isArray(data.promotions)?data.promotions:[];
+        if(version)state.promoMetaVersion=version;
+        if(state.role==='customer'&&state.customerSection==='home')renderApp();
+      }catch(error){if(sequence===state.promotionSyncSequence)console.error('No se pudieron sincronizar las promociones en vivo:',error);}
+    }
 
     function adminShell() {
       return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('promotions','✦','Promociones')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="side-subscription"><div class="status-label">ESTADO DE CUENTA</div><strong>${escapeHtml(subStatus().label)}</strong><small>${subStatus().expiresAt?`Vence el ${escapeHtml(dateLabel(subStatus().expiresAt))}`:'Configurá la fecha de vencimiento desde Firebase.'}</small><button class="btn btn-soft btn-mini" style="width:100%;margin-top:12px" data-action="pay">Gestionar plan ↗</button></div><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():state.section==='promotions'?promotionsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('promotions','✦','Promos')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
@@ -935,7 +996,7 @@
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Aplicado en tu última visita':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
       const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${p.endsAt?`<div class="customer-promo-countdown-wrap"><small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown customer-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong></div>`:''}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuento disponible</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · hito ${Number(r.cut||'')}</span>`).join('')}</div><small>Este beneficio corresponde a la visita que alcanzó el hito.</small></div>`:finalApplied?`<div class="available-discounts"><strong>✓ Ciclo completado</strong><div><span class="discount-chip">${escapeHtml(finalRewardLabel)} · hito ${max}/${max}</span></div><small>El descuento ya se aplicó en esta visita. El próximo ciclo comienza con tu siguiente visita.</small></div>`:lastApplied?`<div class="available-discounts"><strong>✓ Descuento aplicado</strong><div><span class="discount-chip">${escapeHtml(lastApplied.label)} · hito ${lastApplied.cut}</span></div><small>El descuento quedó aplicado en tu última visita. El progreso corresponde al siguiente ciclo.</small></div>`:'';
-      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(presenceIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div id="customer-attendance-live" aria-live="polite">${attendanceMarkup(b.schedule)}</div><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(presenceIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
     }
 
         function renderApp() {
@@ -968,27 +1029,7 @@
         if(state.role==='barber'&&state.section==='home')renderApp();
       } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
     }
-    // En una PWA instalada se puede confirmar Atrás y el cierre de ventana. El sistema operativo aún puede forzar el cierre.
-    (function installStandaloneExitGuard(){
-      const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
-      if(!standalone)return;
-      let exitConfirmed=false;
-      const restoreGuard=()=>history.pushState({barberVipExitGuard:true},'',location.href);
-      restoreGuard();
-      window.addEventListener('popstate',()=>{
-        if(exitConfirmed)return;
-        if(window.confirm('¿Querés salir de Barber VIP?')){
-          exitConfirmed=true;
-          return;
-        }
-        restoreGuard();
-      });
-      window.addEventListener('beforeunload',event=>{
-        if(exitConfirmed)return;
-        event.preventDefault();
-        event.returnValue='';
-      });
-    })();
+    // No se intercepta Atrás ni beforeunload: salir de la app no pide confirmación.
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);u.searchParams.set('stats','0');const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
@@ -1020,6 +1061,7 @@
 
     async function loadContext(me) {
       clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
+      lastReportedCustomerPresence=me.role==='customer'?true:null;desiredCustomerPresence=me.role==='customer'?true:null;desiredPresenceKeepalive=false;
       if(me.role==='barber') {
         state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
@@ -1040,24 +1082,21 @@
         let promotionMetaInitial=true;
         const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
         state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
-          const version=snap.exists()?String(snap.data().revision||promotionRevisionKey(snap.data().updatedAt)):'';
+          const markerData=snap.exists()?snap.data():null;
+          const markerTimestamp=markerData?promotionRevisionKey(markerData.updatedAt):'';
+          const version=markerData?String(markerData.revision||markerTimestamp):'';
           if(promotionMetaInitial){
             promotionMetaInitial=false;state.promoMetaVersion=version;
-            // If the app fetched the profile just before a promotion was changed, catch up once.
+            // Compare timestamps to timestamps; revision is a unique event ID.
             const profileRevision=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
-            if(snap.exists()&&version&&profileRevision&&version!==profileRevision){
-              void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});
-            }
+            if(markerTimestamp&&profileRevision&&markerTimestamp!==profileRevision)void syncPromotionsAfterRevision(version);
             return;
           }
           if(!snap.exists()||!version||version===state.promoMetaVersion)return;
-          state.promoMetaVersion=version;
-          void loadPromotions().then(()=>{if(state.role==='customer'&&state.customerSection==='home')renderApp();});
+          void syncPromotionsAfterRevision(version);
         },err=>{
-          // If Firebase rules have not been published yet, fall back to a low-frequency check,
-          // only while the customer app is visible. With the rule enabled, this timer never runs.
-          console.debug('promotion revision listener unavailable',err.message);
-          // No polling fallback: the promotion revision listener is the realtime update path.
+          console.error('promotion revision listener unavailable',err.message);
+          if(!state.promoMetaListenerFailed){state.promoMetaListenerFailed=true;toast('No se puede sincronizar promociones en vivo: falta permiso para leer el aviso de cambios. Publicá las reglas de Firestore actualizadas.','error');}
         }));
         state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
         renderApp();
@@ -1085,7 +1124,7 @@
       }
     }
 
-    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function signOutAndReturn() { if(state.role==='customer') await setCustomerPresence(false,{keepalive:true}); state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;

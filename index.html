@@ -1591,7 +1591,9 @@
     if(firebaseConfigured()) {
       try {
         const fbApp=initializeApp(firebaseConfig);state.auth=getAuth(fbApp);state.db=getFirestore(fbApp);firebaseReady=true;
-        onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        // Prefer browser-local auth persistence so the installed app restores the session on reopen.
+        void setPersistence(state.auth,browserLocalPersistence).catch(error=>console.warn('No se pudo confirmar la persistencia local de sesión:',error?.message||error)).finally(restoreAuthObserver);
       } catch(error){console.error('Firebase init error',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});

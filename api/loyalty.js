@@ -153,6 +153,8 @@ module.exports = async function handler(req, res) {
     return send(res, 200, { ok: true, programs: [program], defaultLoyaltyProgramId: program.id, updatedCustomers: affected.size });
   } catch (error) {
     console.error('loyalty error', error);
-    return send(res, 400, { ok: false, error: error.message || 'No se pudo guardar la fidelización. Revisá los hitos de visitas y sus descuentos.' });
+    const message = String(error?.message || '');
+    const invalidInput = /^(Configurá entre 1 y 10 hitos|Revisá los hitos:)/i.test(message);
+    return send(res, invalidInput ? 400 : 500, { ok: false, error: invalidInput ? message : 'No se pudo guardar el programa de premios por un problema temporal. Revisá tu conexión e intentá nuevamente.' });
   }
 };

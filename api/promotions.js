@@ -13,14 +13,11 @@ const view = doc => {
   return { id: doc.id, ...d, startsAt: date(d.startsAt), endsAt: date(d.endsAt), createdAt: date(d.createdAt), updatedAt: date(d.updatedAt) };
 };
 async function touchPromotionRevision(barberRef) {
-  // Use the same revision value in the legacy profile field and the public marker,
-  // so the client can compare its already-loaded profile without an extra read.
+  // One tiny write is the signal. Connected clients listen to this document and fetch the
+  // actual promotion list only after a revision changes; no periodic polling.
   const revision = admin().firestore.Timestamp.now();
   const revisionId = require('crypto').randomUUID();
-  await Promise.all([
-    barberRef.update({ promotionsUpdatedAt: revision }),
-    barberRef.collection('publicMeta').doc('promotions').set({ updatedAt: revision, revision: revisionId })
-  ]);
+  await barberRef.collection('publicMeta').doc('promotions').set({ updatedAt: revision, revision: revisionId });
 }
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST', 'PUT', 'DELETE'])) return;

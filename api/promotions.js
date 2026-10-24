@@ -16,9 +16,10 @@ async function touchPromotionRevision(barberRef) {
   // Use the same revision value in the legacy profile field and the public marker,
   // so the client can compare its already-loaded profile without an extra read.
   const revision = admin().firestore.Timestamp.now();
+  const revisionId = require('crypto').randomUUID();
   await Promise.all([
     barberRef.update({ promotionsUpdatedAt: revision }),
-    barberRef.collection('publicMeta').doc('promotions').set({ updatedAt: revision })
+    barberRef.collection('publicMeta').doc('promotions').set({ updatedAt: revision, revision: revisionId })
   ]);
 }
 module.exports = async function handler(req, res) {

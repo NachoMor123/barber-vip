@@ -965,7 +965,7 @@
         let firstSnapshot=true;
         const clientsRef=collection(state.db,'barbers',state.barberUid,'customers');
         const unsubscribe=onSnapshot(clientsRef,snap=>{
-          state.customers=snap.docs.map(d=>({uid:d.id,...d.data()}));
+          state.customers=snap.docs.map(d=>{const customer={uid:d.id,...d.data()};delete customer.isOnline;delete customer.lastSeenAt;delete customer.lastConnectedAt;return customer;});
           state.customersLoaded=true;
           if(firstSnapshot){firstSnapshot=false;resolve();}
           if(state.role==='barber'&&state.section==='clients')renderApp();
@@ -1022,7 +1022,7 @@
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
-          state.customer={uid:snap.id,...snap.data()};
+          const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;state.customer=freshCustomer;
           renderApp();
         },err=>console.warn('customer snapshot',err)));
 

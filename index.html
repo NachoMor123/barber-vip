@@ -557,7 +557,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null,lastIdToken:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -590,7 +590,7 @@
         el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');
       });
     }
-    function refreshRelativeTimes(){$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();const attendance=$('#customer-attendance-live');if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);}
+    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();const attendance=$('#customer-attendance-live');if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);}
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
     const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
@@ -661,7 +661,7 @@
     const api = async (url, options={}) => {
       const headers = {'Content-Type':'application/json',...(options.headers||{})};
       const current = state.auth?.currentUser;
-      if(current){ const token = await current.getIdToken(); headers.Authorization = `Bearer ${token}`; }
+      if(current){ const token = await current.getIdToken(); state.lastIdToken=token; headers.Authorization = `Bearer ${token}`; }
       const response = await fetch(url,{...options,headers,cache:'no-store'});
       const data = await response.json().catch(()=>({ok:false,error:'El servidor devolvió una respuesta inesperada.'}));
       if(!response.ok || data.ok===false) throw new Error(data.error || `Error ${response.status}.`);
@@ -683,7 +683,7 @@
           const nextState = desiredCustomerPresence;
           const keepalive = desiredPresenceKeepalive && !nextState;
           desiredPresenceKeepalive = false;
-          const token = await state.auth.currentUser.getIdToken();
+          const token = state.lastIdToken || await state.auth.currentUser.getIdToken();
           const response = await fetch('/api/me?presence=' + (nextState ? '1' : '0'), {
             method:'GET', headers:{Authorization:'Bearer ' + token}, cache:'no-store', keepalive
           });
@@ -704,6 +704,9 @@
       if (state.role === 'customer') void setCustomerPresence(document.visibilityState === 'visible', {keepalive:document.visibilityState !== 'visible'});
     });
     window.addEventListener('pagehide', () => {
+      if (state.role === 'customer') void setCustomerPresence(false, {keepalive:true});
+    });
+    window.addEventListener('beforeunload', () => {
       if (state.role === 'customer') void setCustomerPresence(false, {keepalive:true});
     });
     window.addEventListener('pageshow', () => {
@@ -792,19 +795,16 @@
     function attendanceStatus(schedule){
       const days=Array.isArray(schedule?.days)?schedule.days:[];
       if(!days.some(d=>d.enabled))return {known:false,open:false,label:'Horario no configurado'};
-      const now=new Date();const dayKey=['sun','mon','tue','wed','thu','fri','sat'][now.getDay()];const item=days.find(d=>d.day===dayKey&&d.enabled);
-      if(!item)return {known:true,open:false,label:'No estoy atendiendo en este momento'};
-      const currentMinutes=now.getHours()*60+now.getMinutes();
-      const minutes=value=>{if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||'')))return null;const [h,m]=value.split(':').map(Number);return h*60+m;};
-      const inRange=(a,b)=>{const start=minutes(a),end=minutes(b);if(start===null||end===null||start===end)return false;return start<end?(currentMinutes>=start&&currentMinutes<end):(currentMinutes>=start||currentMinutes<end);};
-      const mode=item.mode||schedule.mode||'continuous';
-      let open=inRange(item.start1,item.end1)||(mode==='double'&&inRange(item.start2,item.end2));
-      const order=['sun','mon','tue','wed','thu','fri','sat'];
-      const prev=days.find(d=>d.day===order[(now.getDay()+6)%7]&&d.enabled);
-      if(!open&&prev){
-        const prevMode=prev.mode||schedule.mode||'continuous';
-        const carries=(a,b)=>{const start=minutes(a),end=minutes(b);return start!==null&&end!==null&&start>end&&currentMinutes<end;};
-        open=carries(prev.start1,prev.end1)||(prevMode==='double'&&carries(prev.start2,prev.end2));
+      const now=new Date(),keys=['sun','mon','tue','wed','thu','fri','sat'];
+      const todayKey=keys[now.getDay()],prevKey=keys[(now.getDay()+6)%7],current=now.getHours()*60+now.getMinutes();
+      const minutes=value=>{if(!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(value||'')))return null;const [h,m]=value.split(':').map(Number);return h*60+m;};
+      const inRange=(a,b)=>{const start=minutes(a),end=minutes(b);if(start===null||end===null||start===end)return false;return start<end?(current>=start&&current<end):(current>=start||current<end);};
+      const today=days.find(d=>d.day===todayKey&&d.enabled);
+      let open=false;
+      if(today){const mode=today.mode||schedule.mode||'continuous';open=inRange(today.start1,today.end1)||(mode==='double'&&inRange(today.start2,today.end2));}
+      if(!open){
+        const prev=days.find(d=>d.day===prevKey&&d.enabled);
+        if(prev){const mode=prev.mode||schedule.mode||'continuous';const carries=(a,b)=>{const start=minutes(a),end=minutes(b);return start!==null&&end!==null&&start>end&&current<end;};open=carries(prev.start1,prev.end1)||(mode==='double'&&carries(prev.start2,prev.end2));}
       }
       return {known:true,open,label:open?'Estoy atendiendo en este momento':'No estoy atendiendo en este momento'};
     }
@@ -1021,24 +1021,10 @@
       void maybeShowInstallPrompt();
     }
 
-    async function refreshStats(from=state.historyFrom,to=state.historyTo,{loadHistory=!state.historyHidden}={}) {
-      // The dashboard no longer requests aggregate counts. History is fetched only when the user explicitly opens it.
-      if(!loadHistory)return;
-      try {
-        const u=new URL('/api/cuts',location.origin);
-        if(from)u.searchParams.set('from',from);
-        if(to)u.searchParams.set('to',to);
-        u.searchParams.set('stats','0');
-        const data=await api(u.pathname+u.search);
-        state.history=Array.isArray(data.history)?data.history:[];
-        state.historyFrom=from||state.historyFrom;
-        state.historyTo=to||state.historyTo;
-        state.historyNextCursor=data.historyNextCursor||null;
-        state.historyHasMore=Boolean(data.historyHasMore);
-        if(state.role==='barber'&&state.section==='home')renderApp();
-      } catch(error){console.error(error); if(state.role==='barber')toast(error.message,'error');}
+    async function refreshStats(){
+      // El historial ya no forma parte del producto: no consultar Firestore para cargarlo.
+      return;
     }
-    // No se intercepta Atrás ni beforeunload: salir de la app no pide confirmación.
 
     async function loadMoreHistory(){if(!state.historyHasMore||!state.historyNextCursor)return;const btn=$('[data-action="load-more-history"]');if(btn){btn.disabled=true;btn.textContent='Cargando…';}try{const u=new URL('/api/cuts',location.origin);if(state.historyFrom)u.searchParams.set('from',state.historyFrom);if(state.historyTo)u.searchParams.set('to',state.historyTo);u.searchParams.set('cursor',state.historyNextCursor);u.searchParams.set('stats','0');const data=await api(u.pathname+u.search);state.history=[...(state.history||[]),...(Array.isArray(data.history)?data.history:[])];state.historyNextCursor=data.historyNextCursor||null;state.historyHasMore=Boolean(data.historyHasMore);renderApp();}catch(error){toast(error.message||'No se pudieron cargar más visitas.','error');if(btn){btn.disabled=false;btn.textContent='Ver 100 visitas más ↓';}}}
 
@@ -1068,16 +1054,24 @@
       finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;}
     }
 
+    function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
+    function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
+    function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
+
     async function loadContext(me) {
       clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
       lastReportedCustomerPresence=me.role==='customer'?true:null;desiredCustomerPresence=me.role==='customer'?true:null;desiredPresenceKeepalive=false;
       if(me.role==='barber') {
-        state.barber=me.profile; state.customer=null; state.section=state.section||'home'; applyTheme(state.barber.theme);
+        state.section=readSectionPreference('barber',me.uid,['home','clients','promotions','settings'],'home');
+        state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
+        if(state.section==='clients')await ensureAdminCustomersLoaded();
+        if(state.section==='promotions')await loadPromotions();
         renderApp();
       } else {
+        state.customerSection=readSectionPreference('customer',me.uid,['home','barber'],'home');
         state.customer=me.customer; state.barber=me.barber; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
@@ -1146,7 +1140,7 @@
     function openCutModal() {
       const clients=state.customers.filter(c=>c.active!==false).sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));
       const suspended=subStatus().status==='suspended';
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Elegí al cliente y registrá la visita. Si esta visita alcanza un hito, el descuento se aplica a esta misma visita; no hace falta elegir un servicio.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar nuevas visitas.</div>`:''}<div class="quick-cut-card"><div><strong>＋ Visita rápida · sin cuenta</strong><p>Para una persona de paso. Queda en el historial, sin crear un perfil ni modificar ciclos de fidelización.</p></div><form id="walkInForm" autocomplete="off"><div class="form-field"><label for="walkInName">Nombre (opcional)</label><input id="walkInName" name="walkin_${Math.random().toString(36).slice(2,9)}" autocomplete="off" aria-autocomplete="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" maxlength="70" placeholder="Cliente de paso"></div><button class="btn btn-soft btn-block" type="submit" ${suspended?'disabled':''}>Registrar visita rápida</button></form></div><div class="login-divider"></div><label for="cutSearch" class="field-hint">CLIENTES REGISTRADOS</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí nombre o WhatsApp…"><div class="cut-picker-list">${clients.map(c=>`<div class="cut-picker-row" data-cut-search="${escapeHtml(normalizeName(c.fullName))}" data-cut-phone="${escapeHtml(String(c.whatsapp||'').replace(/\D/g,''))}"><div><strong>${escapeHtml(c.fullName)}</strong><small>${Number(c.totalCuts||0)} visitas · Ciclo ${cycleCount(c)}/${cycleLength(c)}${rewardForNextVisit(c).length?' · 🎁 Descuento para esta visita':''}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('')||`<div class="empty-state"><strong>Primero creá un cliente registrado</strong><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`}</div><div id="cutSearchEmpty" class="empty-state" hidden>No encontramos clientes con ese nombre o WhatsApp.</div></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Elegí al cliente y registrá la visita. Si esta visita alcanza un hito, el descuento se aplica a esta misma visita; no hace falta elegir un servicio.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar nuevas visitas.</div>`:''}<div class="login-divider"></div><label for="cutSearch" class="field-hint">CLIENTES REGISTRADOS</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí nombre o WhatsApp…"><div class="cut-picker-list">${clients.map(c=>`<div class="cut-picker-row" data-cut-search="${escapeHtml(normalizeName(c.fullName))}" data-cut-phone="${escapeHtml(String(c.whatsapp||'').replace(/\D/g,''))}"><div><strong>${escapeHtml(c.fullName)}</strong><small>Ciclo ${cycleCount(c)} de ${cycleLength(c)}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('')||`<div class="empty-state"><strong>Primero creá un cliente registrado</strong><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`}</div><div id="cutSearchEmpty" class="empty-state" hidden>No encontramos clientes con ese nombre o WhatsApp.</div></section></div>`;
       const search=$('#cutSearch',modalRoot);
       const list=$('.cut-picker-list',modalRoot);
       const empty=$('#cutSearchEmpty',modalRoot);
@@ -1422,7 +1416,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else modalRoot.innerHTML='';}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){state.section=button.dataset.section;state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='nav'){state.section=button.dataset.section;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
@@ -1436,7 +1430,7 @@
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
-        else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}
+        else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}
         else if(action==='delete-client'){const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id);if(confirm(`¿Dar de baja a ${c?.fullName||'este cliente'}? Desaparecerá de Clientes. Sus visitas históricas y los totales ya registrados se conservan.`)){button.disabled=true;await api('/api/customers',{method:'DELETE',body:JSON.stringify({customerId:id})});state.customers=state.customers.filter(x=>x.uid!==id);modalRoot.innerHTML='';renderApp();toast('Cliente dado de baja. El historial de visitas se conservó.','success');}}
         else if(action==='contact'){contactClient(button.dataset.id,false);}
         else if(action==='new-promotion'){await ensureAdminCustomersLoaded();openPromotionModal();}
@@ -1566,7 +1560,6 @@
         }finally{if(state.manualLogin)state.manualLogin=false;}
       }
 
-      if(form.id==='walkInForm'){event.preventDefault();const fd=new FormData(form),btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Registrando…';try{await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'walk-in',customerName:$('#walkInName',form)?.value||''})});modalRoot.innerHTML='';toast('Visita rápida registrado en el historial.','success');await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Registrar visita rápido';}return;}
       if(form.id==='customerForm'){event.preventDefault();await saveCustomerForm(form);}
     });
 

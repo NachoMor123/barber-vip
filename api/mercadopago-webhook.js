@@ -65,6 +65,6 @@ module.exports = async function handler(req, res) {
     return send(res, 200, { ok: true, received: true });
   } catch (error) {
     console.error('Mercado Pago webhook error', error);
-    return send(res, 500, { ok: false, error: error.message || 'No se pudo procesar la notificación.' });
+    return send(res, 500, { ok: false, error: 'No se pudo procesar la notificación de pago por un problema temporal.' });
   }
 };

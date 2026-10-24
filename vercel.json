@@ -22,11 +22,5 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cleanup-cuts",
-      "schedule": "17 6 * * *"
-    }
   ]
 }

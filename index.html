@@ -531,6 +531,33 @@
     }
     @media(prefers-reduced-motion:reduce){.toolbar .clients-refresh-btn.is-busy .clients-refresh-icon{animation:none!important}}
   </style>
+  <style id="barber-vip-final-dashboard-v1">
+    .quick-actions-section{width:100%;max-width:1080px;margin:26px auto 30px!important}
+    .quick-section-head{margin-bottom:15px}
+    .quick-actions{gap:15px!important;align-content:start}
+    .quick-action{min-height:clamp(160px,22vh,205px)!important;padding:23px!important;border:1px solid rgba(65,139,255,.52)!important;border-radius:19px!important;background:linear-gradient(145deg,rgba(17,42,88,.52),rgba(3,8,19,.98) 68%)!important;box-shadow:0 12px 30px rgba(0,0,0,.16),inset 0 1px 0 rgba(125,184,255,.06)!important}
+    .quick-action:hover{border-color:rgba(116,186,255,.95)!important;background:linear-gradient(145deg,rgba(27,70,147,.48),rgba(3,8,19,.98) 70%)!important;box-shadow:0 16px 34px rgba(0,0,0,.24),0 0 22px rgba(44,115,255,.12)!important;transform:translateY(-2px)}
+    .quick-action span{font-size:31px!important;margin-bottom:19px!important;color:#78baff!important}
+    .quick-action strong{font-size:13px!important;letter-spacing:.01em}
+    .quick-action small{font-size:11px!important;line-height:1.5;max-width:34ch}
+    .schedule-shift-column{display:grid;gap:7px;min-width:0}
+    .schedule-mode-label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:700}
+    .schedule-mode-label select{width:100%;min-width:0;padding:7px 8px;font-size:11px}
+    .shift-double{min-width:0;display:grid;gap:7px;align-content:center}
+    .shift-double.hidden{display:none!important}
+    .schedule-setting-row{grid-template-columns:minmax(90px,.65fr) minmax(190px,1fr) minmax(180px,1fr)!important}
+    @media(max-width:760px){
+      .quick-actions-section{margin-top:20px!important}
+      .quick-actions{gap:11px!important}
+      .quick-action{min-height:150px!important;padding:15px!important;border-radius:15px!important}
+      .quick-action span{font-size:27px!important;margin-bottom:14px!important}
+      .quick-action strong{font-size:12px!important}
+      .quick-action small{font-size:10px!important}
+      .schedule-setting-row{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
+      .schedule-shift-column{grid-template-columns:minmax(100px,.55fr) minmax(150px,1fr);align-items:end}
+      .shift-double{padding-left:0}
+    }
+  </style>
 </head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -683,11 +710,11 @@
         ? `<div class="form-field"><label for="barberCode">Código de acceso</label><input id="barberCode" name="barberCode" placeholder="Ej. A1B2C3D4" autocomplete="off" data-lpignore="true" data-1p-ignore="true" autocapitalize="characters" required maxlength="16"></div><div class="form-field"><label for="username">Nombre y apellido</label><input id="username" name="username" placeholder="Ej. Joaquín Ortiz" autocomplete="off" autocapitalize="words" data-lpignore="true" data-1p-ignore="true" required></div>`
         : `${signup ? `<div class="form-field"><label for="signupName">Tu nombre</label><input id="signupName" name="displayName" placeholder="Ej. Santiago" maxlength="80" autocomplete="name" required></div>` : ''}<div class="form-field"><label for="email">Correo electrónico</label><input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="${signup?'email':'username'}" autocapitalize="off" spellcheck="false" required></div>`;
       const footer = barber&&!signup
-        ? `<div class="login-links"><p class="tiny" style="margin:0">¿Primera vez en Barber VIP? <button class="text-link" type="button" data-action="start-signup">Crear cuenta · 15 días gratis</button></p></div>`
+        ? `<div class="login-links"><p class="tiny" style="margin:0">¿Primera vez en Barber VIP? <button class="text-link" type="button" data-action="start-signup">Crear cuenta · 14 días gratis</button></p></div>`
         : signup
           ? `<p class="tiny" style="margin:0">¿Ya tenés cuenta? <button class="text-link" type="button" data-action="back-to-login">Iniciar sesión</button></p>`
           : `<div class="login-links"><p class="tiny" style="margin:0 0 7px">¿Todavía no tenés cuenta en este espacio profesional?</p><button class="btn btn-primary btn-block" type="button" data-action="start-customer-signup">Crear mi cuenta de cliente</button><p class="field-hint">Pedile a tu profesional su código de acceso para crear tu cuenta.</p></div>`;
-      appRoot.innerHTML = `<main class="login-wrap"><section class="login-card"><button class="link-button" data-action="go-home">← Volver a la aplicación</button>${brand}<div class="login-role-pill">${signup?'✨ PRUEBA GRATIS · 15 DÍAS':customer?'✦ ACCESO DE CLIENTE':'✦ ACCESO PROFESIONAL'}</div><h1>${signup?'Creá tu cuenta':customer?'Tu espacio VIP':'Panel de administrador'}</h1><p>${signup?'Creá tu cuenta con tu nombre, correo y contraseña. No enviamos correos ni enlaces de verificación; la prueba comienza al terminar el registro.':customer?'Ingresá el código de acceso, tu nombre y la contraseña que te compartió tu profesional.':'Ingresá con el correo y la contraseña de tu cuenta.'}</p><form id="loginForm" data-mode="${signup?'barber-signup':mode}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other">${fields}<div class="form-field"><label for="accessSecret">Contraseña</label><div class="password-control"><input id="accessSecret" name="${signup?'barberNewPassword':'barberLoginPassword'}" type="password" autocomplete="${signup?'new-password':'current-password'}" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${signup?'Mínimo 8 caracteres':customer?'Tu contraseña':'Tu contraseña'}" minlength="${signup?'8':'6'}" required><button type="button" class="password-visibility" data-action="toggle-password" data-target="accessSecret" aria-label="Mostrar contraseña">Ver</button></div>${signup?'<span class="field-hint">Usá un correo con formato válido. Guardá tu contraseña: no hay recuperación automática.</span>':''}</div><button class="btn btn-primary btn-block" type="submit">${signup?'Crear cuenta · 15 días gratis':'Ingresar'} <span>↗</span></button></form><div class="login-divider"></div>${footer}</section></main>`;
+      appRoot.innerHTML = `<main class="login-wrap"><section class="login-card"><button class="link-button" data-action="go-home">← Volver a la aplicación</button>${brand}<div class="login-role-pill">${signup?'✨ PRUEBA GRATIS · 15 DÍAS':customer?'✦ ACCESO DE CLIENTE':'✦ ACCESO PROFESIONAL'}</div><h1>${signup?'Creá tu cuenta':customer?'Tu espacio VIP':'Panel de administrador'}</h1><p>${signup?'Creá tu cuenta con tu nombre, correo y contraseña. No enviamos correos ni enlaces de verificación; la prueba comienza al terminar el registro.':customer?'Ingresá el código de acceso, tu nombre y la contraseña que te compartió tu profesional.':'Ingresá con el correo y la contraseña de tu cuenta.'}</p><form id="loginForm" data-mode="${signup?'barber-signup':mode}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other">${fields}<div class="form-field"><label for="accessSecret">Contraseña</label><div class="password-control"><input id="accessSecret" name="${signup?'barberNewPassword':'barberLoginPassword'}" type="password" autocomplete="${signup?'new-password':'current-password'}" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" placeholder="${signup?'Mínimo 8 caracteres':customer?'Tu contraseña':'Tu contraseña'}" minlength="${signup?'8':'6'}" required><button type="button" class="password-visibility" data-action="toggle-password" data-target="accessSecret" aria-label="Mostrar contraseña">Ver</button></div>${signup?'<span class="field-hint">Usá un correo con formato válido. Guardá tu contraseña: no hay recuperación automática.</span>':''}</div><button class="btn btn-primary btn-block" type="submit">${signup?'Crear cuenta · 14 días gratis':'Ingresar'} <span>↗</span></button></form><div class="login-divider"></div>${footer}</section></main>`;
     }
 
     async function renderCustomerSignup() {
@@ -735,6 +762,44 @@
     function cycleSummary(c){const ready=availableRewards(c);const next=nextCycleReward(c);return {ready,next,left:Math.max(0,Number(next.cut)-cycleCount(c))};}
     function safeExternalUrl(value,allowedHosts=[]){try{const u=new URL(String(value||''));if(u.protocol!=='https:'||!allowedHosts.some(host=>u.hostname===host||u.hostname.endsWith('.'+host)))return '';return u.href;}catch(_){return '';}}
     function dayName(key){return ({mon:'Lunes',tue:'Martes',wed:'Miércoles',thu:'Jueves',fri:'Viernes',sat:'Sábado',sun:'Domingo'})[key]||key;}
+    const WEEKDAYS = [
+      ['mon','Lunes'],['tue','Martes'],['wed','Miércoles'],
+      ['thu','Jueves'],['fri','Viernes'],['sat','Sábado'],['sun','Domingo']
+    ];
+    function settingScheduleRow(day,schedule){
+      const item=(Array.isArray(schedule?.days)?schedule.days:[]).find(entry=>entry?.day===day)||{};
+      const mode=item.mode==='double'?'double':'continuous';
+      const defaults={start1:'09:00',end1:'18:00',start2:'16:00',end2:'20:00'};
+      const value=key=>escapeHtml(String(item[key]||defaults[key]));
+      const label=dayName(day);
+      return `<div class="schedule-setting-row" data-schedule-day="${day}">
+        <label class="schedule-day-check">
+          <input type="checkbox" data-schedule-enabled ${item.enabled===true?'checked':''}>
+          <span>${label}</span>
+        </label>
+        <div class="schedule-shift-column">
+          <label class="schedule-mode-label">Tipo de horario
+            <select class="setting-input" data-day-mode aria-label="Tipo de horario de ${label}">
+              <option value="continuous" ${mode==='continuous'?'selected':''}>Corrido</option>
+              <option value="double" ${mode==='double'?'selected':''}>Doble turno</option>
+            </select>
+          </label>
+          <div class="schedule-time">
+            <input type="time" data-start1 value="${value('start1')}" aria-label="Inicio del primer turno, ${label}">
+            <span>a</span>
+            <input type="time" data-end1 value="${value('end1')}" aria-label="Fin del primer turno, ${label}">
+          </div>
+        </div>
+        <div class="shift-double ${mode==='double'?'':'hidden'}">
+          <span class="field-hint">Segundo turno</span>
+          <div class="schedule-time">
+            <input type="time" data-start2 value="${value('start2')}" aria-label="Inicio del segundo turno, ${label}">
+            <span>a</span>
+            <input type="time" data-end2 value="${value('end2')}" aria-label="Fin del segundo turno, ${label}">
+          </div>
+        </div>
+      </div>`;
+    }
     function attendanceStatus(schedule){
       const days=Array.isArray(schedule?.days)?schedule.days:[];
       if(!days.some(d=>d.enabled))return {known:false,open:false,label:'Horario no configurado'};
@@ -941,7 +1006,7 @@
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Aplicado en tu última visita':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
       const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${p.endsAt?`<div class="customer-promo-countdown-wrap"><small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown customer-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong></div>`:''}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuento disponible</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · hito ${Number(r.cut||'')}</span>`).join('')}</div><small>Este beneficio corresponde a la visita que alcanzó el hito.</small></div>`:finalApplied?`<div class="available-discounts"><strong>✓ Ciclo completado</strong><div><span class="discount-chip">${escapeHtml(finalRewardLabel)} · hito ${max}/${max}</span></div><small>El descuento ya se aplicó en esta visita. El próximo ciclo comienza con tu siguiente visita.</small></div>`:lastApplied?`<div class="available-discounts"><strong>✓ Descuento aplicado</strong><div><span class="discount-chip">${escapeHtml(lastApplied.label)} · hito ${lastApplied.cut}</span></div><small>El descuento quedó aplicado en tu última visita. El progreso corresponde al siguiente ciclo.</small></div>`:'';
-      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div id="customer-attendance-live" aria-live="polite">${attendanceMarkup(b.schedule)}</div><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(presenceIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+      appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section><div id="customer-attendance-live" aria-live="polite">${attendanceMarkup(b.schedule)}</div><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(dateIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
     }
 
         function renderApp() {
@@ -1167,7 +1232,7 @@
       const s=subStatus();
       if(s.status==='active'||s.isTrial){
         const trial=s.isTrial;
-        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, podés activar el plan pago ahora y empezar tu período de 30 días desde la aprobación. La renovación se inicia manualmente desde la app.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · 15 días':'Plan mensual'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. No se realizan débitos automáticos mensuales.':' El pago se extiende cuando corresponda renovar. No se realizan débitos automáticos mensuales.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Pagar ahora · activar 30 días ↗</button>':''}</div></section></div>`;
+        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, podés activar el plan pago ahora y empezar tu período de 30 días desde la aprobación. La renovación se inicia manualmente desde la app.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · 14 días':'Plan mensual'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. No se realizan débitos automáticos mensuales.':' El pago se extiende cuando corresponda renovar. No se realizan débitos automáticos mensuales.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Pagar ahora · activar 30 días ↗</button>':''}</div></section></div>`;
         return;
       }
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${s.status==='grace'?'Estás en período de gracia':'Tu cuenta está vencida'}</h2><p>Cada pago aprobado suma 30 días de servicio. La renovación se inicia manualmente desde la app a través de Mercado Pago.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · ${money(subscriptionPrice())}</strong><p>${s.status==='grace'?`Te quedan ${Math.max(0,s.daysRemaining)} día(s) de servicio.`:'Para volver a registrar visitas y crear promociones, renová tu cuenta.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Pagar ${money(subscriptionPrice())} ↗</button></div></section></div>`;
@@ -1197,9 +1262,9 @@
       ['turn','📲 Coordinar una visita','Hablá directamente por WhatsApp.']
     ];
     const PIP_ANSWERS = {
-      start:'¡Bienvenido! Empezá por acá y seguí de arriba hacia abajo: prepará tu perfil, definí premios, creá clientes y registrá cada visita. Sin registrar la visita, la tarjeta no avanza.',
+      start:'¡Hola! Arranquemos por lo importante: configurá tu perfil, elegí los premios, creá un cliente y registrá su primera visita. Después, revisá la tarjeta como cliente. Sin vueltas.',
       settings:'Completá tu nombre, WhatsApp y horarios. Sumá Instagram y ubicación si querés que aparezcan en la tarjeta del cliente.',
-      loyalty:'Una verdad importante: no prometas descuentos que no puedas sostener. Elegí hitos que cuiden tus números y cumplí siempre lo que ofrecés.',
+      loyalty:'Configurá los hitos de visitas y sus descuentos. El premio se aplica al registrar la visita que alcanza el hito.',
       clients:'Creá una ficha por persona y compartile sus datos de acceso. Evitá duplicados: cada cliente tiene su propia tarjeta con vos.',
       visits:'Cuando termine una visita, tocá Registrar visita y elegí al cliente. Se actualizan su total y su ciclo; no hay que hacer nada más.',
       promos:'Poné un título claro, fechas reales y elegí quién la recibe. Al guardar, la tarjeta del cliente se actualiza sin que tenga que recargar.',
@@ -1449,7 +1514,7 @@
             state.pendingSignup=null;
             await loadContext(me);
             state.manualLogin=false;
-            toast('¡Bienvenido a Barber VIP! Tu prueba gratuita de 15 días ya comenzó.','success');
+            toast('¡Bienvenido a Barber VIP! Tu prueba gratuita de 14 días ya comenzó.','success');
             return;
           }
           if(mode==='barber'){
@@ -1465,7 +1530,7 @@
             const me=await api('/api/me');await loadContext(me);state.manualLogin=false;
           }
         }catch(error){
-          state.manualLogin=false;button.disabled=false;button.textContent=mode==='barber-signup'?'Crear cuenta · 15 días gratis':'Ingresar ↗';
+          state.manualLogin=false;button.disabled=false;button.textContent=mode==='barber-signup'?'Crear cuenta · 14 días gratis':'Ingresar ↗';
           if(createdCredential&&/ya utilizó una prueba gratuita/i.test(error.message||'')){
             // A trial claim conflict means no profile was created; remove only the account just created in this attempt.
             try{await deleteUser(createdCredential.user);}catch(cleanupError){console.warn('Could not remove uninitialized Firebase account',cleanupError);}

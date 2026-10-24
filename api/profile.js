@@ -243,6 +243,6 @@ module.exports = async function handler(req, res) {
     return send(res, 200, {ok:true,profile:savedProfile,subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {
     console.error('profile error', error);
-    return send(res, 500, {ok:false,error:error.message || 'No se pudo guardar la configuración.'});
+    return send(res, 500, {ok:false,error:'No se pudo guardar la configuración profesional por un problema temporal. Revisá tu conexión e intentá nuevamente.'});
   }
 };

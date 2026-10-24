@@ -267,8 +267,7 @@
     .attendance-status.is-open{border-color:rgba(69,230,155,.42);background:rgba(69,230,155,.09);color:#8ff3bf}
     .attendance-status.is-open .attendance-dot{background:#45e69b;box-shadow:0 0 13px rgba(69,230,155,.8)}
 
-
-.presence-text{display:inline!important;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;font-size:inherit!important;font-weight:600!important;white-space:normal!important}.presence-text.is-online{color:#54e6a5!important}.presence-text.is-offline{color:var(--muted,#9aa7bc)!important}</style>
+</style>
 
   <style id="barber-vip-polish-v2">
     :root{--bg:#02040a;--panel:#070b15;--panel2:#0a1223;--text:#f7faff;--muted:#a8b7d1;--accent:#3478ff;--accent2:#79bdff;--line:rgba(58,126,255,.48);--shadow:0 24px 70px rgba(0,0,0,.56)}
@@ -557,7 +556,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null,lastIdToken:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, promotions:[],  promotionsVersion:null, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, pendingHistoryDeletion:null, history:[], historyNextCursor:null, historyHasMore:false, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, historyHidden:(()=>{try{const saved=localStorage.getItem('barberVipHistoryHiddenV2');return saved===null?true:saved==='true'}catch(_){return true}})(), historyFrom:'', historyTo:'', section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -576,23 +575,14 @@
     const initialHistoryTo = localDateInput(new Date()); const initialHistoryFromDate = new Date(); initialHistoryFromDate.setDate(initialHistoryFromDate.getDate()-59); state.historyFrom=localDateInput(initialHistoryFromDate); state.historyTo=initialHistoryTo;
     const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
-    function presenceIso(value){const d=asDate(value);return d?d.toISOString():'';}
-    function presenceMarkup(value,isOnline){
-      const d=asDate(value);
-      if(isOnline===true) return '<span class="presence-text is-online">En línea</span>';
-      if(!d) return '<span class="presence-text is-offline">Última conexión: sin datos</span>';
-      const elapsed=relativeTime(d).replace(/^Hace/,'hace');
-      return `<span class="presence-text is-offline">Última conexión: ${escapeHtml(elapsed)}</span>`;
+    function dateIso(value){const d=asDate(value);return d?d.toISOString():'';}
+    function refreshRelativeTimes(){
+      $$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});
+      const attendance=$('#customer-attendance-live');
+      if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);
     }
-    function refreshPresenceLabels(){
-      $$('.presence-live').forEach(el=>{
-        const raw=el.dataset.presenceOnline||'';
-        el.innerHTML=presenceMarkup(el.dataset.presenceValue||'',raw===''?undefined:raw==='true');
-      });
-    }
-    function refreshRelativeTimes(){$$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});refreshPresenceLabels();const attendance=$('#customer-attendance-live');if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);}
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
-    const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
+        const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
       let n=String(input||'').trim().replace(/\D/g,'');
       if(n.startsWith('00'))n=n.slice(2);
@@ -661,59 +651,14 @@
     const api = async (url, options={}) => {
       const headers = {'Content-Type':'application/json',...(options.headers||{})};
       const current = state.auth?.currentUser;
-      if(current){ const token = await current.getIdToken(); state.lastIdToken=token; headers.Authorization = `Bearer ${token}`; }
+      if(current){ const token = await current.getIdToken(); headers.Authorization = `Bearer ${token}`; }
       const response = await fetch(url,{...options,headers,cache:'no-store'});
       const data = await response.json().catch(()=>({ok:false,error:'El servidor devolvió una respuesta inesperada.'}));
       if(!response.ok || data.ok===false) throw new Error(data.error || `Error ${response.status}.`);
       return data;
     };
-    let lastReportedCustomerPresence = null;
-    let desiredCustomerPresence = null;
-    let presenceSendActive = false;
-    let desiredPresenceKeepalive = false;
-    async function setCustomerPresence(online, options={}) {
-      if (state.role !== 'customer' || !state.auth?.currentUser) return;
-      desiredCustomerPresence = Boolean(online);
-      desiredPresenceKeepalive = desiredPresenceKeepalive || options.keepalive === true;
-      if (presenceSendActive || lastReportedCustomerPresence === desiredCustomerPresence) return;
-      presenceSendActive = true;
-      let failed = false;
-      try {
-        while (state.role === 'customer' && lastReportedCustomerPresence !== desiredCustomerPresence) {
-          const nextState = desiredCustomerPresence;
-          const keepalive = desiredPresenceKeepalive && !nextState;
-          desiredPresenceKeepalive = false;
-          const token = state.lastIdToken || await state.auth.currentUser.getIdToken();
-          const response = await fetch('/api/me?presence=' + (nextState ? '1' : '0'), {
-            method:'GET', headers:{Authorization:'Bearer ' + token}, cache:'no-store', keepalive
-          });
-          const data = await response.json().catch(()=>({ok:false}));
-          if (!response.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + response.status));
-          lastReportedCustomerPresence = nextState;
-        }
-      } catch (error) {
-        failed = true;
-        lastReportedCustomerPresence = null;
-        console.warn('No se pudo actualizar la presencia del cliente:', error?.message || error);
-      } finally {
-        presenceSendActive = false;
-        if (!failed && state.role === 'customer' && lastReportedCustomerPresence !== desiredCustomerPresence) void setCustomerPresence(desiredCustomerPresence, {keepalive:desiredPresenceKeepalive});
-      }
-    }
-    document.addEventListener('visibilitychange', () => {
-      if (state.role === 'customer') void setCustomerPresence(document.visibilityState === 'visible', {keepalive:document.visibilityState !== 'visible'});
-    });
-    window.addEventListener('pagehide', () => {
-      if (state.role === 'customer') void setCustomerPresence(false, {keepalive:true});
-    });
-    window.addEventListener('beforeunload', () => {
-      if (state.role === 'customer') void setCustomerPresence(false, {keepalive:true});
-    });
-    window.addEventListener('pageshow', () => {
-      if (state.role === 'customer' && document.visibilityState === 'visible') void setCustomerPresence(true);
-    });
-    const clearListeners = () => { state.unsubscribers.forEach(fn=>{try{fn()}catch(_){}}); state.unsubscribers=[]; state.customersLoaded=false; state.customersListenerStarted=false; state.customersLoadPromise=null; };
-    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1; lastReportedCustomerPresence=null; desiredCustomerPresence=null; desiredPresenceKeepalive=false; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
+    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
 
@@ -837,7 +782,7 @@
       return `<section class="panel history-panel"><div class="panel-head"><div><h2>Historial de visitas</h2><p>Visitas recientes. El detalle antiguo se depura automáticamente; el total de visitas de cada cliente no cambian.</p></div><div class="history-toolbar"><span class="muted">${state.historyHidden?'Oculto':`${list.length} en el período`}</span><button class="btn btn-ghost btn-mini" data-action="toggle-history">${state.historyHidden?'Ver historial':'Ocultar'}</button></div></div>${state.historyHidden?`<div class="history-hidden-note">El historial está oculto. Podés volver a mostrarlo cuando lo necesites.</div>`:`${dates}<div class="history-list">${list.map(historyEntryMarkup).join('')||'<div class="history-empty">No hay visitas registradas en estas fechas.</div>'}</div>${list.length>=100?'<p class="tiny muted" style="margin:12px 0 0">Mostrando por bloques para que el historial no vuelva lenta la pantalla.</p>':''}${state.historyHasMore?'<div class="history-load-more"><button class="btn btn-soft btn-block" data-action="load-more-history">Ver 100 visitas más ↓</button></div>':''}`}</section>`;
     }
     function dashboardView() {
-      return `${sectionHeading('RESUMEN DE TU ACTIVIDAD',`${greetingForNow()}, ${escapeHtml(state.barber?.displayName||'profesional')} 👋`,'Convertí cada visita en una razón para volver.','<button class="btn btn-primary" data-action="open-cut-modal">✦ Registrar visita</button>')} ${subscriptionBanner()}<section class="quick-actions-section"><div class="quick-section-head"><div><span class="eyebrow">⚡ ACCESO DIRECTO</span><h2>Accesos rápidos</h2><p>Lo que más usás, siempre a mano.</p></div></div><div class="quick-actions"><button class="quick-action" data-action="new-client"><span>＋</span><strong>Crear cliente</strong><small>Sumá una persona a tu comunidad.</small></button><button class="quick-action" data-action="open-cut-modal"><span>✦</span><strong>Registrar visita</strong><small>Cliente registrado o de paso.</small></button><button class="quick-action" data-action="nav" data-section="promotions"><span>✦</span><strong>Promociones</strong><small>Publicá una oferta especial.</small></button><button class="quick-action" data-action="nav" data-section="settings"><span>⚙️</span><strong>Configuración</strong><small>Tu perfil, fidelización y datos profesionales.</small></button></div></section>`;
+      return `${sectionHeading('RESUMEN DE TU ACTIVIDAD',`${greetingForNow()}, ${escapeHtml(state.barber?.displayName||'profesional')} 👋`,'Convertí cada visita en una razón para volver.','<button class="btn btn-primary" data-action="open-cut-modal">✦ Registrar visita</button>')} ${subscriptionBanner()}<section class="quick-actions-section"><div class="quick-section-head"><div><span class="eyebrow">⚡ ACCESO DIRECTO</span><h2>Accesos rápidos</h2><p>Lo que más usás, siempre a mano.</p></div></div><div class="quick-actions"><button class="quick-action" data-action="new-client"><span>＋</span><strong>Crear cliente</strong><small>Sumá una persona a tu comunidad.</small></button><button class="quick-action" data-action="open-cut-modal"><span>✦</span><strong>Registrar visita</strong><small>Elegí un cliente y registrá su visita.</small></button><button class="quick-action" data-action="nav" data-section="promotions"><span>✦</span><strong>Promociones</strong><small>Publicá una oferta especial.</small></button><button class="quick-action" data-action="nav" data-section="settings"><span>⚙️</span><strong>Configuración</strong><small>Tu perfil, fidelización y datos profesionales.</small></button></div></section>`;
     }
 
     // Renderizado del cliente sin consultas nuevas: se reutiliza el snapshot ya cargado.
@@ -848,7 +793,6 @@
       const cycle=cycleCount(c), max=cycleLength(c), pct=progress(c);
       const status=clientStatus(c);
       const lastCut=relativeTime(c?.lastCutAt);
-      const lastSeen=presenceMarkup(c?.lastSeenAt,c?.isOnline);
       const summary=cycleSummary(c);
       const nextVisit=rewardForNextVisit(c);
       const completedFinal=c?.lastRewardAppliedOnFinalMilestone===true;
@@ -860,9 +804,7 @@
             ? `Falta 1 visita para ${escapeHtml(summary.next.label||'el próximo beneficio')}${nextVisit.length?'; esa visita recibe el descuento.':'.'}`
             : `Faltan ${summary.left} visitas para ${escapeHtml(summary.next.label||'el próximo beneficio')}`;
       const hasWhats=validWhatsapp(c?.whatsapp);
-      const lastCutIso=presenceIso(c?.lastCutAt);
-      const lastSeenIso=presenceIso(c?.lastSeenAt);
-      const onlineValue=c?.isOnline===true?'true':c?.isOnline===false?'false':'';
+      const lastCutIso=dateIso(c?.lastCutAt);
       return `<article class="client-row" data-client-id="${escapeHtml(id)}" data-search="${escapeHtml(normalizeName(name+' '+(c?.whatsapp||'')))}">
         <div class="avatar" aria-hidden="true">${escapeHtml(nameInitials(name))}</div>
         <div class="client-info">
@@ -870,7 +812,6 @@
           <div class="client-meta">
             <span><b>${total}</b> visita${total===1?'':'s'} totales</span>
             <span>Última visita: <b><span class="last-cut-relative" data-last-cut-at="${escapeHtml(lastCutIso)}">${escapeHtml(lastCut)}</span></b></span>
-            <span>Estado: <b><span class="presence-live" data-presence-value="${escapeHtml(lastSeenIso)}" data-presence-online="${onlineValue}">${lastSeen}</span></b></span>
             
           </div>
           <div class="progress-mini" role="progressbar" aria-label="Progreso de fidelización de ${escapeHtml(name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
@@ -908,7 +849,7 @@
         }
         toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)) openCutModal();
-        else modalRoot.innerHTML='';
+        else {modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();}
         renderApp();
         await refreshStats(state.historyFrom,state.historyTo,{loadHistory:!state.historyHidden});
       } catch(error) {
@@ -975,17 +916,30 @@
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${p?'Editar promoción':'Nueva promoción'}</h2><p>La visibilidad se controla con el interruptor de la tarjeta.</p></div><button class="close-modal btn-back" data-action="close-modal">×</button></div><form id="promotionForm" data-id="${escapeHtml(p?.id||'')}" autocomplete="off"><div class="form-field"><label>Título de la promoción *</label><input id="promotionTitle" name="title" autocomplete="off" data-lpignore="true" required maxlength="80" value="${escapeHtml(p?.title||'')}"><div class="emoji-quick-row" aria-label="Agregar emoji"><button type="button" data-action="insert-promo-emoji" data-emoji="🔥">🔥</button><button type="button" data-action="insert-promo-emoji" data-emoji="✨">✨</button><button type="button" data-action="insert-promo-emoji" data-emoji="💈">💈</button><button type="button" data-action="insert-promo-emoji" data-emoji="🎁">🎁</button><button type="button" data-action="insert-promo-emoji" data-emoji="⚡">⚡</button><button type="button" data-action="insert-promo-emoji" data-emoji="💙">💙</button></div></div><p class="field-hint">Podés escribir o combinar emojis. En la tarjeta se muestra el título y el cronómetro.</p><div class="field-grid"><div class="form-field"><label>Comienza (fecha y hora)</label><input name="startsAt" type="datetime-local" value="${p?.startsAt?escapeHtml(dateTimeLocalInput(p.startsAt)):''}"></div><div class="form-field"><label>Termina (fecha y hora)</label><input name="endsAt" type="datetime-local" value="${p?.endsAt?escapeHtml(dateTimeLocalInput(p.endsAt)):''}"></div></div><div class="form-field"><label>Asignar a</label><select name="audience" id="promotionAudience" class="setting-input"><option value="all" ${p?.audience!=='selected'?'selected':''}>Todos los clientes</option><option value="selected" ${p?.audience==='selected'?'selected':''}>Clientes seleccionados</option></select></div><div class="promotion-select-clients ${p?.audience==='selected'?'':'hidden'}">${clients.map(c=>`<label class="bulk-row"><input type="checkbox" name="customerIds" value="${escapeHtml(c.uid)}" ${(p?.customerIds||[]).includes(c.uid)?'checked':''}><span>${escapeHtml(c.fullName)}</span></label>`).join('')||'<span class="tiny muted">No hay clientes activos.</span>'}</div><div class="modal-footer"><button class="btn btn-danger" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">Guardar promoción</button></div></form></section></div>`;
     }
     function promotionRevisionKey(value){const d=asDate(value);return d?String(d.getTime()):String(value||'');}
-    async function loadPromotions(){try{const d=await api('/api/promotions');state.promotions=d.promotions||[];}catch(e){console.warn('promotions',e.message);state.promotions=[];}}
-    async function syncPromotionsAfterRevision(version){
+    async function loadPromotions({renderCustomer=false}={}){
       const sequence=(state.promotionSyncSequence||0)+1;
       state.promotionSyncSequence=sequence;
       try{
         const data=await api('/api/promotions');
-        if(sequence!==state.promotionSyncSequence)return;
+        if(sequence!==state.promotionSyncSequence)return false;
         state.promotions=Array.isArray(data.promotions)?data.promotions:[];
-        if(version)state.promoMetaVersion=version;
-        if(state.role==='customer'&&state.customerSection==='home')renderApp();
-      }catch(error){if(sequence===state.promotionSyncSequence)console.error('No se pudieron sincronizar las promociones en vivo:',error);}
+        state.promotionsLoaded=true;
+        state.promotionsDirty=false;
+        if(renderCustomer&&state.role==='customer'&&state.customerSection==='home')renderApp();
+        return true;
+      }catch(error){
+        if(sequence===state.promotionSyncSequence){
+          state.promotionsDirty=true;
+          console.warn('No se pudieron cargar las promociones:',error?.message||error);
+        }
+        return false;
+      }
+    }
+    async function syncPromotionsAfterRevision(version){
+      if(version)state.promoMetaVersion=version;
+      state.promotionsDirty=true;
+      if(state.role==='customer'&&state.customerSection!=='home')return;
+      await loadPromotions({renderCustomer:true});
     }
 
     function adminShell() {
@@ -1030,37 +984,46 @@
 
     async function ensureAdminCustomersLoaded(){
       if(state.role!=='barber')return;
-      if(state.customersLoaded)return;
+      if(state.customersLoaded&&state.customersUnsubscribe)return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
       const promise=new Promise((resolve,reject)=>{
         let firstSnapshot=true;
         const clientsRef=collection(state.db,'barbers',state.barberUid,'customers');
         const unsubscribe=onSnapshot(clientsRef,snap=>{
-          const next=snap.docs.map(d=>({uid:d.id,...d.data()}));
-          state.customers=next;state.customersLoaded=true;
+          state.customers=snap.docs.map(d=>({uid:d.id,...d.data()}));
+          state.customersLoaded=true;
           if(firstSnapshot){firstSnapshot=false;resolve();}
-          if(state.role!=='barber')return;
-          renderApp();
+          if(state.role==='barber'&&state.section==='clients')renderApp();
         },err=>{
-          console.error(err);state.customersLoaded=false;state.customersListenerStarted=false;
+          console.error('customers snapshot',err);
+          state.customersLoaded=false;
+          state.customersListenerStarted=false;
+          state.customersUnsubscribe=null;
           if(firstSnapshot){firstSnapshot=false;reject(err);}
           else toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');
         });
-        state.unsubscribers.push(unsubscribe);state.customersListenerStarted=true;
+        state.customersUnsubscribe=unsubscribe;
+        state.customersListenerStarted=true;
       });
       state.customersLoadPromise=promise;
       try{await promise;}
       catch(error){toast('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.','error');throw error;}
       finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;}
     }
+    function stopAdminCustomersListener(){
+      if(typeof state.customersUnsubscribe==='function'){try{state.customersUnsubscribe();}catch(_){}}
+      state.customersUnsubscribe=null;
+      state.customersLoaded=false;
+      state.customersListenerStarted=false;
+      state.customersLoadPromise=null;
+    }
 
-    function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
+        function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
       clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
-      lastReportedCustomerPresence=me.role==='customer'?true:null;desiredCustomerPresence=me.role==='customer'?true:null;desiredPresenceKeepalive=false;
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','promotions','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme);
@@ -1072,36 +1035,50 @@
         renderApp();
       } else {
         state.customerSection=readSectionPreference('customer',me.uid,['home','barber'],'home');
-        state.customer=me.customer; state.barber=me.barber; state.customers=[]; applyTheme(state.barber.theme); await loadPromotions();
+        state.customer=me.customer;
+        state.barber=me.barber;
+        state.customers=[];
+        state.promotionsLoaded=false;
+        state.promotionsDirty=true;
+        state.promotions=[];
+        state.promoMetaListenerFailed=false;
+        applyTheme(state.barber.theme);
+
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
-          const fresh={uid:snap.id,...snap.data()};
-          state.customer=fresh;
+          state.customer={uid:snap.id,...snap.data()};
           renderApp();
         },err=>console.warn('customer snapshot',err)));
-        // Watch only a safe, tiny revision document. Promotions are reloaded when the barber changes one,
-        // not by polling Firestore on a timer and not by asking the customer to press Refresh.
+
+        let resolvePromotionMarker;
+        const promotionMarkerReady=new Promise(resolve=>{resolvePromotionMarker=resolve;});
         let promotionMetaInitial=true;
         const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
         state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
           const markerData=snap.exists()?snap.data():null;
-          const markerTimestamp=markerData?promotionRevisionKey(markerData.updatedAt):'';
-          const version=markerData?String(markerData.revision||markerTimestamp):'';
+          const version=markerData?String(markerData.revision||promotionRevisionKey(markerData.updatedAt)):'';
           if(promotionMetaInitial){
-            promotionMetaInitial=false;state.promoMetaVersion=version;
-            // Compare timestamps to timestamps; revision is a unique event ID.
-            const profileRevision=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
-            if(markerTimestamp&&profileRevision&&markerTimestamp!==profileRevision)void syncPromotionsAfterRevision(version);
+            promotionMetaInitial=false;
+            state.promoMetaVersion=version;
+            resolvePromotionMarker();
             return;
           }
-          if(!snap.exists()||!version||version===state.promoMetaVersion)return;
-          void syncPromotionsAfterRevision(version);
-        },err=>{
-          console.error('promotion revision listener unavailable',err.message);
-          if(!state.promoMetaListenerFailed){state.promoMetaListenerFailed=true;toast('No se puede sincronizar promociones en vivo: falta permiso para leer el aviso de cambios. Publicá las reglas de Firestore actualizadas.','error');}
+          if(!version||version===state.promoMetaVersion)return;
+          state.promoMetaVersion=version;
+          state.promotionsDirty=true;
+          if(state.customerSection==='home')void syncPromotionsAfterRevision(version);
+        },error=>{
+          console.error('promotion revision listener unavailable',error?.message||error);
+          resolvePromotionMarker();
+          if(!state.promoMetaListenerFailed){
+            state.promoMetaListenerFailed=true;
+            toast('No se pudo activar la actualización automática de promociones. Revisá las reglas de Firestore.','error');
+          }
         }));
-        state.promotionsVersion=promotionRevisionKey(state.barber?.promotionsUpdatedAt);
+
+        await promotionMarkerReady;
+        if(state.customerSection==='home')await loadPromotions();
         renderApp();
       }
       const payment=new URLSearchParams(location.search).get('payment');
@@ -1127,7 +1104,7 @@
       }
     }
 
-    async function signOutAndReturn() { if(state.role==='customer') await setCustomerPresence(false,{keepalive:true}); state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;
@@ -1228,42 +1205,40 @@
 
 
     const PIP_TOPICS_ADMIN = [
-      ['start','🧠 Barber VIP en pocas palabras','Organizá visitas, beneficios y promociones desde un solo lugar.'],
-      ['promos','🔥 Crear una promoción','Publicar una oferta con fecha y clientes destinatarios.'],
-      ['clients','👥 Crear clientes','Dar acceso a la tarjeta personal de cada cliente.'],
-      ['settings','⚙️ Preparar el perfil','Completar WhatsApp, horarios y datos para compartir.'],
-      ['visits','◷ Registrar una visita','Actualizar el progreso del cliente y sus premios.'],
-      ['customer-view','📱 Verlo como cliente','Probar la experiencia del otro lado.'],
-      ['loyalty','🎁 Premios automáticos','Entender el ciclo común para todos tus clientes.'],
-      ['trial','💳 Suscripción','Consultar el estado de tu cuenta y cuándo corresponde pagar.'],
-      ['roadmap','🗺️ Orden recomendado','Una guía breve con los primeros pasos para aprovechar Barber VIP.']
+      ['start','👋 Empezá por acá','Primero prepará tu perfil. Después clientes y visitas.'],
+      ['settings','🧭 Prepará tu perfil','WhatsApp y horarios para que te puedan encontrar.'],
+      ['loyalty','🎁 Premios sostenibles','Ofrecé beneficios que puedas cumplir.'],
+      ['clients','👥 Creá tu comunidad','Una ficha por cliente.'],
+      ['visits','✦ Registrá cada visita','El ciclo avanza cuando la registrás.'],
+      ['promos','🔥 Activá una promo','Vigencia clara; se actualiza sola en la tarjeta.'],
+      ['customer-view','📱 Miralo como cliente','Probá la experiencia antes de compartir el acceso.'],
+      ['trial','💳 Tu plan','Revisá prueba y vencimiento.']
     ];
     const PIP_TOPICS_CUSTOMER = [
-      ['card','✨ Mi tarjeta','Las visitas registradas se reflejan en el progreso del ciclo de tu profesional.'],
-      ['loyalty','🎁 Premios','Tu profesional define los hitos del ciclo y el beneficio de cada uno. El descuento se aplica en la misma visita que alcanza el hito; al aplicar el último premio empieza otro ciclo.'],
-      ['promos','🔥 Promociones','Las ofertas activas aparecen en Inicio con su cronómetro de vigencia.'],
-      ['barber','📍 Datos del profesional','Desde Datos de tu profesional podés ver horarios, WhatsApp, Instagram y ubicación si fueron configurados.'],
-      ['turn','📲 Agendar turno','Abrir WhatsApp para coordinar una visita.']
+      ['card','✨ Tu tarjeta','Visitas y progreso, en un mismo lugar.'],
+      ['loyalty','🎁 Tus premios','Mirá qué hito sigue y qué beneficio corresponde.'],
+      ['promos','🔥 Promociones','Ofertas vigentes y tiempo restante.'],
+      ['barber','📍 Datos de tu profesional','Horarios y formas de contacto.'],
+      ['turn','📲 Coordinar una visita','Hablá directamente por WhatsApp.']
     ];
     const PIP_ANSWERS = {
-      start:'No alcanza con hacer bien el trabajo: si después de una visita no hay un motivo claro para volver, dependés de que el cliente se acuerde de vos, del precio o de la conveniencia. Fidelizar no es regalar por regalar: es definir premios sostenibles, comunicar promociones reales y retomar el contacto con respeto. La app organiza el progreso y te ayuda a mantener presente tu propuesta; no garantiza que todos vuelvan, pero te da un sistema para trabajar la relación en lugar de dejarla al azar.',
-      promos:'Publicá una oferta con un título llamativo, emojis y fecha de vigencia. Elegí si la ven todos o solo algunos clientes. Las promociones comerciales son independientes de los premios automáticos.',
-      clients:'Creá un perfil con nombre, contraseña y WhatsApp. Compartí el enlace y tu código de acceso. El botón Ver muestra la ficha y Editar cambia sus datos.',
-      settings:'Completá nombre, WhatsApp, Instagram, ubicación y horarios por día. Compartí el enlace y código de acceso para que tus clientes entren. Configurá el programa de premios desde esta sección.',
-      cuts:'Usá Registrar visita cada vez que venga una persona registrada. El ciclo y la tarjeta del cliente se actualizan automáticamente. Para alguien de paso, usá Registrar visita rápido: no crea una cuenta ni cambia el ciclo de nadie.',
-      'customer-view':'Después de crear un cliente, cerrá sesión y entrá por Soy cliente usando el código, nombre y contraseña que le asignaste. Así vas a comprobar su tarjeta, progreso, promociones y los datos de contacto que configuraste.',
-      loyalty:'Hay un solo ciclo para todos los clientes. El profesional define los hitos y el porcentaje de cada premio. El descuento se aplica en la misma visita que alcanza el hito. Al aplicar el último beneficio, comienza un nuevo ciclo.',
-      trial:'La cuenta comienza con 15 días de prueba. Ver plan muestra el estado y la fecha de vencimiento. Si querés, podés pagar antes: al aprobarse el pago, comienza un período de 30 días desde esa fecha.',
-      roadmap:'Primero, definí una propuesta de fidelización que puedas sostener sin perjudicar tus ingresos. Después completá los datos profesionales, cargá servicios y precios si querés mostrarlos, configurá premios y promociones, y creá el acceso de un cliente. Registrá una visita de prueba y mirá la tarjeta desde la experiencia del cliente. La clave no es descontar en todo: es dar una razón concreta para volver, cumplir lo prometido y facilitar que te recomienden.',
-      card:'Tu tarjeta muestra visitas totales, última visita, progreso y el siguiente descuento. Cuando la persona profesional registra una nueva visita, el avance se actualiza automáticamente.',
-      turn:'El botón abre WhatsApp con el contacto de tu profesional. El mensaje queda vacío para que escribas lo que necesitás.',
-      barber:'Acá ves los datos que tu profesional eligió compartir: WhatsApp, horarios, Instagram y ubicación. Si un dato opcional no aparece, puede que todavía no lo haya configurado.'
+      start:'¡Bienvenido! Empezá por acá y seguí de arriba hacia abajo: prepará tu perfil, definí premios, creá clientes y registrá cada visita. Sin registrar la visita, la tarjeta no avanza.',
+      settings:'Completá tu nombre, WhatsApp y horarios. Sumá Instagram y ubicación si querés que aparezcan en la tarjeta del cliente.',
+      loyalty:'Una verdad importante: no prometas descuentos que no puedas sostener. Elegí hitos que cuiden tus números y cumplí siempre lo que ofrecés.',
+      clients:'Creá una ficha por persona y compartile sus datos de acceso. Evitá duplicados: cada cliente tiene su propia tarjeta con vos.',
+      visits:'Cuando termine una visita, tocá Registrar visita y elegí al cliente. Se actualizan su total y su ciclo; no hay que hacer nada más.',
+      promos:'Poné un título claro, fechas reales y elegí quién la recibe. Al guardar, la tarjeta del cliente se actualiza sin que tenga que recargar.',
+      'customer-view':'Probá la app entrando por Soy cliente con una cuenta de prueba. Revisá tarjeta, horarios y promociones antes de compartir el acceso.',
+      trial:'En Configuración podés revisar el período de prueba, el estado de tu cuenta y su vencimiento.',
+      card:'Acá ves visitas totales, última visita y avance del ciclo. El tiempo de la última visita se calcula en tu dispositivo.',
+      turn:'Tocá WhatsApp para coordinar directamente con tu profesional.',
+      barber:'Vas a ver los datos que tu profesional decidió compartir: horarios, WhatsApp, Instagram y ubicación.'
     };
-    function openPipHelp(selected=''){
+        function openPipHelp(selected=''){
       const topics=state.role==='customer'?PIP_TOPICS_CUSTOMER:PIP_TOPICS_ADMIN;
       if(!selected)selected=state.role==='customer'?'card':'start';
       const answer=selected?PIP_ANSWERS[selected]:'';
-      modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, tus beneficios y el contacto con tu profesional, sin vueltas.':'Tu asistente rápido: entendé cómo atraer visitas repetidas, mostrar promociones y convertir cada visita en una oportunidad de fidelización.'} Sin chat libre ni consultas externas.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}</section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, promociones y contacto, sin vueltas.':'Bienvenido. Empezá arriba; no hace falta leer todo de golpe.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}</section></div>`;
     }
     function showPipTopic(topic){openPipHelp(topic);}
     function pipEnabled(){try{return localStorage.getItem('barberVipPipVisible')!=='false';}catch(_){return true;}}
@@ -1414,9 +1389,9 @@
         else if(action==='start-customer-signup'){void renderCustomerSignup();}
         else if(action==='cancel-customer-signup'){renderLanding();}
         else if(action==='start-customer-login'){renderLogin('customer');}
-        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else modalRoot.innerHTML='';}
+        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){state.section=button.dataset.section;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='nav'){const nextSection=button.dataset.section;if(nextSection!=='clients')stopAdminCustomersListener();state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
@@ -1430,8 +1405,8 @@
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
-        else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}
-        else if(action==='delete-client'){const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id);if(confirm(`¿Dar de baja a ${c?.fullName||'este cliente'}? Desaparecerá de Clientes. Sus visitas históricas y los totales ya registrados se conservan.`)){button.disabled=true;await api('/api/customers',{method:'DELETE',body:JSON.stringify({customerId:id})});state.customers=state.customers.filter(x=>x.uid!==id);modalRoot.innerHTML='';renderApp();toast('Cliente dado de baja. El historial de visitas se conservó.','success');}}
+        else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);if(state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty))await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='delete-client'){const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id);if(confirm(`¿Dar de baja a ${c?.fullName||'este cliente'}? Desaparecerá de Clientes. Se conservan el total y el ciclo registrado.`)){button.disabled=true;await api('/api/customers',{method:'DELETE',body:JSON.stringify({customerId:id})});state.customers=state.customers.filter(x=>x.uid!==id);modalRoot.innerHTML='';renderApp();toast('Cliente dado de baja. El historial de visitas se conservó.','success');}}
         else if(action==='contact'){contactClient(button.dataset.id,false);}
         else if(action==='new-promotion'){await ensureAdminCustomersLoaded();openPromotionModal();}
         else if(action==='edit-promotion'){await ensureAdminCustomersLoaded();openPromotionModal(button.dataset.id);}

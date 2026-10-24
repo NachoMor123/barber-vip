@@ -268,7 +268,7 @@
     .attendance-status.is-open .attendance-dot{background:#45e69b;box-shadow:0 0 13px rgba(69,230,155,.8)}
 
 
-</style>
+.presence-text{display:inline!important;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;font-size:inherit!important;font-weight:600!important;white-space:normal!important}.presence-text.is-online{color:#54e6a5!important}.presence-text.is-offline{color:var(--muted,#9aa7bc)!important}</style>
 
   <style id="barber-vip-polish-v2">
     :root{--bg:#02040a;--panel:#070b15;--panel2:#0a1223;--text:#f7faff;--muted:#a8b7d1;--accent:#3478ff;--accent2:#79bdff;--line:rgba(58,126,255,.48);--shadow:0 24px 70px rgba(0,0,0,.56)}
@@ -580,10 +580,10 @@
     function presenceMarkup(value,isOnline){
       const d=asDate(value);
       const age=d?Date.now()-d.getTime():Infinity;
-      if(d&&age>=0&&age<660000&&isOnline===true) return '<span class="status-chip good">En línea</span>';
-      if(!d) return '<span class="status-chip warn">Última conexión: sin datos</span>';
+      if(isOnline===true&&d&&age>=0&&age<120000) return '<span class="presence-text is-online">En línea</span>';
+      if(!d) return '<span class="presence-text is-offline">Última conexión: sin datos</span>';
       const elapsed=relativeTime(d).replace(/^Hace/,'hace');
-      return `<span class="status-chip warn">Última conexión: ${escapeHtml(elapsed)}</span>`;
+      return `<span class="presence-text is-offline">Última conexión: ${escapeHtml(elapsed)}</span>`;
     }
     function refreshPresenceLabels(){
       $$('.presence-live').forEach(el=>{
@@ -764,7 +764,7 @@
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
     function promoIsActive(p){const now=Date.now(),start=asDate(p.startsAt)?.getTime(),end=asDate(p.endsAt)?.getTime();return p.active!==false&&(!start||start<=now)&&(!end||end>=now);}
     function promoCountdown(value){const d=asDate(value);if(!d)return 'Sin vencimiento';const ms=d.getTime()-Date.now();if(ms<=0)return 'Finalizada';const total=Math.floor(ms/1000),days=Math.floor(total/86400),hours=Math.floor(total%86400/3600),minutes=Math.floor(total%3600/60),seconds=total%60;return days?`${days} d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;}
-    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible||!state.promotions.some(p=>promoIsActive(p)&&p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))return;state.promoTimer=setInterval(()=>{$$$('[data-promo-countdown]').forEach(el=>{el.textContent=promoCountdown(el.dataset.promoCountdown);});},1000);}
+    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible)return;const tick=()=>{let expired=false;$$('[data-promo-countdown]').forEach(el=>{const next=promoCountdown(el.dataset.promoCountdown);if(el.textContent!==next)el.textContent=next;if(next==='Finalizada')expired=true;});if(expired&&state.role==='customer'){const before=state.promotions.length;state.promotions=state.promotions.filter(p=>!p.endsAt||asDate(p.endsAt)?.getTime()>Date.now());if(before!==state.promotions.length)renderApp();}};tick();if(state.promotions.some(p=>p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))state.promoTimer=setInterval(tick,250);}
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function subscriptionBanner() {
       const s=subStatus(); const cls=s.status; const message=s.status==='active'?(s.isTrial?`Tu prueba gratuita sigue activa por ${s.daysRemaining} día${s.daysRemaining===1?'':'s'}. Podés activar el plan pago cuando quieras.`:`Tu cuenta está activa. Quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} antes del período de gracia.`):s.status==='grace'?`Te quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} de servicio. Pagá para extender el acceso por 30 días.`:'La cuenta está vencida o todavía no tiene fecha de vencimiento. No se pueden registrar visitas hasta renovarla.';
@@ -943,7 +943,7 @@
       if(!state.user || !state.role) return renderLanding();
       applyTheme(state.role==='barber'?state.barber?.theme:state.barber?.theme);
       if(state.role==='barber') { appRoot.innerHTML=adminShell(); startPromoCountdowns(); }
-      else { renderCustomer(); }
+      else { renderCustomer(); startPromoCountdowns(); }
       // Update relative times immediately after painting; subsequent updates are local-only.
       refreshRelativeTimes();
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
@@ -1040,7 +1040,7 @@
         let promotionMetaInitial=true;
         const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
         state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
-          const version=snap.exists()?promotionRevisionKey(snap.data().updatedAt):'';
+          const version=snap.exists()?String(snap.data().revision||promotionRevisionKey(snap.data().updatedAt)):'';
           if(promotionMetaInitial){
             promotionMetaInitial=false;state.promoMetaVersion=version;
             // If the app fetched the profile just before a promotion was changed, catch up once.

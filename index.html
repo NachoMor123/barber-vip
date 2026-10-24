@@ -927,6 +927,15 @@
       window.open(url,'_blank','noopener,noreferrer');
     }
 
+    function contactBarber(withMessage=false){
+      const barber=state.barber||{};
+      if(!validWhatsapp(barber.whatsapp)){toast('Tu profesional todavía no configuró un WhatsApp válido.','error');return;}
+      const number=whatsappNumber(barber.whatsapp);
+      const message=withMessage?'Hola, quería consultar por un turno.':'';
+      const url=`https://wa.me/${number}${message?'?text='+encodeURIComponent(message):''}`;
+      window.open(url,'_blank','noopener,noreferrer');
+    }
+
     function customerResultsMarkup(list) {
       if(list.length) return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>`;
       const heading=state.query?'No encontramos coincidencias':'Todavía no hay clientes';

@@ -4,42 +4,39 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+
     function isBarber(barberId) {
       return signedIn() && request.auth.uid == barberId;
     }
-    function isLinkedCustomer(barberId) {
-      return signedIn()
-        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'customer'
-        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.barberUid == barberId;
-    }
-    // Los perfiles internos y los cambios se administran desde las API del servidor.
+
+    // The server API owns profile and role mapping writes.
     match /userProfiles/{uid} {
       allow read, write: if false;
     }
 
     match /barbers/{barberId} {
-      // El documento padre contiene configuración interna y solo lo lee el barbero.
-      // Los clientes reciben un perfil público filtrado por la API del servidor.
+      // The parent profile contains private professional data; owner only.
       allow get: if isBarber(barberId);
       allow list, create, update, delete: if false;
 
       match /customers/{customerId} {
-        allow get: if isBarber(barberId) || (signedIn() && request.auth.uid == customerId && resource.data.active == true);
+        // Admin can view the barber's customer list; each customer can view only their own active card.
+        allow get: if isBarber(barberId)
+          || (signedIn() && request.auth.uid == customerId && resource.data.active == true);
         allow list: if isBarber(barberId);
         allow create, update, delete: if false;
       }
 
-      // Tiny promotion revision marker. Customers can read only their linked barber's marker;
-      // the actual promotion payload still comes from the server API.
       match /publicMeta/{metaId} {
-        // Only revision token + timestamp are exposed; promotion payload remains server-only.
+        // The promotion marker contains only an opaque revision ID and timestamp.
+        // No get()/exists() lookups means no extra rule-document reads for each notification.
         allow get: if signedIn() && metaId == 'promotions';
         allow list, create, update, delete: if false;
       }
 
+      // History is disabled: the app no longer reads or writes visit audit documents.
       match /cuts/{cutId} {
-        allow read: if isBarber(barberId);
-        allow write: if false;
+        allow read, write: if false;
       }
 
       match /redemptions/{redemptionId} {

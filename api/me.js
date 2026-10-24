@@ -120,21 +120,8 @@ module.exports = async function handler(req, res) {
   try {
     const decoded = await requireUser(req, res);
     if (!decoded) return;
-    // Event-driven customer presence: one write only when the app becomes active/inactive.
-    // No heartbeat or polling; this branch never reads the customer document.
-    const legacyPresence = String(req.query && req.query.presence || '');
+    // No online/last-seen presence tracking: keep account loading read-only.
     const database = db();
-    if (legacyPresence === '1' || legacyPresence === '0') {
-      const presenceProfile = await database.collection('userProfiles').doc(decoded.uid).get();
-      if (!presenceProfile.exists) return send(res, 404, { ok:false, error:'No se encontró el perfil de esta cuenta.' });
-      const linked = presenceProfile.data();
-      if (linked.role !== 'customer' || !linked.barberUid) return send(res, 200, { ok:true, online:false });
-      const customerRef = database.collection('barbers').doc(linked.barberUid).collection('customers').doc(decoded.uid);
-      const stamp = admin().firestore.FieldValue.serverTimestamp();
-      const online = legacyPresence === '1';
-      await customerRef.update(online ? { isOnline:true, lastConnectedAt:stamp } : { isOnline:false, lastSeenAt:stamp });
-      return send(res, 200, { ok:true, online });
-    }
     const profileRef = database.collection('userProfiles').doc(decoded.uid);
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el perfil de esta cuenta. Volvé a ingresar.' });
@@ -162,11 +149,11 @@ module.exports = async function handler(req, res) {
       const barberSnap = await barberRef.get();
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró el espacio profesional asociado.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
-      // On session entry, mark online. "Last connection" changes only when moving offline.
-      const connectedAt = new Date().toISOString();
-      await customerRef.update({ isOnline:true, lastConnectedAt:admin().firestore.FieldValue.serverTimestamp() });
-      const asIso = value => value && typeof value.toDate === 'function' ? value.toDate().toISOString() : (value || null);
-      const customer = { ...customerData, isOnline:true, lastConnectedAt:connectedAt, lastSeenAt:asIso(customerData.lastSeenAt) };
+      // Do not expose legacy presence fields; no reads or writes are dedicated to connection status.
+      const customer = { ...customerData };
+      delete customer.isOnline;
+      delete customer.lastSeenAt;
+      delete customer.lastConnectedAt;
       return send(res, 200, { ok: true, role: 'customer', uid: decoded.uid, barberUid: profile.barberUid, customer, barber: publicBarberProfile(barber) });
     }
     return send(res, 403, { ok: false, error: 'El tipo de cuenta no está configurado correctamente.' });

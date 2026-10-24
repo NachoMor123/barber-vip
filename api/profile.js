@@ -224,16 +224,23 @@ module.exports = async function handler(req, res) {
     catch (error) { return send(res, 400, { ok:false, error:error.message }); }
     const showServices = data.showServices === undefined ? existing.showServices === true : data.showServices === true;
     const updatedAt = admin().firestore.FieldValue.serverTimestamp();
-    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},updatedAt});
-    // Publish only client-facing fields in a separate lightweight document. Customers listen to
-    // this document (not the private barber profile), so updates are instant without polling.
-    await ref.collection('publicMeta').doc('professional').set({
+    const publicProfile = {
       displayName, barberName, whatsapp, instagramUrl, mapsUrl, schedule,
       services: showServices ? services.filter(service => service.active !== false).map(({id,name,price,active})=>({id,name,price,active})) : [],
-      showServices, updatedAt: admin().firestore.FieldValue.serverTimestamp()
+      showServices, updatedAt
+    };
+    // Commit private settings and public customer-facing data together. The customer listener
+    // receives only this small public document; no polling or second read is needed on save.
+    const batch = context.db.batch();
+    batch.update(ref,{displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},updatedAt});
+    batch.set(ref.collection('publicMeta').doc('professional'),publicProfile);
+    await batch.commit();
+    const savedProfile = profileView({
+      ...existing,displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,
+      services,showServices,theme:{...(existing.theme||{}),accent,density},
+      updatedAt: new Date().toISOString()
     });
-    const fresh = await ref.get();
-    return send(res, 200, {ok:true,profile:profileView(fresh.data()),subscriptionPrice:getSubscriptionPrice()});
+    return send(res, 200, {ok:true,profile:savedProfile,subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {
     console.error('profile error', error);
     return send(res, 500, {ok:false,error:error.message || 'No se pudo guardar la configuración.'});

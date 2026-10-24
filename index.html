@@ -807,7 +807,7 @@
       if(!days.some(d=>d.enabled))return {known:false,open:false,label:'Horario no configurado'};
       const now=new Date(),keys=['sun','mon','tue','wed','thu','fri','sat'];
       const todayKey=keys[now.getDay()],prevKey=keys[(now.getDay()+6)%7],current=now.getHours()*60+now.getMinutes();
-      const minutes=value=>{if(!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(value||'')))return null;const [h,m]=value.split(':').map(Number);return h*60+m;};
+      const minutes=value=>{if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||'')))return null;const [h,m]=value.split(':').map(Number);return h*60+m;};
       const inRange=(a,b)=>{const start=minutes(a),end=minutes(b);if(start===null||end===null||start===end)return false;return start<end?(current>=start&&current<end):(current>=start||current<end);};
       const today=days.find(d=>d.day===todayKey&&d.enabled);
       let open=false;

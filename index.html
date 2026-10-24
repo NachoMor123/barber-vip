@@ -703,7 +703,8 @@
     function userFacingError(error,fallback='No se pudo completar la operación. Revisá la conexión e intentá nuevamente.'){
       const code=String(error?.code||'').toLowerCase();
       const message=String(error?.message||'').trim();
-      if(error?.retryable||navigator.onLine===false||code==='auth/network-request-failed'||/failed to fetch|networkerror|network request failed|load failed|internet disconnected/i.test(message)){
+      const technical=/FirebaseError|Firebase: Error|^TypeError:|^ReferenceError:|^SyntaxError:|Cannot read properties of/i.test(message);
+      if(navigator.onLine===false||code==='auth/network-request-failed'||/failed to fetch|networkerror|network request failed|load failed|internet disconnected|no pudimos conectar|conexión se interrumpió/i.test(message)){
         return navigator.onLine===false?'Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.':'No pudimos conectar con Barber VIP. Revisá tu conexión e intentá nuevamente.';
       }
       if(code==='auth/too-many-requests')return 'Hubo demasiados intentos. Esperá un momento antes de volver a probar.';
@@ -712,11 +713,13 @@
       if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(code))return 'Los datos de ingreso no coinciden. Revisalos y probá de nuevo.';
       if(code==='auth/weak-password')return 'La contraseña no cumple con la longitud mínima requerida.';
       if(code==='auth/user-disabled')return 'Esta cuenta está deshabilitada. Consultá con tu profesional.';
-      if(code==='permission-denied'||code==='7'||/missing or insufficient permissions|permission_denied|firestore\/permission-denied/i.test(message)){
+      if(code==='permission-denied'||code==='7'||/missing or insufficient permissions|permission_denied|firestore permission-denied/i.test(message)){
         return 'No se pudieron leer o guardar los datos. Revisá la conexión y las reglas de Firestore.';
       }
-      if(/FirebaseError|Firebase: Error \(auth\/|^TypeError:|^ReferenceError:|^SyntaxError:|Cannot read properties of/i.test(message))return fallback;
-      return message&&message.length<=260?message:fallback;
+      if(error?.status===429)return !technical&&message?message:'Hubo demasiadas solicitudes. Esperá un momento y volvé a intentar.';
+      if(Number(error?.status)>=500)return !technical&&message?message:'El servidor tuvo un problema temporal. Probá nuevamente en unos minutos.';
+      if(error?.retryable)return !technical&&message?message:fallback;
+      return message&&!technical&&message.length<=260?message:fallback;
     }
     function isRetryableError(error){
       return Boolean(error?.retryable||navigator.onLine===false||String(error?.code||'').toLowerCase()==='auth/network-request-failed'||/failed to fetch|networkerror|network request failed|no pudimos conectar|problema temporal/i.test(String(error?.message||'')));
@@ -1071,7 +1074,7 @@
       }catch(error){
         if(sequence===state.promotionSyncSequence){
           state.promotionsDirty=true;
-          console.warn('No se pudieron cargar las promociones:',error?.message||error);
+          notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron cargar las promociones. Revisá tu conexión e intentá nuevamente.'),error);
         }
         return false;
       }

@@ -1,6 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireUser, requireBarber, subscription } = require('../lib/security');
+const TRIAL_DAYS = 14;
 const crypto = require('crypto');
 
 function normalizeEmail(value) {
@@ -130,9 +131,9 @@ module.exports = async function handler(req, res) {
           if (!trialExpiryDate && claim) {
             const savedExpiry = claim.trialExpiresAt;
             if (savedExpiry) trialExpiryDate = savedExpiry && typeof savedExpiry.toDate === 'function' ? savedExpiry.toDate() : new Date(savedExpiry);
-            else if (claim.claimedAt) trialExpiryDate = new Date(millis(claim.claimedAt) + 15 * 86400000);
+            else if (claim.claimedAt) trialExpiryDate = new Date(millis(claim.claimedAt) + TRIAL_DAYS * 86400000);
           }
-          if (!trialExpiryDate || Number.isNaN(trialExpiryDate.getTime())) trialExpiryDate = new Date(now.toMillis() + 15 * 86400000);
+          if (!trialExpiryDate || Number.isNaN(trialExpiryDate.getTime())) trialExpiryDate = new Date(now.toMillis() + TRIAL_DAYS * 86400000);
           const trialExpiry = Timestamp.fromDate(trialExpiryDate);
           const barberCode = freshBarberSnap.exists ? (freshBarberSnap.data().barberCode || defaultCode(decoded.uid)) : defaultCode(decoded.uid);
           const fallbackRewards = [

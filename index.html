@@ -969,7 +969,8 @@
       const sequence=(state.promotionSyncSequence||0)+1;
       state.promotionSyncSequence=sequence;
       try{
-        const data=await api('/api/promotions');
+        const promotionUrl=state.role==='customer'&&state.barberUid?`/api/promotions?barberUid=${encodeURIComponent(state.barberUid)}`:'/api/promotions';
+        const data=await api(promotionUrl);
         if(sequence!==state.promotionSyncSequence)return false;
         state.promotions=Array.isArray(data.promotions)?data.promotions:[];
         state.promotionsLoaded=true;
@@ -1101,7 +1102,7 @@
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.promotions=[]; state.promotionsLoaded=false; state.promotionsDirty=true; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','promotions','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme);
@@ -1433,7 +1434,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))await loadPromotions();renderApp();window.scrollTo(0,0);}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}

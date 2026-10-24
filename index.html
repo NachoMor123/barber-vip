@@ -571,6 +571,30 @@
   <div id="modal-root"></div>
   <div id="toasts" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
+  <script>
+    (function () {
+      let shown = false;
+      function showBootstrapFailure() {
+        if (shown || window.__barberVipModuleReady) return;
+        shown = true;
+        const root = document.getElementById('app');
+        if (!root) return;
+        root.innerHTML = '<main class="login-wrap"><section class="login-card" role="alert"><h1>No pudimos iniciar Barber VIP</h1><p>No se pudieron cargar los recursos necesarios para abrir la aplicación. Revisá tu conexión y volvé a intentar.</p><button id="barberVipBootstrapRetry" class="btn btn-primary btn-block" type="button">Volver a intentar</button></section></main>';
+        document.getElementById('barberVipBootstrapRetry')?.addEventListener('click', () => location.reload());
+      }
+      window.addEventListener('error', event => {
+        if (window.__barberVipModuleReady) return;
+        if (event.target === window || event.target?.tagName === 'SCRIPT') showBootstrapFailure();
+      }, true);
+      window.addEventListener('unhandledrejection', () => {
+        if (!window.__barberVipModuleReady) showBootstrapFailure();
+      });
+      window.setTimeout(() => {
+        if (!window.__barberVipModuleReady) showBootstrapFailure();
+      }, 15000);
+    })();
+  </script>
+
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, deleteUser, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
@@ -666,7 +690,49 @@
     const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
     function greetingForNow(){const h=new Date().getHours();return h>=5&&h<12?'Buen día':h>=12&&h<20?'Buenas tardes':'Buenas noches';}
     const nameInitials = name => String(name||'BV').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'BV';
-    const toast = (message,type='') => { const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=message; $('#toasts').appendChild(el); setTimeout(()=>el.remove(),4500); };
+    const toast = (message,type='') => { const root=$('#toasts');if(!root)return;const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=String(message||'');root.appendChild(el);setTimeout(()=>el.remove(),4500); };
+    const lastErrorNotifications = new Map();
+    function notifyErrorOnce(key,message,error,cooldownMs=7000){
+      const now=Date.now(),previous=lastErrorNotifications.get(key)||0;
+      if(now-previous<cooldownMs)return;
+      lastErrorNotifications.set(key,now);
+      if(lastErrorNotifications.size>40){for(const [stored,at] of lastErrorNotifications)if(now-at>60000)lastErrorNotifications.delete(stored);}
+      if(error)console.error('[Barber VIP]',key,error);
+      toast(message,'error');
+    }
+    function userFacingError(error,fallback='No se pudo completar la operación. Revisá la conexión e intentá nuevamente.'){
+      const code=String(error?.code||'').toLowerCase();
+      const message=String(error?.message||'').trim();
+      if(error?.retryable||navigator.onLine===false||code==='auth/network-request-failed'||/failed to fetch|networkerror|network request failed|load failed|internet disconnected/i.test(message)){
+        return navigator.onLine===false?'Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.':'No pudimos conectar con Barber VIP. Revisá tu conexión e intentá nuevamente.';
+      }
+      if(code==='auth/too-many-requests')return 'Hubo demasiados intentos. Esperá un momento antes de volver a probar.';
+      if(code==='auth/invalid-email')return 'Revisá el formato del correo electrónico.';
+      if(code==='auth/email-already-in-use')return 'Ya existe una cuenta con ese correo. Iniciá sesión con ella.';
+      if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(code))return 'Los datos de ingreso no coinciden. Revisalos y probá de nuevo.';
+      if(code==='auth/weak-password')return 'La contraseña no cumple con la longitud mínima requerida.';
+      if(code==='auth/user-disabled')return 'Esta cuenta está deshabilitada. Consultá con tu profesional.';
+      if(code==='permission-denied'||code==='7'||/missing or insufficient permissions|permission_denied|firestore\/permission-denied/i.test(message)){
+        return 'No se pudieron leer o guardar los datos. Revisá la conexión y las reglas de Firestore.';
+      }
+      if(/FirebaseError|Firebase: Error \(auth\/|^TypeError:|^ReferenceError:|^SyntaxError:|Cannot read properties of/i.test(message))return fallback;
+      return message&&message.length<=260?message:fallback;
+    }
+    function isRetryableError(error){
+      return Boolean(error?.retryable||navigator.onLine===false||String(error?.code||'').toLowerCase()==='auth/network-request-failed'||/failed to fetch|networkerror|network request failed|no pudimos conectar|problema temporal/i.test(String(error?.message||'')));
+    }
+    function reportUnexpectedError(kind,error){
+      notifyErrorOnce(`unexpected:${kind}`,'Ocurrió un error inesperado. Recargá Barber VIP; si continúa, cerrá la aplicación y volvé a abrirla.',error,8000);
+    }
+    window.addEventListener('error',event=>{
+      if(event.target&&event.target!==window){
+        if(event.target.tagName==='SCRIPT'&&/gstatic|firebase/i.test(String(event.target.src||'')))reportUnexpectedError('script-resource',event.error||event.message);
+        return;
+      }
+      reportUnexpectedError('runtime',event.error||event.message);
+    });
+    window.addEventListener('unhandledrejection',event=>reportUnexpectedError('unhandled-promise',event.reason));
+    window.__barberVipModuleReady=true;
     async function copyText(value){
       const text=String(value??'');
       if(!text)throw new Error('No hay nada para copiar.');
@@ -682,16 +748,41 @@
     const api = async (url, options={}) => {
       const headers = {'Content-Type':'application/json',...(options.headers||{})};
       const current = state.auth?.currentUser;
-      if(current){ const token = await current.getIdToken(); headers.Authorization = `Bearer ${token}`; }
-      const response = await fetch(url,{...options,headers,cache:'no-store'});
-      const data = await response.json().catch(()=>({ok:false,error:'El servidor devolvió una respuesta inesperada.'}));
-      if(!response.ok || data.ok===false) throw new Error(data.error || `Error ${response.status}.`);
+      if(current){
+        try{const token=await current.getIdToken();headers.Authorization=`Bearer ${token}`;}
+        catch(error){
+          const failure=new Error(navigator.onLine===false||error?.code==='auth/network-request-failed'?'No se pudo validar la sesión por un problema de conexión. Volvé a intentar.':'No se pudo validar tu sesión. Volvé a ingresar e intentá nuevamente.');
+          failure.retryable=navigator.onLine===false||error?.code==='auth/network-request-failed';failure.cause=error;throw failure;
+        }
+      }
+      let response;
+      try{response=await fetch(url,{...options,headers,cache:'no-store'});}
+      catch(error){
+        const failure=new Error(navigator.onLine===false?'Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.':'No pudimos conectar con el servidor de Barber VIP. Revisá tu conexión e intentá nuevamente.');
+        failure.retryable=true;failure.cause=error;throw failure;
+      }
+      let raw='';
+      try{raw=await response.text();}
+      catch(error){const failure=new Error('La conexión se interrumpió mientras se recibía la respuesta. Volvé a intentar.');failure.retryable=true;failure.cause=error;throw failure;}
+      let data=null;
+      try{data=raw?JSON.parse(raw):null;}catch(_){}
+      if(!data||typeof data!=='object'){
+        const failure=new Error(!response.ok?(response.status>=500?'El servidor de Barber VIP no pudo completar la operación. Probá de nuevo en unos minutos.':`La solicitud no se pudo completar (código ${response.status}).`):'El servidor devolvió una respuesta inesperada. Recargá Barber VIP y volvé a intentar.');
+        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
+      }
+      if(!response.ok||data.ok===false){
+        const failure=new Error(data.error||`La solicitud no se pudo completar (código ${response.status}).`);
+        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
+      }
       return data;
     };
     const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;try{state.promotionMetaUnsubscribe?.();}catch(_){}state.promotionMetaUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
     const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
+    function renderSessionError(message){
+      appRoot.innerHTML=`<main class="login-wrap"><section class="login-card" role="alert">${brand}<h1>No pudimos cargar tu sesión</h1><p>${escapeHtml(message||'Revisá tu conexión y volvé a intentar.')}</p><button class="btn btn-primary btn-block" type="button" data-action="retry-session">Reintentar conexión</button></section></main>`;
+    }
 
     function renderLanding() {
       const query = new URLSearchParams(location.search);
@@ -902,7 +993,7 @@
         else {modalRoot.innerHTML='';}
         renderApp();
       } catch(error) {
-        toast(error.message||'No se pudo registrar la visita. Probá de nuevo.','error');
+        toast(userFacingError(error,'No se pudo registrar la visita. Revisá la conexión e intentá nuevamente.'),'error');
       } finally {
         delete state.cutSaving[id];
       }
@@ -1094,7 +1185,7 @@
       });
       state.customersLoadPromise=promise;
       try{await promise;}
-      catch(error){toast('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.','error');throw error;}
+      catch(error){const failure=new Error('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.');failure.retryable=true;failure.cause=error;throw failure;}
       finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;}
     }
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
@@ -1108,7 +1199,7 @@
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
         const barberRef=doc(state.db,'barbers',me.barberUid);
-        state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>console.warn('barber snapshot',err)));
+        state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>notifyErrorOnce('barber-snapshot','No se pudieron sincronizar los datos del panel. Revisá la conexión y las reglas de Firestore.',err)));
         if(state.section==='clients')await ensureAdminCustomersLoaded();
         if(state.section==='promotions')await loadPromotions();
         renderApp();
@@ -1130,14 +1221,14 @@
           const fresh=snap.data()||{};
           state.barber={...state.barber,displayName:fresh.displayName??state.barber?.displayName,barberName:fresh.barberName??state.barber?.barberName,whatsapp:fresh.whatsapp??state.barber?.whatsapp,instagramUrl:fresh.instagramUrl??state.barber?.instagramUrl,mapsUrl:fresh.mapsUrl??state.barber?.mapsUrl,schedule:fresh.schedule??state.barber?.schedule,services:Array.isArray(fresh.services)?fresh.services:state.barber?.services,showServices:fresh.showServices===true};
           renderApp();
-        },err=>console.warn('professional profile listener',err?.message||err)));
+        },err=>notifyErrorOnce('professional-profile-snapshot','No se pudieron actualizar los datos del profesional. Revisá la conexión y las reglas de Firestore.',err)));
 
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
           const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;state.customer=freshCustomer;
           renderApp();
-        },err=>console.warn('customer snapshot',err)));
+        },err=>notifyErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá la conexión y las reglas de Firestore.',err)));
 
         if(state.customerSection==='home'&&document.visibilityState==='visible'){
           await ensureCustomerPromotionListener();
@@ -1164,9 +1255,16 @@
         }
         await loadContext(me);
       } catch(error) {
-        console.warn('resume session',error.message);
+        const message=userFacingError(error,'No se pudo recuperar tu sesión. Revisá la conexión e intentá nuevamente.');
+        console.warn('resume session',error?.message||error);
+        if(isRetryableError(error)){
+          state.loadError=true;
+          renderSessionError(message);
+          notifyErrorOnce('resume-session',message,error);
+          return;
+        }
         cleanupContext(); await signOut(state.auth).catch(()=>{}); renderLanding();
-        if(/prueba gratuita/i.test(error.message)) toast(error.message,'error');
+        toast(message,'error');
       }
     }
 
@@ -1222,7 +1320,7 @@
       const fd=new FormData(form); const id=form.dataset.id; const loyaltyMode=$('#clientLoyaltyMode',form)?.value||'standard'; const loyaltyRewards=$$('[data-client-reward-row]',form).map(row=>({cut:Number($('[data-client-reward-cut]',row)?.value),discount:Number($('[data-client-reward-discount]',row)?.value)})); if(loyaltyMode==='custom'){if(!loyaltyRewards.length||loyaltyRewards.length>10){toast('El programa personalizado necesita entre 1 y 10 hitos.','error');return;}const sorted=[...loyaltyRewards].sort((a,b)=>a.cut-b.cut);let prev=0;for(const r of sorted){if(!Number.isInteger(r.cut)||r.cut<1||r.cut>50||r.cut<=prev||!Number.isInteger(r.discount)||r.discount<0||r.discount>100){toast('Revisá los hitos: visitas únicas del 1 al 50 y descuentos del 0% al 100%.','error');return;}prev=r.cut;}loyaltyRewards.splice(0,loyaltyRewards.length,...sorted);} const payload={fullName:$('#clientFullName',form)?.value||'',password:$('#clientPassword',form)?.value||'',whatsapp:whatsappNumber($('#clientWhatsapp',form)?.value||''),cutStyle:$('#clientCutStyle',form)?.value||'',conversationPreference:fd.get('conversationPreference')||'',loyaltyMode,loyaltyRewards};
       const submit=$('button[type="submit"]',form); if(submit){submit.disabled=true;submit.textContent='Guardando…';}
       try { await api('/api/customers',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,customerId:id}:{...payload})}); modalRoot.innerHTML='';toast(id?'Cliente actualizado.':'Cliente creado correctamente.','success'); }
-      catch(error){toast(error.message,'error');if(submit){submit.disabled=false;submit.textContent=id?'Guardar cambios':'Crear cliente';}}
+      catch(error){toast(userFacingError(error,'No se pudo guardar el cliente. Revisá la conexión e intentá nuevamente.'),'error');if(submit){submit.disabled=false;submit.textContent=id?'Guardar cambios':'Crear cliente';}}
     }
     function collectSchedule(root=modalRoot){const days=$$('[data-schedule-day]',root).map(row=>({day:row.dataset.scheduleDay,mode:$('[data-day-mode]',row)?.value==='double'?'double':'continuous',enabled:$('[data-schedule-enabled]',row)?.checked||false,start1:$('[data-start1]',row)?.value||'',end1:$('[data-end1]',row)?.value||'',start2:$('[data-start2]',row)?.value||'',end2:$('[data-end2]',row)?.value||''}));return {mode:'mixed',days};}
 
@@ -1239,7 +1337,7 @@
       
       const btn=$('button[type="submit"]',form);if(btn){btn.disabled=true;btn.textContent='Guardando…';}
       try{const data=await api('/api/profile',{method:'PUT',body:JSON.stringify(payload)});state.barber={...state.barber,...data.profile,theme:{...(data.profile.theme||{}),accent:BRAND_ACCENT}};modalRoot.innerHTML='';applyTheme(state.barber.theme);renderApp();toast('Datos profesionales guardados.','success');}
-      catch(error){toast(error.message||'No se pudieron guardar los datos.','error');if(btn){btn.disabled=false;btn.textContent='Guardar datos profesionales';}}
+      catch(error){toast(userFacingError(error,'No se pudieron guardar los datos profesionales. Revisá la conexión e intentá nuevamente.'),'error');if(btn){btn.disabled=false;btn.textContent='Guardar datos profesionales';}}
     }
     function validateLoyaltyDraft(programs){
       if(!Array.isArray(programs)||programs.length!==1)throw new Error('Configurá un solo programa estándar.');
@@ -1252,7 +1350,7 @@
       const programs=collectLoyaltyPrograms();try{validateLoyaltyDraft(programs);}catch(error){toast(error.message,'error');return;}
       const btn=$('button[type="submit"]',form);if(btn){btn.disabled=true;btn.textContent='Guardando…';}
       try{const data=await api('/api/loyalty',{method:'PUT',body:JSON.stringify({programs})});const only=data.programs?.[0]||programs[0];state.barber={...state.barber,loyaltyPrograms:[{...only,audience:'all',customerIds:[]}],defaultLoyaltyProgramId:data.defaultLoyaltyProgramId||only.id};state.customers=state.customers.map(c=>({...c,loyaltyProgramId:state.barber.defaultLoyaltyProgramId}));renderApp();toast('Programa de premios guardado para todos los clientes.','success');}
-      catch(error){toast(error.message||'No se pudo guardar el programa de premios.','error');if(btn){btn.disabled=false;btn.textContent='Guardar programa de premios';}}
+      catch(error){toast(userFacingError(error,'No se pudo guardar el programa de premios. Revisá la conexión e intentá nuevamente.'),'error');if(btn){btn.disabled=false;btn.textContent='Guardar programa de premios';}}
     }
     function openPlanInfo(){
       const s=subStatus();
@@ -1266,7 +1364,7 @@
     async function paySubscription(skipTrial=false) {
       if(subStatus().status==='active'&&!skipTrial){openPlanInfo();return;}
       try {const data=await api('/api/create-preference',{method:'POST',body:JSON.stringify(skipTrial?{action:'skip-trial'}:{})});location.href=data.url;}
-      catch(error){toast(error.message,'error');}
+      catch(error){toast(userFacingError(error,'No se pudo iniciar el pago. Revisá tu conexión e intentá nuevamente.'),'error');}
     }
 
 
@@ -1415,7 +1513,8 @@
         }
         renderInstallGate();
       }catch(error){
-        console.warn('PWA install prompt',error);installPhase='prompt';installHelpExpanded=true;renderInstallGate();
+        installPhase='prompt';installHelpExpanded=true;renderInstallGate();
+        notifyErrorOnce('install-prompt','El navegador no pudo iniciar la instalación automática. Elegí «Cómo instalarla» para ver los pasos manuales.',error);
       }
     }
     // Prevent password managers from filling client-creation fields before the barber focuses them.
@@ -1424,7 +1523,12 @@
     document.addEventListener('click',async event=>{
       const button=event.target.closest('[data-action]');if(!button)return;const action=button.dataset.action;
       try {
-        if(action==='toggle-password'){
+        if(action==='retry-session'){
+          const current=state.auth?.currentUser;
+          if(!current){renderLanding();return;}
+          renderLoading();await resumeSession(current);
+        }
+        else if(action==='toggle-password'){
           const input=$(`#${button.dataset.target}`);
           if(input){if(input.hasAttribute('data-mask-password')){const reveal=input.dataset.masked!=='false';input.style.webkitTextSecurity=reveal?'none':'disc';input.dataset.masked=reveal?'false':'true';button.textContent=reveal?'Ocultar':'Ver';button.setAttribute('aria-label',reveal?'Ocultar contraseña':'Mostrar contraseña');}else{const visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'Ocultar':'Ver';button.setAttribute('aria-label',visible?'Ocultar contraseña':'Mostrar contraseña');}}
         }
@@ -1484,7 +1588,7 @@
         else if(action==='copy-app-link'){await copyText(CUSTOMER_APP_URL);toast('Enlace para tus clientes copiado.','success');}
         else if(action==='book-turn'){contactBarber(false);}
         else if(action==='contact-barber'){contactBarber(false);}
-      } catch(error){console.error(error);toast(error.message||'Ocurrió un error. Probá otra vez.','error');}
+      } catch(error){notifyErrorOnce('action:'+action,userFacingError(error,'No se pudo completar esta acción. Revisá la conexión e intentá nuevamente.'),error,4000);}
     });
 
     document.addEventListener('change',event=>{if(event.target.id==='promotionAudience'){const el=$('.promotion-select-clients',modalRoot);if(el)el.classList.toggle('hidden',event.target.value!=='selected');}
@@ -1492,6 +1596,7 @@
 });
     document.addEventListener('submit',async event=>{
       const form=event.target;
+      try {
       if(form.id==='promotionForm'){event.preventDefault();const fd=new FormData(form),id=form.dataset.id,audience=fd.get('audience');const toIso=v=>v?new Date(v).toISOString():null;const payload={title:fd.get('title'),description:'',conditions:'',startsAt:toIso(fd.get('startsAt')),endsAt:toIso(fd.get('endsAt')),audience,customerIds:audience==='selected'?fd.getAll('customerIds'):[],active:id?(state.promotions.find(p=>p.id===id)?.active!==false):true};const btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Guardando…';try{const result=await api('/api/promotions',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,id}:payload)});const now=new Date().toISOString(),savedId=result.id||id,previous=state.promotions.find(p=>p.id===savedId);const saved={...(previous||{}),...payload,id:savedId,createdAt:previous?.createdAt||now,updatedAt:now};state.promotions=id?state.promotions.map(p=>p.id===savedId?saved:p):[saved,...state.promotions];state.promotions.sort((a,b)=>new Date(b.createdAt||0).getTime()-new Date(a.createdAt||0).getTime());state.promotionsLoaded=true;state.promotionsDirty=false;modalRoot.innerHTML='';state.section='promotions';renderApp();toast('Promoción guardada.','success');}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Guardar promoción';}return;}
       if(form.id==='profileEditForm'){event.preventDefault();await saveProfileForm(form);return;}
       if(form.id==='loyaltySettingsForm'){event.preventDefault();await saveLoyaltyForm(form);return;}
@@ -1517,7 +1622,7 @@
           if(message.includes('auth/email-already-in-use'))message='Ya existe una cuenta para este registro. Probá iniciar sesión o consultá con tu profesional.';
           else if(message.includes('auth/weak-password'))message='Usá una contraseña de al menos 6 caracteres.';
           else if(message.includes('auth/too-many-requests'))message='Hubo demasiados intentos. Esperá un momento y probá otra vez.';
-          toast(message,'error');button.disabled=false;button.textContent='Crear mi cuenta ↗';
+          message=userFacingError(error,message);toast(message,'error');button.disabled=false;button.textContent='Crear mi cuenta ↗';
         }finally{if(state.manualLogin)state.manualLogin=false;}
         return;
       }
@@ -1567,11 +1672,18 @@
           else if(message.includes('auth/invalid-credential')||message.includes('auth/wrong-password')||message.includes('auth/user-not-found'))message='Los datos de ingreso no coinciden. Revisalos y probá de nuevo.';
           else if(message.includes('auth/weak-password'))message='La contraseña debe tener al menos 8 caracteres.';
           else if(message.includes('auth/too-many-requests'))message='Hubo demasiados intentos. Esperá un momento antes de volver a probar.';
-          toast(message,'error');
+          message=userFacingError(error,message);toast(message,'error');
         }finally{if(state.manualLogin)state.manualLogin=false;}
       }
 
       if(form.id==='customerForm'){event.preventDefault();await saveCustomerForm(form);}
+      } catch(error) {
+        console.error('[Barber VIP] Form submission failed',error);
+        const submit=$('button[type="submit"]',form);
+        const labels={promotionForm:'Guardar promoción',profileEditForm:'Guardar datos profesionales',loyaltySettingsForm:'Guardar programa de premios',customerSignupForm:'Crear mi cuenta ↗',loginForm:form.dataset.mode==='barber-signup'?'Crear cuenta · 14 días gratis':'Ingresar ↗',customerForm:form.dataset.id?'Guardar cambios':'Crear cliente'};
+        if(submit){submit.disabled=false;if(labels[form.id])submit.textContent=labels[form.id];}
+        toast(userFacingError(error,'No se pudo completar el formulario. Revisá los datos e intentá nuevamente.'),'error');
+      }
     });
 
     document.addEventListener('focusout',event=>{const target=event.target;if(target instanceof HTMLInputElement&&target.matches('[data-argentina-mobile]')){const raw=String(target.value||'').trim();if(raw&&validWhatsapp(raw))target.value=argentinaLocalNumber(raw);}});
@@ -1602,11 +1714,24 @@
         const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
         // Prefer browser-local auth persistence so the installed app restores the session on reopen.
         void setPersistence(state.auth,browserLocalPersistence).catch(error=>console.warn('No se pudo confirmar la persistencia local de sesión:',error?.message||error)).finally(restoreAuthObserver);
-      } catch(error){console.error('Firebase init error',error);}
+      } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
     window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='instructions';renderInstallGate();});
-    if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('SW register failed',err));
+    if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+      const watchServiceWorker=worker=>{
+        if(!worker)return;
+        worker.addEventListener('statechange',()=>{
+          if(worker.state==='redundant'&&!navigator.serviceWorker.controller){
+            notifyErrorOnce('service-worker-install','No se pudo preparar la instalación sin conexión. Barber VIP puede seguir funcionando con internet; recargá cuando tengas buena conexión.');
+          }
+        });
+      };
+      navigator.serviceWorker.register('/sw.js').then(registration=>{
+        watchServiceWorker(registration.installing);
+        registration.addEventListener('updatefound',()=>watchServiceWorker(registration.installing));
+      }).catch(error=>notifyErrorOnce('service-worker-register','No se pudo preparar la instalación sin conexión. Barber VIP puede seguir funcionando con internet; revisá la conexión y recargá.',error));
+    }
     if(firebaseReady) renderLoading(); else renderLanding();
   </script>
 </body>

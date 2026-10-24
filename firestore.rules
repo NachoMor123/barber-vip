@@ -30,7 +30,7 @@ service cloud.firestore {
       match /publicMeta/{metaId} {
         // The promotion marker contains only an opaque revision ID and timestamp.
         // No get()/exists() lookups means no extra rule-document reads for each notification.
-        allow get: if signedIn() && metaId == 'promotions';
+        allow get: if signedIn() && metaId in ['promotions', 'professional'];
         allow list, create, update, delete: if false;
       }
 

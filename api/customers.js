@@ -108,6 +108,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error('customers error', error);
     if (error && error.code === 'auth/email-already-exists') return send(res, 409, { ok: false, error: 'No se pudo crear el usuario del cliente; probá otra vez.' });
-    return send(res, 500, { ok: false, error: error.message || 'No se pudo guardar el cliente.' });
+    if (error && error.code === 'auth/user-not-found') return send(res, 404, { ok: false, error: 'No se encontró la cuenta de acceso de este cliente. Verificá sus datos e intentá nuevamente.' });
+    return send(res, 500, { ok: false, error: 'No se pudo guardar el cliente por un problema temporal. Revisá tu conexión e intentá nuevamente.' });
   }
 };

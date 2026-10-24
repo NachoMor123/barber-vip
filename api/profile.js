@@ -223,7 +223,15 @@ module.exports = async function handler(req, res) {
     try { services = cleanServices(data.services === undefined ? existing.services : data.services); }
     catch (error) { return send(res, 400, { ok:false, error:error.message }); }
     const showServices = data.showServices === undefined ? existing.showServices === true : data.showServices === true;
-    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},updatedAt:admin().firestore.FieldValue.serverTimestamp()});
+    const updatedAt = admin().firestore.FieldValue.serverTimestamp();
+    await ref.update({displayName,barberName,activityType,whatsapp,instagramUrl,mapsUrl,schedule,services,showServices,theme:{accent,density},updatedAt});
+    // Publish only client-facing fields in a separate lightweight document. Customers listen to
+    // this document (not the private barber profile), so updates are instant without polling.
+    await ref.collection('publicMeta').doc('professional').set({
+      displayName, barberName, whatsapp, instagramUrl, mapsUrl, schedule,
+      services: showServices ? services.filter(service => service.active !== false).map(({id,name,price,active})=>({id,name,price,active})) : [],
+      showServices, updatedAt: admin().firestore.FieldValue.serverTimestamp()
+    });
     const fresh = await ref.get();
     return send(res, 200, {ok:true,profile:profileView(fresh.data()),subscriptionPrice:getSubscriptionPrice()});
   } catch (error) {

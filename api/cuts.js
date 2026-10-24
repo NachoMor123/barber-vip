@@ -36,7 +36,6 @@ module.exports = async function handler(req, res) {
     const customerRef = barberRef.collection('customers').doc(customerId);
 
     if (action === 'add') {
-      if (subscriptionState.status === 'suspended') return send(res, 402, { ok: false, error: 'La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.' });
       let resultCustomer = null;
       let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
       await ctx.db.runTransaction(async transaction => {

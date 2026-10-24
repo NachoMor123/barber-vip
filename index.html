@@ -572,8 +572,6 @@
     const asDate = value => { if (value == null || value === '') return null; if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value; if (typeof value.toDate === 'function') { const d=value.toDate(); return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null; } if (typeof value === 'object') { const seconds=Number(value.seconds ?? value._seconds); if (Number.isFinite(seconds) && seconds > 0) { const nanos=Number(value.nanoseconds ?? value._nanoseconds ?? 0); const d=new Date(seconds*1000+(Number.isFinite(nanos)?nanos:0)/1e6); return Number.isNaN(d.getTime()) ? null : d; } } const d = new Date(value); return Number.isNaN(d.getTime()) ? null : d; };
     const dateLabel = value => { const d=asDate(value); return d ? d.toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : 'Sin registros'; };
     const dateTimeLabel = value => { const d=asDate(value); return d ? d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : 'Hora no disponible'; };
-    const initialHistoryTo = localDateInput(new Date()); const initialHistoryFromDate = new Date(); initialHistoryFromDate.setDate(initialHistoryFromDate.getDate()-59); state.historyFrom=localDateInput(initialHistoryFromDate); state.historyTo=initialHistoryTo;
-    const daysBetween = (a,b=new Date()) => { const d=asDate(a); if(!d)return null; const localA=new Date(d.getFullYear(),d.getMonth(),d.getDate()); const localB=new Date(b.getFullYear(),b.getMonth(),b.getDate()); return Math.max(0,Math.round((localB-localA)/86400000)); };
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function dateIso(value){const d=asDate(value);return d?d.toISOString():'';}
     function refreshRelativeTimes(){
@@ -1502,8 +1500,6 @@
       if(target.id==='sortSelect'){state.sort=target.value;renderApp();}
       if(target.id==='customerSourceFilter'){state.customerSourceFilter=target.value;renderApp();}
       if(target.id==='customerRewardFilter'){state.customerRewardFilter=target.value;renderApp();}
-      if(target.id==='historyFrom'){const to=$('#historyTo');if(to)to.min=target.value;}
-      if(target.id==='historyTo'){const from=$('#historyFrom');if(from)from.max=target.value;}
       
       if(target.id==='clientLoyaltyMode'){const box=$('#clientLoyaltyConfig',modalRoot);if(box){box.classList.toggle('hidden',target.value!=='custom');$$('input',box).forEach(input=>input.disabled=target.value!=='custom');}}
       if(target.id==='settingDensity'){saveDensityPreference(target.value);}

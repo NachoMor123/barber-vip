@@ -1261,9 +1261,9 @@
         const message=userFacingError(error,'No se pudo recuperar tu sesión. Revisá la conexión e intentá nuevamente.');
         console.warn('resume session',error?.message||error);
         if(isRetryableError(error)){
+          cleanupContext();
           state.loadError=true;
           renderSessionError(message);
-          notifyErrorOnce('resume-session',message,error);
           return;
         }
         cleanupContext(); await signOut(state.auth).catch(()=>{}); renderLanding();

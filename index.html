@@ -583,7 +583,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -682,7 +682,7 @@
       if(!response.ok || data.ok===false) throw new Error(data.error || `Error ${response.status}.`);
       return data;
     };
-    const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
+    const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;try{state.promotionMetaUnsubscribe?.();}catch(_){}state.promotionMetaUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
     const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
@@ -897,7 +897,7 @@
         }
         toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)) openCutModal();
-        else {modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();}
+        else {modalRoot.innerHTML='';}
         renderApp();
       } catch(error) {
         toast(error.message||'No se pudo registrar la visita. Probá de nuevo.','error');
@@ -988,6 +988,50 @@
       if(state.role==='customer'&&state.customerSection!=='home')return;
       await loadPromotions({renderCustomer:true});
     }
+    function stopCustomerPromotionListener(){
+      if(typeof state.promotionMetaUnsubscribe==='function'){try{state.promotionMetaUnsubscribe();}catch(_){}}
+      state.promotionMetaUnsubscribe=null;
+    }
+    function ensureCustomerPromotionListener(){
+      if(state.role!=='customer'||state.customerSection!=='home'||document.visibilityState!=='visible')return Promise.resolve();
+      if(state.promotionMetaUnsubscribe)return Promise.resolve();
+      const previousVersion=state.promoMetaVersion;
+      let firstSnapshot=true,resolveReady;
+      const ready=new Promise(resolve=>{resolveReady=resolve;});
+      const promotionMetaRef=doc(state.db,'barbers',state.barberUid,'publicMeta','promotions');
+      state.promotionMetaUnsubscribe=onSnapshot(promotionMetaRef,snap=>{
+        const marker=snap.exists()?snap.data():null;
+        const version=marker?String(marker.revision||promotionRevisionKey(marker.updatedAt)):'';
+        if(firstSnapshot){
+          firstSnapshot=false;
+          state.promoMetaVersion=version;
+          if(previousVersion&&version&&version!==previousVersion)state.promotionsDirty=true;
+          resolveReady();
+          return;
+        }
+        if(!version||version===state.promoMetaVersion)return;
+        state.promoMetaVersion=version;
+        state.promotionsDirty=true;
+        if(state.customerSection==='home'&&document.visibilityState==='visible')void syncPromotionsAfterRevision(version);
+      },error=>{
+        console.error('promotion revision listener unavailable',error?.message||error);
+        if(firstSnapshot){firstSnapshot=false;resolveReady();}
+        if(!state.promoMetaListenerFailed){
+          state.promoMetaListenerFailed=true;
+          toast('No se pudo activar la actualización automática de promociones. Revisá las reglas de Firestore.','error');
+        }
+      });
+      return ready;
+    }
+    document.addEventListener('visibilitychange',()=>{
+      if(state.role!=='customer')return;
+      if(document.visibilityState==='visible'&&state.customerSection==='home'){
+        void ensureCustomerPromotionListener().then(()=>{
+          if(state.role==='customer'&&state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty))return loadPromotions({renderCustomer:true});
+        });
+      }else stopCustomerPromotionListener();
+    });
+
 
     function adminShell() {
       return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('promotions','✦','Promociones')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="side-subscription"><div class="status-label">ESTADO DE CUENTA</div><strong>${escapeHtml(subStatus().label)}</strong><small>${subStatus().expiresAt?`Vence el ${escapeHtml(dateLabel(subStatus().expiresAt))}`:'Configurá la fecha de vencimiento desde Firebase.'}</small><button class="btn btn-soft btn-mini" style="width:100%;margin-top:12px" data-action="pay">Gestionar plan ↗</button></div><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():state.section==='promotions'?promotionsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('promotions','✦','Promos')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
@@ -1050,15 +1094,7 @@
       catch(error){toast('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.','error');throw error;}
       finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;}
     }
-    function stopAdminCustomersListener(){
-      if(typeof state.customersUnsubscribe==='function'){try{state.customersUnsubscribe();}catch(_){}}
-      state.customersUnsubscribe=null;
-      state.customersLoaded=false;
-      state.customersListenerStarted=false;
-      state.customersLoadPromise=null;
-    }
-
-        function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
+    function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
@@ -1091,34 +1127,12 @@
           renderApp();
         },err=>console.warn('customer snapshot',err)));
 
-        let resolvePromotionMarker;
-        const promotionMarkerReady=new Promise(resolve=>{resolvePromotionMarker=resolve;});
-        let promotionMetaInitial=true;
-        const promotionMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','promotions');
-        state.unsubscribers.push(onSnapshot(promotionMetaRef,snap=>{
-          const markerData=snap.exists()?snap.data():null;
-          const version=markerData?String(markerData.revision||promotionRevisionKey(markerData.updatedAt)):'';
-          if(promotionMetaInitial){
-            promotionMetaInitial=false;
-            state.promoMetaVersion=version;
-            resolvePromotionMarker();
-            return;
-          }
-          if(!version||version===state.promoMetaVersion)return;
-          state.promoMetaVersion=version;
+        if(state.customerSection==='home'&&document.visibilityState==='visible'){
+          await ensureCustomerPromotionListener();
+          if(!state.promotionsLoaded||state.promotionsDirty)await loadPromotions();
+        }else{
           state.promotionsDirty=true;
-          if(state.customerSection==='home')void syncPromotionsAfterRevision(version);
-        },error=>{
-          console.error('promotion revision listener unavailable',error?.message||error);
-          resolvePromotionMarker();
-          if(!state.promoMetaListenerFailed){
-            state.promoMetaListenerFailed=true;
-            toast('No se pudo activar la actualización automática de promociones. Revisá las reglas de Firestore.','error');
-          }
-        }));
-
-        await promotionMarkerReady;
-        if(state.customerSection==='home')await loadPromotions();
+        }
         renderApp();
       }
       const payment=new URLSearchParams(location.search).get('payment');
@@ -1195,7 +1209,7 @@
     async function saveCustomerForm(form) {
       const fd=new FormData(form); const id=form.dataset.id; const loyaltyMode=$('#clientLoyaltyMode',form)?.value||'standard'; const loyaltyRewards=$$('[data-client-reward-row]',form).map(row=>({cut:Number($('[data-client-reward-cut]',row)?.value),discount:Number($('[data-client-reward-discount]',row)?.value)})); if(loyaltyMode==='custom'){if(!loyaltyRewards.length||loyaltyRewards.length>10){toast('El programa personalizado necesita entre 1 y 10 hitos.','error');return;}const sorted=[...loyaltyRewards].sort((a,b)=>a.cut-b.cut);let prev=0;for(const r of sorted){if(!Number.isInteger(r.cut)||r.cut<1||r.cut>50||r.cut<=prev||!Number.isInteger(r.discount)||r.discount<0||r.discount>100){toast('Revisá los hitos: visitas únicas del 1 al 50 y descuentos del 0% al 100%.','error');return;}prev=r.cut;}loyaltyRewards.splice(0,loyaltyRewards.length,...sorted);} const payload={fullName:$('#clientFullName',form)?.value||'',password:$('#clientPassword',form)?.value||'',whatsapp:whatsappNumber($('#clientWhatsapp',form)?.value||''),cutStyle:$('#clientCutStyle',form)?.value||'',conversationPreference:fd.get('conversationPreference')||'',loyaltyMode,loyaltyRewards};
       const submit=$('button[type="submit"]',form); if(submit){submit.disabled=true;submit.textContent='Guardando…';}
-      try { await api('/api/customers',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,customerId:id}:{...payload})}); modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();toast(id?'Cliente actualizado.':'Cliente creado correctamente.','success'); }
+      try { await api('/api/customers',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,customerId:id}:{...payload})}); modalRoot.innerHTML='';toast(id?'Cliente actualizado.':'Cliente creado correctamente.','success'); }
       catch(error){toast(error.message,'error');if(submit){submit.disabled=false;submit.textContent=id?'Guardar cambios':'Crear cliente';}}
     }
     function collectSchedule(root=modalRoot){const days=$$('[data-schedule-day]',root).map(row=>({day:row.dataset.scheduleDay,mode:$('[data-day-mode]',row)?.value==='double'?'double':'continuous',enabled:$('[data-schedule-enabled]',row)?.checked||false,start1:$('[data-start1]',row)?.value||'',end1:$('[data-end1]',row)?.value||'',start2:$('[data-start2]',row)?.value||'',end2:$('[data-end2]',row)?.value||''}));return {mode:'mixed',days};}
@@ -1406,9 +1420,9 @@
         else if(action==='start-customer-signup'){void renderCustomerSignup();}
         else if(action==='cancel-customer-signup'){renderLanding();}
         else if(action==='start-customer-login'){renderLogin('customer');}
-        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';if(state.role==='barber'&&state.section!=='clients')stopAdminCustomersListener();}}
+        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){const nextSection=button.dataset.section;if(nextSection!=='clients')stopAdminCustomersListener();state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions')await loadPromotions();renderApp();window.scrollTo(0,0);}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
@@ -1422,7 +1436,7 @@
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
-        else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);if(state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty))await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='customer-section'){const nextSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';if(nextSection!=='home')stopCustomerPromotionListener();state.customerSection=nextSection;saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);if(state.customerSection==='home'&&document.visibilityState==='visible'){await ensureCustomerPromotionListener();if(!state.promotionsLoaded||state.promotionsDirty)await loadPromotions();}renderApp();window.scrollTo(0,0);}
         else if(action==='delete-client'){const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id);if(confirm(`¿Dar de baja a ${c?.fullName||'este cliente'}? Desaparecerá de Clientes. Se conservan el total y el ciclo registrado.`)){button.disabled=true;await api('/api/customers',{method:'DELETE',body:JSON.stringify({customerId:id})});state.customers=state.customers.filter(x=>x.uid!==id);modalRoot.innerHTML='';renderApp();toast('Cliente dado de baja. El historial de visitas se conservó.','success');}}
         else if(action==='contact'){contactClient(button.dataset.id,false);}
         else if(action==='new-promotion'){await ensureAdminCustomersLoaded();openPromotionModal();}
@@ -1466,7 +1480,7 @@
 });
     document.addEventListener('submit',async event=>{
       const form=event.target;
-      if(form.id==='promotionForm'){event.preventDefault();const fd=new FormData(form),id=form.dataset.id,audience=fd.get('audience');const toIso=v=>v?new Date(v).toISOString():null;const payload={title:fd.get('title'),description:'',conditions:'',startsAt:toIso(fd.get('startsAt')),endsAt:toIso(fd.get('endsAt')),audience,customerIds:audience==='selected'?fd.getAll('customerIds'):[],active:id?(state.promotions.find(p=>p.id===id)?.active!==false):true};const btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Guardando…';try{await api('/api/promotions',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,id}:payload)});modalRoot.innerHTML='';stopAdminCustomersListener();await loadPromotions();state.section='promotions';renderApp();toast('Promoción guardada.','success');}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Guardar promoción';}return;}
+      if(form.id==='promotionForm'){event.preventDefault();const fd=new FormData(form),id=form.dataset.id,audience=fd.get('audience');const toIso=v=>v?new Date(v).toISOString():null;const payload={title:fd.get('title'),description:'',conditions:'',startsAt:toIso(fd.get('startsAt')),endsAt:toIso(fd.get('endsAt')),audience,customerIds:audience==='selected'?fd.getAll('customerIds'):[],active:id?(state.promotions.find(p=>p.id===id)?.active!==false):true};const btn=$('button[type=submit]',form);btn.disabled=true;btn.textContent='Guardando…';try{await api('/api/promotions',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,id}:payload)});modalRoot.innerHTML='';await loadPromotions();state.section='promotions';renderApp();toast('Promoción guardada.','success');}catch(error){toast(error.message,'error');btn.disabled=false;btn.textContent='Guardar promoción';}return;}
       if(form.id==='profileEditForm'){event.preventDefault();await saveProfileForm(form);return;}
       if(form.id==='loyaltySettingsForm'){event.preventDefault();await saveLoyaltyForm(form);return;}
       if(form.id==='customerSignupForm'){

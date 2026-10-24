@@ -32,7 +32,8 @@ service cloud.firestore {
       // Tiny promotion revision marker. Customers can read only their linked barber's marker;
       // the actual promotion payload still comes from the server API.
       match /publicMeta/{metaId} {
-        allow get: if metaId == 'promotions' && (isBarber(barberId) || isLinkedCustomer(barberId));
+        // Only revision token + timestamp are exposed; promotion payload remains server-only.
+        allow get: if signedIn() && metaId == 'promotions';
         allow list, create, update, delete: if false;
       }
 

@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
     const barber = barberSnap.data();
     const data = req.body && typeof req.body === 'object' ? req.body : {};
     const skipTrial = data.action === 'skip-trial';
-    const paymentsSnap = !barber.hasPaidSubscription ? await ctx.db.collection('barbers').doc(ctx.uid).collection('payments').limit(1).get() : null;
+    const paymentsSnap = typeof barber.hasPaidSubscription !== 'boolean' ? await ctx.db.collection('barbers').doc(ctx.uid).collection('payments').limit(1).get() : null;
     const alreadyPaid = barber.hasPaidSubscription === true || !!(paymentsSnap && !paymentsSnap.empty);
     if (subscription(barber).status === 'active' && (!skipTrial || alreadyPaid)) return send(res, 409, {ok:false,error:alreadyPaid?'Tu plan ya está activo. No hace falta pagar otra vez.':'La cuenta está activa. Podés consultar tu plan sin iniciar un pago.'});
     if (skipTrial && alreadyPaid) return send(res, 409, {ok:false,error:'Tu cuenta ya tiene un pago registrado. No podés usar la opción de activar la prueba antes de tiempo.'});

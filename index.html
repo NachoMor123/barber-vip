@@ -833,9 +833,9 @@
     function renderLanding() {
       const query = new URLSearchParams(location.search);
       const fromSignupLink = query.get('signup') === '1';
-      if(fromSignupLink){try{localStorage.setItem('barberVipStartSignup','1');}catch(_){}}
-      let pendingSignup = fromSignupLink;
-      if(!pendingSignup){try{pendingSignup=localStorage.getItem('barberVipStartSignup')==='1';}catch(_){}}
+      // Ignore stale flags left by older versions; only an explicit signup link should bypass the role menu.
+      try { localStorage.removeItem('barberVipStartSignup'); } catch (_) {}
+      const pendingSignup = fromSignupLink;
       if(fromSignupLink){query.delete('signup');history.replaceState({},'',location.pathname+(query.toString()?'?'+query.toString():'')+location.hash);}
       if (pendingSignup) {
         renderLogin('barber-signup');

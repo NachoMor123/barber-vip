@@ -71,14 +71,33 @@ module.exports = async function handler(req, res) {
         const cyclePausedAtMax = false;
         const rewardReady = false;
         const now = admin().firestore.FieldValue.serverTimestamp();
+        const previousAppliedReward = !appliedReward && !shouldRestart
+          && customer.lastRewardAppliedOnFinalMilestone !== true
+          && String(customer.lastRewardAppliedLabel || '').trim()
+          && Number(customer.lastRewardAppliedCut || 0) > 0
+          ? {
+              label: text(customer.lastRewardAppliedLabel, 50),
+              cut: Number(customer.lastRewardAppliedCut),
+              at: customer.lastRewardAppliedAt || null,
+              finalMilestone: false
+            }
+          : null;
+        const storedReward = appliedReward
+          ? {
+              label: text(appliedReward.label || `${Number(appliedReward.discount)||0}% OFF`, 50),
+              cut: Number(appliedReward.cut || 0),
+              at: now,
+              finalMilestone: appliedOnFinalMilestone
+            }
+          : previousAppliedReward;
         const updates = {
           totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2, cyclePausedAtMax,
           availableRewards, rewardReady,
           lastCutAt: now,
-          lastRewardAppliedLabel: appliedReward ? text(appliedReward.label || `${Number(appliedReward.discount)||0}% OFF`, 50) : null,
-          lastRewardAppliedAt: appliedReward ? now : null,
-          lastRewardAppliedCut: appliedReward ? Number(appliedReward.cut || 0) : null,
-          lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null,
+          lastRewardAppliedLabel: storedReward ? storedReward.label : null,
+          lastRewardAppliedAt: storedReward ? storedReward.at : null,
+          lastRewardAppliedCut: storedReward ? storedReward.cut : null,
+          lastRewardAppliedOnFinalMilestone: storedReward ? Boolean(storedReward.finalMilestone) : null,
           updatedAt: now
         };
         transaction.update(customerRef, updates);
@@ -94,8 +113,10 @@ module.exports = async function handler(req, res) {
           availableRewards,
           rewardReady,
           lastCutAt: new Date().toISOString(),
-          lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null,
-          lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null
+          lastRewardAppliedLabel: storedReward ? storedReward.label : null,
+          lastRewardAppliedAt: appliedReward ? new Date().toISOString() : (previousAppliedReward ? (previousAppliedReward.at && typeof previousAppliedReward.at.toDate === 'function' ? previousAppliedReward.at.toDate().toISOString() : previousAppliedReward.at || null) : null),
+          lastRewardAppliedCut: storedReward ? storedReward.cut : null,
+          lastRewardAppliedOnFinalMilestone: storedReward ? Boolean(storedReward.finalMilestone) : null
         };
         outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });

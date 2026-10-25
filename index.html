@@ -1129,7 +1129,7 @@
     }
     function promotionRevisionKey(value){const d=asDate(value);return d?String(d.getTime()):String(value||'');}
     async function loadPromotions({renderCustomer=false}={}) {
-      if(state.promotionsLoadPromise)return state.promotionsLoadPromise;
+      if(state.promotionsLoadPromise){const loaded=await state.promotionsLoadPromise;if(renderCustomer&&state.role==='customer'&&state.customerSection==='home')renderApp();return loaded;}
       const sequence=(state.promotionSyncSequence||0)+1;
       state.promotionSyncSequence=sequence;
       state.promotionsLoading=true;

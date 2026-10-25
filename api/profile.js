@@ -1,7 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireUser, requireBarber, subscription } = require('../lib/security');
-const TRIAL_DAYS = 14;
+const TRIAL_DAYS = 7;
 const crypto = require('crypto');
 
 function normalizeEmail(value) {

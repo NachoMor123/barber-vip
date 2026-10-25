@@ -609,51 +609,95 @@
   @media(prefers-reduced-motion:reduce){.loading-spinner,[data-action="add-cut"][aria-busy="true"]::before{animation:none!important}}
 </style>
 
-<style id="barber-vip-centered-entry-flow">
-  /* Acceso de barbero/cliente: contenido centrado y sin una tarjeta exterior redundante. */
+<style id="barber-vip-entry-screen-layout">
+  /* Presentación solamente: navegación arriba, identidad debajo y acciones separadas. */
   .login-wrap.role-menu-wrap{
     width:min(500px,calc(100% - 38px));
     min-height:100vh;min-height:100svh;min-height:100dvh;
-    margin:0 auto;padding:28px 0;
-    align-items:center;justify-content:center;
+    margin:0 auto;
+    padding:clamp(20px,3.4vh,36px) 0;
+    display:flex;align-items:stretch;justify-content:flex-start;
   }
   .login-wrap.role-menu-wrap .entry-choice-card{
-    width:100%;max-width:100%;padding:0!important;
-    border:0!important;border-radius:0!important;
+    width:100%;max-width:100%;min-height:calc(100vh - 56px);
+    min-height:calc(100svh - 56px);min-height:calc(100dvh - 56px);
+    flex:1;display:flex;flex-direction:column;
+    padding:0!important;border:0!important;border-radius:0!important;
     background:transparent!important;box-shadow:none!important;overflow:visible!important;
   }
-  .login-wrap.role-menu-wrap .entry-choice-card .back-icon-button{margin-bottom:22px}
-  .login-wrap.role-menu-wrap .entry-choice-card h1{
-    margin-top:21px;margin-bottom:8px;
-    font-size:clamp(30px,5vw,36px);line-height:1.12;
+  .entry-screen-header{
+    display:flex;flex-direction:column;align-items:flex-start;
+    gap:21px;flex:0 0 auto;
   }
-  .login-wrap.role-menu-wrap .entry-choice-card>p{margin-bottom:28px}
-  .login-wrap.role-menu-wrap .entry-action-stack{gap:15px;margin-top:29px}
+  .entry-screen-header .back-icon-button{
+    margin:0!important;flex:0 0 auto;
+  }
+  .entry-screen-brand{display:flex;align-items:center;min-height:42px}
+  .entry-screen-brand .brand{
+    display:inline-flex;align-items:center;gap:12px;
+    font-size:22px;line-height:1.1;letter-spacing:-.045em;
+  }
+  .entry-screen-brand .brand-icon{
+    width:44px;height:44px;border-radius:14px;
+  }
+  .entry-screen-content{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    justify-content:space-between;
+    padding-top:clamp(58px,8.5vh,104px);
+    padding-bottom:clamp(30px,5.5vh,66px);
+  }
+  .entry-screen-intro h1{
+    margin:0 0 10px!important;
+    font-size:clamp(31px,5vw,37px)!important;line-height:1.12;
+    letter-spacing:-.06em;
+  }
+  .entry-screen-intro p{
+    margin:0!important;font-size:13px;line-height:1.65;
+  }
+  .login-wrap.role-menu-wrap .entry-action-stack{
+    display:grid;gap:15px;margin:clamp(35px,6vh,64px) 0 0;
+  }
   .login-wrap.role-menu-wrap .entry-action-card{
-    min-height:108px;padding:20px 18px;border-radius:19px;
+    min-height:112px;padding:20px 18px;border-radius:18px;
   }
   .login-wrap.role-menu-wrap .entry-action-symbol{
-    flex-basis:52px;width:52px;height:52px;border-radius:16px;font-size:23px;
+    flex-basis:52px;width:52px;height:52px;border-radius:15px;font-size:23px;
   }
-  .login-wrap.role-menu-wrap .entry-action-copy strong{font-size:15px}
+  .login-wrap.role-menu-wrap .entry-action-copy strong{font-size:15px;line-height:1.35}
   .login-wrap.role-menu-wrap .entry-action-copy small{font-size:11px;line-height:1.55}
+  .login-wrap.role-menu-wrap .entry-screen-content>.notice{margin-top:18px!important}
   @media(max-width:520px){
-    .login-wrap.role-menu-wrap{width:calc(100% - 38px);padding:24px 0}
-    .login-wrap.role-menu-wrap .entry-choice-card .back-icon-button{margin-bottom:25px}
-    .login-wrap.role-menu-wrap .entry-choice-card>p{margin-bottom:30px}
-    .login-wrap.role-menu-wrap .entry-action-stack{gap:16px;margin-top:31px}
-    .login-wrap.role-menu-wrap .entry-action-card{min-height:110px;padding:18px 15px}
+    .login-wrap.role-menu-wrap{width:calc(100% - 38px);padding:22px 0}
+    .login-wrap.role-menu-wrap .entry-choice-card{
+      min-height:calc(100vh - 44px);min-height:calc(100svh - 44px);min-height:calc(100dvh - 44px);
+    }
+    .entry-screen-header{gap:20px}
+    .entry-screen-brand .brand{font-size:22px}
+    .entry-screen-content{
+      padding-top:clamp(54px,8vh,88px);
+      padding-bottom:clamp(30px,5.5vh,62px);
+    }
+    .entry-screen-intro h1{font-size:clamp(31px,8vw,35px)!important}
+    .login-wrap.role-menu-wrap .entry-action-stack{gap:15px;margin-top:clamp(36px,6vh,58px)}
+    .login-wrap.role-menu-wrap .entry-action-card{min-height:108px;padding:17px 14px}
     .login-wrap.role-menu-wrap .entry-action-symbol{flex-basis:48px;width:48px;height:48px}
-    .login-wrap.role-menu-wrap .entry-action-copy strong{font-size:15px}
+    .login-wrap.role-menu-wrap .entry-action-copy strong{font-size:14px}
     .login-wrap.role-menu-wrap .entry-action-copy small{font-size:10px}
   }
-  @media(max-height:680px){
-    .login-wrap.role-menu-wrap{min-height:auto;align-items:flex-start;padding:20px 0}
-    .login-wrap.role-menu-wrap .entry-action-card{min-height:84px}
-    .login-wrap.role-menu-wrap .entry-choice-card .back-icon-button{margin-bottom:14px}
-    .login-wrap.role-menu-wrap .entry-choice-card>p{margin-bottom:16px}
-    .login-wrap.role-menu-wrap .entry-action-stack{margin-top:18px;gap:10px}
+  @media(max-height:720px){
+    .login-wrap.role-menu-wrap{padding-top:16px;padding-bottom:16px}
+    .login-wrap.role-menu-wrap .entry-choice-card{
+      min-height:calc(100vh - 32px);min-height:calc(100svh - 32px);min-height:calc(100dvh - 32px);
+    }
+    .entry-screen-header{gap:13px}
+    .entry-screen-brand .brand-icon{width:38px;height:38px}
+    .entry-screen-content{padding-top:clamp(30px,5vh,48px);padding-bottom:18px}
+    .entry-screen-intro h1{font-size:29px!important;margin-bottom:7px!important}
+    .login-wrap.role-menu-wrap .entry-action-stack{margin-top:24px;gap:10px}
+    .login-wrap.role-menu-wrap .entry-action-card{min-height:78px;padding:12px 14px}
+    .login-wrap.role-menu-wrap .entry-action-symbol{width:42px;height:42px;flex-basis:42px}
   }
+  @media(prefers-reduced-motion:reduce){.back-icon-button,.entry-action-card{transition:none!important}}
 </style></head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -901,17 +945,23 @@
       const loginLabel = customer ? 'Ingresar' : 'Iniciar sesión';
       const loginHint = customer ? 'Ya tenés tu código y tu contraseña.' : 'Entrá a tu panel de Barber VIP.';
       appRoot.innerHTML = '<main class="login-wrap role-menu-wrap"><section class="login-card entry-choice-card">' +
+        '<header class="entry-screen-header">' +
         '<button class="back-icon-button" type="button" data-action="go-home" aria-label="Volver" title="Volver">←</button>' +
-        brand +
-        '<div class="login-role-pill">' + (customer ? '✦ ESPACIO DE CLIENTE' : '✂ ESPACIO DE BARBER') + '</div>' +
-        '<h1>' + (customer ? 'Acceso de cliente' : 'Acceso de barber') + '</h1><p>Elegí cómo querés continuar.</p>' +
-        '<div class="entry-action-stack">' +
-        '<button class="entry-action-card entry-action-primary" type="button" data-action="entry-create" data-mode="' + role + '">' +
-        '<span class="entry-action-symbol" aria-hidden="true">' + (customer ? '✦' : '＋') + '</span><span class="entry-action-copy"><strong>' + createLabel + '</strong><small>' + createHint + '</small></span><span class="entry-action-arrow" aria-hidden="true">→</span></button>' +
-        '<button class="entry-action-card" type="button" data-action="entry-login" data-mode="' + role + '">' +
-        '<span class="entry-action-symbol" aria-hidden="true">↗</span><span class="entry-action-copy"><strong>' + loginLabel + '</strong><small>' + loginHint + '</small></span><span class="entry-action-arrow" aria-hidden="true">→</span></button>' +
+        '<div class="entry-screen-brand">' + brand + '</div>' +
+        '</header>' +
+        '<div class="entry-screen-content">' +
+          '<div class="entry-screen-intro">' +
+            '<h1>' + (customer ? 'Acceso de cliente' : 'Acceso de barber') + '</h1>' +
+            '<p>Elegí cómo querés continuar.</p>' +
+          '</div>' +
+          '<div class="entry-action-stack">' +
+            '<button class="entry-action-card entry-action-primary" type="button" data-action="entry-create" data-mode="' + role + '">' +
+            '<span class="entry-action-symbol" aria-hidden="true">' + (customer ? '✦' : '＋') + '</span><span class="entry-action-copy"><strong>' + createLabel + '</strong><small>' + createHint + '</small></span><span class="entry-action-arrow" aria-hidden="true">→</span></button>' +
+            '<button class="entry-action-card" type="button" data-action="entry-login" data-mode="' + role + '">' +
+            '<span class="entry-action-symbol" aria-hidden="true">↗</span><span class="entry-action-copy"><strong>' + loginLabel + '</strong><small>' + loginHint + '</small></span><span class="entry-action-arrow" aria-hidden="true">→</span></button>' +
+          '</div>' +
+          (!firebaseConfigured() ? '<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>' : '') +
         '</div>' +
-        (!firebaseConfigured() ? '<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>' : '') +
         '</section></main>';
       void maybeShowInstallPrompt();
     }

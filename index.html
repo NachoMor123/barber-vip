@@ -599,7 +599,15 @@
     @media(max-width:520px){.landing{width:calc(100% - 28px);padding-top:18px}.landing .landing-top{gap:10px}.landing .top-pill{font-size:9px;padding:7px 9px}.landing .hero{padding-top:31px}.landing .choice-panel{padding:14px}.landing .role-choice{min-height:75px;padding:15px 12px}.login-card{padding:22px!important;border-radius:22px!important}.entry-action-card{gap:11px;padding:13px;min-height:80px}.entry-action-symbol{flex-basis:42px;width:42px;height:42px;font-size:21px}.entry-action-copy strong{font-size:14px}.entry-action-copy small{font-size:10px}}
     @media(prefers-reduced-motion:reduce){.back-icon-button,.entry-action-card{transition:none!important}}
   </style>
-</head>
+
+<style id="barber-vip-loading-and-action-feedback">
+  .customer-loading-state{display:flex;align-items:center;justify-content:center;gap:8px;flex-direction:column;min-height:150px}
+  .loading-spinner{width:22px;height:22px;border:2px solid rgba(89,153,255,.23);border-top-color:#7ab8ff;border-radius:50%;animation:barberVipSpinner .7s linear infinite}
+  @keyframes barberVipSpinner{to{transform:rotate(360deg)}}
+  [data-action="add-cut"][aria-busy="true"]{min-width:112px;color:#dbeaff!important;border-color:rgba(90,153,255,.65)!important;background:linear-gradient(135deg,#15366f,#071329)!important;cursor:progress}
+  [data-action="add-cut"][aria-busy="true"]::before{content:"";display:inline-block;width:11px;height:11px;border:2px solid rgba(212,232,255,.35);border-top-color:#d7eaff;border-radius:50%;animation:barberVipSpinner .7s linear infinite}
+  @media(prefers-reduced-motion:reduce){.loading-spinner,[data-action="add-cut"][aria-busy="true"]::before{animation:none!important}}
+</style></head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
   <div id="app"></div>
@@ -648,7 +656,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -1035,25 +1043,26 @@
       ];
       return Math.round(checks.filter(Boolean).length/checks.length*100);
     }
-    async function addCut(id) {
+    async function addCut(id, button) {
       state.cutSaving=state.cutSaving||{};
       if(state.cutSaving[id])return;
       state.cutSaving[id]=true;
+      const originalLabel=button?.textContent||'＋ Sumar visita';
+      if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Registrando…';}
       try {
         const c=state.customers.find(x=>x.uid===id);
         if(!c){toast('No se encontró al cliente seleccionado. Actualizá la lista y probá de nuevo.','error');return;}
         const result=await api('/api/cuts',{method:'POST',body:JSON.stringify({action:'add',customerId:id})});
-        if(result.customer){
-          state.customers=state.customers.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
-        }
+        if(result.customer)state.customers=state.customers.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
         toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
-        if($('#cutSearch',modalRoot)) openCutModal();
-        else {modalRoot.innerHTML='';}
+        if($('#cutSearch',modalRoot))openCutModal();
+        else modalRoot.innerHTML='';
         renderApp();
-      } catch(error) {
+      }catch(error){
         toast(userFacingError(error,'No se pudo registrar la visita. Revisá la conexión e intentá nuevamente.'),'error');
-      } finally {
+      }finally{
         delete state.cutSaving[id];
+        if(button?.isConnected){button.disabled=false;button.removeAttribute('aria-busy');button.textContent=originalLabel;}
       }
     }
 
@@ -1076,6 +1085,7 @@
     }
 
     function customerResultsMarkup(list) {
+      if(state.customersLoading&&!state.customersLoaded)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando clientes…</strong><p>La lista se está sincronizando por primera vez.</p></div>`;
       if(list.length) return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>`;
       const heading=state.query?'No encontramos coincidencias':'Todavía no hay clientes';
       const copy=state.query?'Probá con otra palabra o número.':'Creá el primer perfil para empezar a registrar visitas y beneficios.';
@@ -1102,7 +1112,7 @@
 
         function promotionsView(){
       const list=state.promotions||[];
-      return `${sectionHeading('COMUNICACIÓN','Promociones','Ofertas comerciales independientes de los premios automáticos.','<button class="btn btn-primary" data-action="new-promotion">＋ Crear promoción</button>')}<div class="promotion-list admin-promotion-list">${list.map(p=>{
+      return `${sectionHeading('COMUNICACIÓN','Promociones','Ofertas comerciales independientes de los premios automáticos.','<button class="btn btn-primary" data-action="new-promotion">＋ Crear promoción</button>')}<div class="promotion-list admin-promotion-list">${list.length===0?(state.promotionsLoading?'<div class="empty-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando promociones…</strong><p>Estamos sincronizando tus promociones.</p></div>':'<div class="empty-state"><strong>Todavía no creaste promociones</strong><p>Creá una oferta cuando quieras comunicar un beneficio puntual.</p></div>'):list.map(p=>{
         const inRange=(!p.startsAt||asDate(p.startsAt)?.getTime()<=Date.now())&&(!p.endsAt||asDate(p.endsAt)?.getTime()>=Date.now());const active=promoIsActive(p);const stateLabel=p.active===false?'Pausada':inRange?'Activa':'Fuera de vigencia';
         return `<article class="panel promotion-card admin-promo-card"><div class="promotion-card-head"><div><span class="promo-active-tag">${active?'PROMO ACTIVA':p.active===false?'PROMO PAUSADA':'OFERTA PROGRAMADA'}</span><h3>${escapeHtml(p.title)}</h3></div><div class="promo-state-control"><span class="status-chip ${active?'good':'warn'}">${stateLabel}</span><button class="promo-switch ${p.active!==false?'on':''}" role="switch" aria-checked="${p.active!==false}" aria-label="${p.active!==false?'Desactivar':'Activar'} promoción ${escapeHtml(p.title)}" data-action="toggle-promotion" data-id="${escapeHtml(p.id)}"><span></span></button></div></div><div class="promo-time-block">${p.endsAt?`<small class="countdown-label">FINALIZA EN</small><strong class="promo-countdown" data-promo-countdown="${escapeHtml(p.endsAt)}">${promoCountdown(p.endsAt)}</strong>`:'<strong class="promo-countdown">Sin vencimiento configurado</strong>'}</div><div class="promo-admin-info"><span class="pill">${p.audience==='all'?'Todos los clientes':'Clientes seleccionados'}</span></div><div class="promotion-actions"><button class="btn btn-ghost btn-mini" data-action="edit-promotion" data-id="${escapeHtml(p.id)}">Editar detalles</button><button class="btn btn-danger btn-mini" data-action="delete-promotion" data-id="${escapeHtml(p.id)}">Eliminar</button></div></article>`;
       }).join('')||`<div class="empty-state"><div class="empty-icon">✦</div><strong>Todavía no hay promociones</strong><p>Creá una oferta para comunicar algo especial a tus clientes.</p><button class="btn btn-primary" data-action="new-promotion">＋ Crear promoción</button></div>`}</div>`;
@@ -1114,24 +1124,37 @@
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${p?'Editar promoción':'Nueva promoción'}</h2><p>La visibilidad se controla con el interruptor de la tarjeta.</p></div><button class="close-modal btn-back" data-action="close-modal">×</button></div><form id="promotionForm" data-id="${escapeHtml(p?.id||'')}" autocomplete="off"><div class="form-field"><label>Título de la promoción *</label><input id="promotionTitle" name="title" autocomplete="off" data-lpignore="true" required maxlength="80" value="${escapeHtml(p?.title||'')}"><div class="emoji-quick-row" aria-label="Agregar emoji"><button type="button" data-action="insert-promo-emoji" data-emoji="🔥">🔥</button><button type="button" data-action="insert-promo-emoji" data-emoji="✨">✨</button><button type="button" data-action="insert-promo-emoji" data-emoji="💈">💈</button><button type="button" data-action="insert-promo-emoji" data-emoji="🎁">🎁</button><button type="button" data-action="insert-promo-emoji" data-emoji="⚡">⚡</button><button type="button" data-action="insert-promo-emoji" data-emoji="💙">💙</button></div></div><p class="field-hint">Podés escribir o combinar emojis. En la tarjeta se muestra el título y el cronómetro.</p><div class="field-grid"><div class="form-field"><label>Comienza (fecha y hora)</label><input name="startsAt" type="datetime-local" value="${p?.startsAt?escapeHtml(dateTimeLocalInput(p.startsAt)):''}"></div><div class="form-field"><label>Termina (fecha y hora)</label><input name="endsAt" type="datetime-local" value="${p?.endsAt?escapeHtml(dateTimeLocalInput(p.endsAt)):''}"></div></div><div class="form-field"><label>Asignar a</label><select name="audience" id="promotionAudience" class="setting-input"><option value="all" ${p?.audience!=='selected'?'selected':''}>Todos los clientes</option><option value="selected" ${p?.audience==='selected'?'selected':''}>Clientes seleccionados</option></select></div><div class="promotion-select-clients ${p?.audience==='selected'?'':'hidden'}">${clients.map(c=>`<label class="bulk-row"><input type="checkbox" name="customerIds" value="${escapeHtml(c.uid)}" ${(p?.customerIds||[]).includes(c.uid)?'checked':''}><span>${escapeHtml(c.fullName)}</span></label>`).join('')||'<span class="tiny muted">No hay clientes activos.</span>'}</div><div class="modal-footer"><button class="btn btn-danger" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">Guardar promoción</button></div></form></section></div>`;
     }
     function promotionRevisionKey(value){const d=asDate(value);return d?String(d.getTime()):String(value||'');}
-    async function loadPromotions({renderCustomer=false}={}){
+    async function loadPromotions({renderCustomer=false}={}) {
+      if(state.promotionsLoadPromise)return state.promotionsLoadPromise;
       const sequence=(state.promotionSyncSequence||0)+1;
       state.promotionSyncSequence=sequence;
-      try{
-        const promotionUrl=state.role==='customer'&&state.barberUid?`/api/promotions?barberUid=${encodeURIComponent(state.barberUid)}`:'/api/promotions';
-        const data=await api(promotionUrl);
-        if(sequence!==state.promotionSyncSequence)return false;
-        state.promotions=Array.isArray(data.promotions)?data.promotions:[];
-        state.promotionsLoaded=true;
-        state.promotionsDirty=false;
-        if(renderCustomer&&state.role==='customer'&&state.customerSection==='home')renderApp();
-        return true;
-      }catch(error){
-        if(sequence===state.promotionSyncSequence){
-          state.promotionsDirty=true;
-          notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron cargar las promociones. Revisá tu conexión e intentá nuevamente.'),error);
+      state.promotionsLoading=true;
+      const promise=(async()=>{
+        try {
+          const promotionUrl=state.role==='customer'&&state.barberUid?'/api/promotions?barberUid='+encodeURIComponent(state.barberUid):'/api/promotions';
+          const data=await api(promotionUrl);
+          if(sequence!==state.promotionSyncSequence)return false;
+          state.promotions=Array.isArray(data.promotions)?data.promotions:[];
+          state.promotionsLoaded=true;
+          state.promotionsDirty=false;
+          return true;
+        }catch(error){
+          if(sequence===state.promotionSyncSequence){
+            state.promotionsDirty=true;
+            notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron cargar las promociones. Revisá tu conexión e intentá nuevamente.'),error);
+          }
+          return false;
+        }finally{
+          if(sequence===state.promotionSyncSequence)state.promotionsLoading=false;
         }
-        return false;
+      })();
+      state.promotionsLoadPromise=promise;
+      try{
+        const loaded=await promise;
+        if(renderCustomer&&state.role==='customer'&&state.customerSection==='home')renderApp();
+        return loaded;
+      }finally{
+        if(state.promotionsLoadPromise===promise)state.promotionsLoadPromise=null;
       }
     }
     async function syncPromotionsAfterRevision(version){
@@ -1222,16 +1245,19 @@
       if(state.role!=='barber')return;
       if(state.customersLoaded&&state.customersUnsubscribe)return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
+      state.customersLoading=true;
       const promise=new Promise((resolve,reject)=>{
         let firstSnapshot=true;
         const clientsRef=collection(state.db,'barbers',state.barberUid,'customers');
         const unsubscribe=onSnapshot(clientsRef,snap=>{
           state.customers=snap.docs.map(d=>{const customer={uid:d.id,...d.data()};delete customer.isOnline;delete customer.lastSeenAt;delete customer.lastConnectedAt;return customer;});
           state.customersLoaded=true;
+          state.customersLoading=false;
           if(firstSnapshot){firstSnapshot=false;resolve();}
           if(state.role==='barber'&&state.section==='clients')renderApp();
         },err=>{
           console.error('customers snapshot',err);
+          state.customersLoading=false;
           state.customersLoaded=false;
           state.customersListenerStarted=false;
           state.customersUnsubscribe=null;
@@ -1244,22 +1270,22 @@
       state.customersLoadPromise=promise;
       try{await promise;}
       catch(error){const failure=new Error('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.');failure.retryable=true;failure.cause=error;throw failure;}
-      finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;}
+      finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;state.customersLoading=false;}
     }
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.promotions=[]; state.promotionsLoaded=false; state.promotionsDirty=true; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.promotionSyncSequence=(state.promotionSyncSequence||0)+1; state.promotionsLoadPromise=null; state.promotionsLoading=false; state.customersLoading=false; state.promotions=[]; state.promotionsLoaded=false; state.promotionsDirty=true; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','promotions','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme);
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
         const barberRef=doc(state.db,'barbers',me.barberUid);
         state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>notifyErrorOnce('barber-snapshot','No se pudieron sincronizar los datos del panel. Revisá la conexión y las reglas de Firestore.',err)));
-        if(state.section==='clients')await ensureAdminCustomersLoaded();
-        if(state.section==='promotions')await loadPromotions();
+        if(state.section==='clients'&&!state.customersLoaded)void ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
+        if(state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))void loadPromotions().then(()=>{if(state.role==='barber'&&state.section==='promotions')renderApp();});
         renderApp();
       } else {
         state.customerSection=readSectionPreference('customer',me.uid,['home','barber'],'home');
@@ -1288,13 +1314,14 @@
           renderApp();
         },err=>notifyErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá la conexión y las reglas de Firestore.',err)));
 
+        renderApp();
         if(state.customerSection==='home'&&document.visibilityState==='visible'){
-          await ensureCustomerPromotionListener();
-          if(!state.promotionsLoaded||state.promotionsDirty)await loadPromotions();
+          void ensureCustomerPromotionListener().then(()=>{
+            if(state.role==='customer'&&state.customerSection==='home'&&document.visibilityState==='visible'&&(!state.promotionsLoaded||state.promotionsDirty))return loadPromotions({renderCustomer:true});
+          }).catch(error=>notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron actualizar las promociones.'),error));
         }else{
           state.promotionsDirty=true;
         }
-        renderApp();
       }
       const payment=new URLSearchParams(location.search).get('payment');
       if(payment){history.replaceState({},'',location.pathname);setTimeout(()=>{if(payment==='success')toast('Volviste de Mercado Pago. Estamos verificando el pago; el estado se actualiza al confirmar el webhook.','success');else if(payment==='pending')toast('El pago quedó pendiente. El acceso se actualiza cuando Mercado Pago lo apruebe.');else if(state.role==='barber'&&subStatus().status==='active')toast('Tu cuenta sigue activa. No necesitás pagar nuevamente ahora.','success');else toast('El pago no se completó. Podés volver a intentarlo desde Configuración.','error');},300);}
@@ -1339,7 +1366,7 @@
     function openCutModal() {
       const clients=state.customers.filter(c=>c.active!==false).sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));
       const suspended=subStatus().status==='suspended';
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Elegí al cliente y registrá la visita.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar nuevas visitas.</div>`:''}<div class="login-divider"></div><label for="cutSearch" class="field-hint">CLIENTES REGISTRADOS</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí nombre o WhatsApp…"><div class="cut-picker-list">${clients.map(c=>`<div class="cut-picker-row" data-cut-search="${escapeHtml(normalizeName(c.fullName))}" data-cut-phone="${escapeHtml(String(c.whatsapp||'').replace(/\D/g,''))}"><div><strong>${escapeHtml(c.fullName)}</strong><small>Ciclo ${cycleCount(c)} de ${cycleLength(c)}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('')||`<div class="empty-state"><strong>Primero creá un cliente registrado</strong><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`}</div><div id="cutSearchEmpty" class="empty-state" hidden>No encontramos clientes con ese nombre o WhatsApp.</div></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Elegí al cliente y registrá la visita.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar nuevas visitas.</div>`:''}<div class="login-divider"></div><label for="cutSearch" class="field-hint">CLIENTES REGISTRADOS</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí nombre o WhatsApp…"><div class="cut-picker-list">${state.customersLoading&&!state.customersLoaded?`<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando clientes…</strong><p>La lista aparece en cuanto termina la primera sincronización.</p></div>`:clients.map(c=>`<div class="cut-picker-row" data-cut-search="${escapeHtml(normalizeName(c.fullName))}" data-cut-phone="${escapeHtml(String(c.whatsapp||'').replace(/\D/g,''))}"><div><strong>${escapeHtml(c.fullName)}</strong><small>Ciclo ${cycleCount(c)} de ${cycleLength(c)}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('')||`<div class="empty-state"><strong>Primero creá un cliente registrado</strong><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`}</div><div id="cutSearchEmpty" class="empty-state" hidden>No encontramos clientes con ese nombre o WhatsApp.</div></section></div>`;
       const search=$('#cutSearch',modalRoot);
       const list=$('.cut-picker-list',modalRoot);
       const empty=$('#cutSearchEmpty',modalRoot);
@@ -1599,7 +1626,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);if(state.role==='barber'&&state.section==='clients')await ensureAdminCustomersLoaded();if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))await loadPromotions();renderApp();window.scrollTo(0,0);}
+        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&!state.customersLoaded)pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
@@ -1613,7 +1640,7 @@
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
-        else if(action==='customer-section'){const nextSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';if(nextSection!=='home')stopCustomerPromotionListener();state.customerSection=nextSection;saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);if(state.customerSection==='home'&&document.visibilityState==='visible'){await ensureCustomerPromotionListener();if(!state.promotionsLoaded||state.promotionsDirty)await loadPromotions();}renderApp();window.scrollTo(0,0);}
+        else if(action==='customer-section'){const nextSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';if(nextSection!=='home')stopCustomerPromotionListener();state.customerSection=nextSection;saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);if(state.customerSection==='home'&&document.visibilityState==='visible'){void ensureCustomerPromotionListener().then(()=>{if(state.role==='customer'&&state.customerSection==='home'&&document.visibilityState==='visible'&&(!state.promotionsLoaded||state.promotionsDirty))return loadPromotions({renderCustomer:true});}).catch(error=>notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron actualizar las promociones.'),error));}}
         else if(action==='delete-client'){const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id);if(confirm(`¿Dar de baja a ${c?.fullName||'este cliente'}? Desaparecerá de Clientes. Se conservan el total y el ciclo registrado.`)){button.disabled=true;await api('/api/customers',{method:'DELETE',body:JSON.stringify({customerId:id})});state.customers=state.customers.filter(x=>x.uid!==id);modalRoot.innerHTML='';renderApp();toast('Cliente dado de baja. El historial de visitas se conservó.','success');}}
         else if(action==='contact'){contactClient(button.dataset.id,false);}
         else if(action==='new-promotion'){await ensureAdminCustomersLoaded();openPromotionModal();}
@@ -1632,8 +1659,8 @@
           const row=button.closest('[data-service-row]');const list=$('.service-editor-list',modalRoot);row?.remove();
           if(list&&!$('[data-service-row]',list))list.innerHTML='<div class="service-empty" data-services-empty><strong>Todavía no agregaste servicios</strong><p>Agregá los que ofrecés y el precio que querés mostrar a tus clientes.</p></div>';
         }
-        else if(action==='open-cut-modal'){await ensureAdminCustomersLoaded();openCutModal();}
-        else if(action==='add-cut'){await addCut(button.dataset.id);}
+        else if(action==='open-cut-modal'){const wasLoaded=state.customersLoaded;const pending=wasLoaded?Promise.resolve():ensureAdminCustomersLoaded();openCutModal();if(!wasLoaded){await pending;if($('#cutSearch',modalRoot))openCutModal();}}
+        else if(action==='add-cut'){await addCut(button.dataset.id,button);}
         else if(action==='add-client-reward'){const config=$('#clientLoyaltyConfig',modalRoot);const rows=$$('[data-client-reward-row]',config);if(rows.length>=10){toast('Podés configurar hasta 10 hitos.','error');return;}const max=Math.max(0,...rows.map(r=>Number($('[data-client-reward-cut]',r)?.value)||0));const row=document.createElement('div');row.className='loyalty-custom-row';row.setAttribute('data-client-reward-row','');row.innerHTML=`<label>Visita<input type="number" min="1" max="50" data-client-reward-cut value="${Math.min(50,max+2)}" required></label><label>Descuento (%)<input type="number" min="0" max="100" data-client-reward-discount value="10" required></label><button type="button" class="btn btn-danger btn-mini" data-action="remove-client-reward" aria-label="Eliminar hito">⌫</button>`;$('.loyalty-custom-rows',config).appendChild(row);}
         else if(action==='remove-client-reward'){const config=button.closest('#clientLoyaltyConfig');if($$('[data-client-reward-row]',config).length<=1){toast('El programa personalizado necesita al menos un hito.','error');return;}button.closest('[data-client-reward-row]')?.remove();}
         else if(action==='add-reward-step'){const card=$('[data-program-card]',modalRoot);const rows=$$('.program-reward-row',card);if(rows.length>=10){toast('Podés configurar hasta 10 hitos.','error');return;}const max=Math.max(0,...rows.map(r=>Number($('[data-reward-cut]',r)?.value)||0));const next=Math.min(50,max+2);const row=document.createElement('div');row.className='program-reward-row';row.setAttribute('data-reward-row','');row.innerHTML=`<label><span>Premio en la visita</span><input type="number" min="1" max="50" data-reward-cut value="${next}" required></label><label><span>Descuento (%)</span><input type="number" min="1" max="100" data-reward-discount value="10" required></label><button class="btn btn-danger btn-mini" type="button" data-action="remove-reward-step" aria-label="Eliminar etapa">⌫</button>`;$('.program-reward-rows',card).appendChild(row);}

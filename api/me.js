@@ -132,7 +132,17 @@ module.exports = async function handler(req, res) {
       if (!barberSnap.exists) return send(res, 404, { ok: false, error: 'Falta configurar el perfil profesional.' });
       const barber = await sanitizeBarberLoyalty(database, barberRef, barberSnap.data());
       if (typeof barber.hasPaidSubscription !== 'boolean') {
-        try { const paid = await barberRef.collection('payments').limit(1).get(); barber.hasPaidSubscription = !paid.empty; } catch (_) { barber.hasPaidSubscription = false; }
+        try {
+          const paid = await barberRef.collection('payments').limit(1).get();
+          barber.hasPaidSubscription = !paid.empty;
+          // Migrate legacy profiles once, so we do not repeat this subcollection read on every login.
+          await barberRef.update({
+            hasPaidSubscription: barber.hasPaidSubscription,
+            updatedAt: admin().firestore.FieldValue.serverTimestamp()
+          });
+        } catch (_) {
+          barber.hasPaidSubscription = false;
+        }
       }
       return send(res, 200, {
         ok: true, role: 'barber', uid: decoded.uid, barberUid: decoded.uid, subscriptionPrice: getSubscriptionPrice(),

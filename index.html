@@ -953,7 +953,7 @@
       }
     }
     function safePosterFilename(value) {
-      return String(value||'Barber-VIP').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'Barber-VIP';
+      return String(value||'Barber-VIP').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'Barber-VIP';
     }
     async function downloadBarberPosterPdf() {
       const btn = $('[data-action="download-barber-poster"]');
@@ -966,7 +966,7 @@
         const JsPDF = window.jspdf.jsPDF;
         const doc = new JsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
         const W=210,H=297, name=String(b.displayName||b.barberName||'Tu barbero').trim();
-        const insta = String(b.instagramUrl||'').match(/instagram\\.com\\/([^/?#]+)/i)?.[1] || '';
+        let insta=''; try { const igUrl = new URL(String(b.instagramUrl||'')); if (igUrl.hostname.toLowerCase().includes('instagram.com')) insta = igUrl.pathname.split('/').filter(Boolean)[0] || ''; } catch(_) {}
         const code = String(b.barberCode||'—').trim();
         // Premium navy header with blue accents, then a high-contrast QR and visible access code.
         doc.setFillColor(4,12,27);doc.rect(0,0,W,64,'F');
@@ -1342,7 +1342,7 @@
             <div class="barber-poster-scan">ESCANEÁ Y ENTRÁ A BARBER VIP</div>
             <p class="barber-poster-instructions">Elegí «Cliente» e ingresá el código de tu barbero.</p>
             <div class="barber-poster-code"><small>CÓDIGO DE ACCESO</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div>
-            ${b.instagramUrl?'<div class="barber-poster-instagram">'+escapeHtml(String(b.instagramUrl).match(/instagram\\.com\\/([^/?#]+)/i)?.[1]||'Instagram')+'</div>':''}
+            ${b.instagramUrl?'<div class="barber-poster-instagram">@'+escapeHtml((()=>{try{return new URL(String(b.instagramUrl)).pathname.split('/').filter(Boolean)[0]||'Instagram'}catch(_){return 'Instagram'}})())+'</div>':''}
           </div>
           <p class="field-hint barber-poster-help">El QR abre la app como el enlace habitual. El código impreso permite al cliente vincularse con vos. No agrega lecturas a Firebase.</p>
           <button type="button" class="btn btn-primary btn-block" data-action="download-barber-poster">Descargar cartel en PDF ↓</button>

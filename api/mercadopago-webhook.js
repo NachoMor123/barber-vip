@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { db, admin } = require('../lib/admin');
 const { send } = require('../lib/http');
+const { calculateRenewalExpiry } = require('../lib/subscription');
 
 function verifySignature(req, paymentId) {
   const secret = process.env.MP_WEBHOOK_SECRET;
@@ -44,21 +45,40 @@ module.exports = async function handler(req, res) {
     const preferenceId = String(payment.preference_id || '');
     const preferenceRef = preferenceId ? barberRef.collection('paymentPreferences').doc(preferenceId) : null;
     if (preferenceRef) {
-      try { const preferenceSnap = await preferenceRef.get(); if (preferenceSnap.exists && preferenceSnap.data().billingAction === 'skip-trial') skipTrial = true; } catch (_) {}
+      // Do not silently ignore a Firestore failure here: the saved preference is the
+      // authoritative record of whether this payment activates paid service early.
+      // Returning an error lets Mercado Pago retry instead of assigning the wrong expiry.
+      const preferenceSnap = await preferenceRef.get();
+      if (preferenceSnap.exists) {
+        const action = preferenceSnap.data().billingAction;
+        if (action !== 'skip-trial' && action !== 'renew') {
+          return send(res, 503, { ok: false, error: 'La preferencia de pago no tiene una acción de renovación válida. Se reintentará el procesamiento.' });
+        }
+        skipTrial = action === 'skip-trial';
+      } else if (payment.metadata && payment.metadata.billing_action === 'skip-trial') {
+        skipTrial = true;
+      } else if (payment.metadata && payment.metadata.billing_action === 'renew') {
+        skipTrial = false;
+      } else {
+        return send(res, 503, { ok: false, error: 'No se pudo confirmar el tipo de renovación del pago. Se reintentará el procesamiento.' });
+      }
+    } else if (!payment.metadata || !['skip-trial', 'renew'].includes(payment.metadata.billing_action)) {
+      return send(res, 503, { ok: false, error: 'No se pudo confirmar el tipo de renovación del pago. Se reintentará el procesamiento.' });
     }
     const approvedAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
     await db().runTransaction(async transaction => {
       const [barberSnap, paidSnap] = await Promise.all([transaction.get(barberRef), transaction.get(payRef)]);
       if (paidSnap.exists) return;
       if (!barberSnap.exists) throw new Error('No existe la cuenta asociada al pago.');
-      const rawExpiry = barberSnap.data().subscriptionExpiresAt;
-      const expiry = rawExpiry && rawExpiry.toDate ? rawExpiry.toDate() : (rawExpiry ? new Date(rawExpiry) : null);
-      const base = !skipTrial && expiry && expiry.getTime() > approvedAt.getTime() ? expiry : approvedAt;
-      const newExpiry = new Date(base.getTime() + 30 * 86400000);
+      const newExpiry = calculateRenewalExpiry(
+        barberSnap.data().subscriptionExpiresAt,
+        approvedAt,
+        skipTrial ? 'skip-trial' : 'renew'
+      );
       transaction.update(barberRef, { subscriptionExpiresAt: admin().firestore.Timestamp.fromDate(newExpiry), hasPaidSubscription: true, lastPaymentAt: admin().firestore.Timestamp.fromDate(approvedAt), updatedAt: admin().firestore.FieldValue.serverTimestamp() });
       transaction.set(payRef, {
         paymentId: String(payment.id), amount: Number(payment.transaction_amount), currency: payment.currency_id,
-        status: 'approved', approvedAt: admin().firestore.Timestamp.fromDate(approvedAt), newExpiry: admin().firestore.Timestamp.fromDate(newExpiry), createdAt: admin().firestore.FieldValue.serverTimestamp()
+        status: 'approved', billingAction: skipTrial ? 'skip-trial' : 'renew', approvedAt: admin().firestore.Timestamp.fromDate(approvedAt), newExpiry: admin().firestore.Timestamp.fromDate(newExpiry), createdAt: admin().firestore.FieldValue.serverTimestamp()
       });
       if (preferenceRef) transaction.set(preferenceRef, { processedAt: admin().firestore.FieldValue.serverTimestamp(), paymentId: String(payment.id) }, { merge: true });
     });

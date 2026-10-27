@@ -36,9 +36,13 @@ test('clasifica como vencida una cuenta una vez agotada la gracia', () => {
   assert.equal(result.label, 'Cuenta vencida');
 });
 
-test('una fecha ausente o inválida bloquea la cuenta con estado explícito', () => {
-  assert.equal(subscription({}, now).status, 'suspended');
-  assert.equal(subscription({ subscriptionExpiresAt: 'no-es-fecha' }, now).expiresAt, null);
+test('una fecha ausente o inválida bloquea la cuenta y nunca la presenta como prueba activa', () => {
+  const missing = subscription({ trialStartedAt: new Date('2026-10-20T12:00:00.000Z'), hasPaidSubscription: false }, now);
+  assert.equal(missing.status, 'suspended');
+  assert.equal(missing.isTrial, false);
+  const invalid = subscription({ subscriptionExpiresAt: 'no-es-fecha', trialStartedAt: new Date('2026-10-20T12:00:00.000Z'), hasPaidSubscription: false }, now);
+  assert.equal(invalid.expiresAt, null);
+  assert.equal(invalid.isTrial, false);
 });
 
 test('pagar durante la prueba activa 30 días desde la aprobación', () => {

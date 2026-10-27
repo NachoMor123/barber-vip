@@ -698,6 +698,28 @@
     .login-wrap.role-menu-wrap .entry-action-symbol{width:42px;height:42px;flex-basis:42px}
   }
   @media(prefers-reduced-motion:reduce){.back-icon-button,.entry-action-card{transition:none!important}}
+
+    .barber-poster-settings{margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+    .barber-poster-intro h4{font-size:17px;letter-spacing:-.03em;margin:6px 0}
+    .barber-poster-intro p{margin:0 0 15px;color:var(--muted);font-size:12px;line-height:1.65}
+    .barber-poster-preview{overflow:hidden;position:relative;padding:18px 15px 16px;border:1px solid rgba(87,155,255,.46);border-radius:16px;background:linear-gradient(180deg,#f8fbff,#e9f2ff);color:#07172c;text-align:center;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+    .barber-poster-preview:before{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:linear-gradient(90deg,#1d5fd0,#69c4ff,#3478ff)}
+    .barber-poster-preview-head{display:flex;align-items:center;justify-content:space-between;gap:9px;padding-bottom:10px;border-bottom:1px solid #d4e0ef}
+    .barber-poster-brand{font:900 12px 'Space Grotesk',sans-serif;letter-spacing:.06em;color:#0b1c35}
+    .barber-poster-pill{font-size:8px;font-weight:900;letter-spacing:.1em;color:#165ab1;border:1px solid #bfd7f6;border-radius:99px;padding:5px 7px}
+    .barber-poster-preview h5{margin:15px 0 4px;font:700 22px/1.15 'Space Grotesk',sans-serif;letter-spacing:-.04em;color:#07172c;overflow-wrap:anywhere}
+    .barber-poster-callout{margin:0 auto 11px;max-width:280px;color:#35516f;font-size:11px;line-height:1.5}
+    .barber-poster-qr{width:154px;height:154px;margin:0 auto 8px;display:grid;place-items:center;background:#fff;border:1px solid #d4e1f0;border-radius:12px;overflow:hidden}
+    .barber-poster-qr img,.barber-poster-qr canvas{display:block;width:144px!important;height:144px!important;max-width:100%;object-fit:contain}
+    .barber-poster-qr>span{padding:12px;color:#536987;font-size:10px}
+    .barber-poster-scan{font-size:10px;font-weight:900;letter-spacing:.08em;color:#145cb4}
+    .barber-poster-instructions{margin:5px auto 12px;color:#526985;font-size:10px;line-height:1.5}
+    .barber-poster-code{display:grid;gap:4px;padding:10px;border:1px solid #bfd6f3;border-radius:10px;background:#fff}
+    .barber-poster-code small{font-size:8px;letter-spacing:.12em;font-weight:900;color:#5b7392}
+    .barber-poster-code strong{font:800 22px 'Space Grotesk',sans-serif;letter-spacing:.13em;color:#0e3975;overflow-wrap:anywhere}
+    .barber-poster-instagram{margin-top:10px;color:#385b82;font-size:10px;font-weight:800}
+    .barber-poster-help{font-size:11px;line-height:1.65;margin:12px 0}
+    @media(max-width:560px){.barber-poster-preview{padding:15px 11px}.barber-poster-qr{width:146px;height:146px}.barber-poster-qr img,.barber-poster-qr canvas{width:136px!important;height:136px!important}}
 </style></head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -870,6 +892,112 @@
     });
     window.addEventListener('unhandledrejection',event=>reportUnexpectedError('unhandled-promise',event.reason));
     window.__barberVipModuleReady=true;
+
+    let barberPosterQrDataUrl = '';
+    let barberPosterQrPromise = null;
+    let qrLibPromise = null;
+    let pdfLibPromise = null;
+    function loadExternalLibrary(id, src, readyCheck) {
+      if (readyCheck()) return Promise.resolve();
+      if (window[id + 'Promise']) return window[id + 'Promise'];
+      window[id + 'Promise'] = new Promise((resolve, reject) => {
+        let script = document.querySelector('script[data-bv-library="' + id + '"]');
+        if (!script) {
+          script = document.createElement('script');
+          script.src = src;
+          script.async = true;
+          script.dataset.bvLibrary = id;
+          document.head.appendChild(script);
+        }
+        script.addEventListener('load', () => readyCheck() ? resolve() : reject(new Error('No se pudo inicializar la librería.')), {once:true});
+        script.addEventListener('error', () => reject(new Error('No se pudo cargar la herramienta para generar el cartel.')), {once:true});
+      });
+      return window[id + 'Promise'];
+    }
+    async function getBarberPosterQr() {
+      if (barberPosterQrDataUrl) return barberPosterQrDataUrl;
+      if (barberPosterQrPromise) return barberPosterQrPromise;
+      barberPosterQrPromise = (async () => {
+        await loadExternalLibrary('QRCode', 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', () => typeof window.QRCode === 'function');
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-10000px;top:0;width:360px;height:360px;opacity:0;pointer-events:none';
+        document.body.appendChild(host);
+        try {
+          new window.QRCode(host, {text:CUSTOMER_APP_URL,width:360,height:360,colorDark:'#06152b',colorLight:'#ffffff',correctLevel:window.QRCode.CorrectLevel.H});
+          const canvas = host.querySelector('canvas');
+          const image = host.querySelector('img');
+          if (canvas) barberPosterQrDataUrl = canvas.toDataURL('image/png');
+          else if (image) {
+            if (!image.complete) await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;});
+            const c = document.createElement('canvas'); c.width=360;c.height=360;
+            c.getContext('2d').drawImage(image,0,0,360,360);
+            barberPosterQrDataUrl = c.toDataURL('image/png');
+          }
+          if (!barberPosterQrDataUrl) throw new Error('No se pudo crear el código QR.');
+          return barberPosterQrDataUrl;
+        } finally { host.remove(); }
+      })().catch(error => { barberPosterQrPromise=null; throw error; });
+      return barberPosterQrPromise;
+    }
+    async function renderBarberPosterPreview() {
+      const holder = $('#barberPosterQr');
+      if (!holder || state.role!=='barber' || state.section!=='settings') return;
+      try {
+        const qr = await getBarberPosterQr();
+        const current = $('#barberPosterQr');
+        if (current && state.role==='barber' && state.section==='settings') current.innerHTML = '<img alt="Código QR que abre Barber VIP" src="' + qr + '">';
+      } catch(error) {
+        const current = $('#barberPosterQr');
+        if (current) current.innerHTML = '<span>No se pudo preparar el QR. Revisá tu conexión y volvé a abrir Configuración.</span>';
+        console.warn('[Barber VIP] No se pudo generar el QR del cartel.', error);
+      }
+    }
+    function safePosterFilename(value) {
+      return String(value||'Barber-VIP').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'Barber-VIP';
+    }
+    async function downloadBarberPosterPdf() {
+      const btn = $('[data-action="download-barber-poster"]');
+      const original = btn?.textContent || 'Descargar cartel en PDF ↓';
+      if (btn) {btn.disabled=true;btn.textContent='Preparando PDF…';}
+      try {
+        const b = state.barber || {};
+        const qr = await getBarberPosterQr();
+        await loadExternalLibrary('jsPDF','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf?.jsPDF);
+        const JsPDF = window.jspdf.jsPDF;
+        const doc = new JsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+        const W=210,H=297, name=String(b.displayName||b.barberName||'Tu barbero').trim();
+        const insta = String(b.instagramUrl||'').match(/instagram\\.com\\/([^/?#]+)/i)?.[1] || '';
+        const code = String(b.barberCode||'—').trim();
+        // Premium navy header with blue accents, then a high-contrast QR and visible access code.
+        doc.setFillColor(4,12,27);doc.rect(0,0,W,64,'F');
+        doc.setFillColor(45,123,255);doc.rect(0,62,W,2,'F');
+        doc.setTextColor(119,199,255);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('BARBER VIP',18,19);
+        doc.setTextColor(246,249,255);doc.setFontSize(22);doc.text('UN MOTIVO MÁS',18,36);
+        doc.text('PARA VOLVER.',18,47);
+        doc.setTextColor(169,193,220);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('FIDELIZACIÓN DIGITAL PARA CLIENTES',18,56);
+        doc.setTextColor(82,112,148);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('TU BARBERO',W/2,77,{align:'center'});
+        doc.setTextColor(5,19,39);doc.setFont('helvetica','bold');doc.setFontSize(20);
+        const nameLines=doc.splitTextToSize(name,172);doc.text(nameLines,W/2,88,{align:'center'});
+        let y=88+nameLines.length*8;
+        if(insta){doc.setTextColor(37,94,157);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('@'+insta.replace(/^@/,''),W/2,y+3,{align:'center'});y+=6;}
+        doc.setFillColor(242,247,255);doc.setDrawColor(209,224,244);doc.roundedRect(59,y+9,92,92,4,4,'FD');
+        doc.addImage(qr,'PNG',65,y+15,80,80,'BARBERVIPQR','FAST');
+        doc.setTextColor(18,91,181);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('ESCANEÁ Y ENTRÁ A BARBER VIP',W/2,y+110,{align:'center'});
+        doc.setTextColor(78,99,126);doc.setFont('helvetica','normal');doc.setFontSize(9);
+        doc.text('Elegí «Cliente» y registrate con el código de acceso de abajo.',W/2,y+117,{align:'center'});
+        doc.setFillColor(235,243,255);doc.setDrawColor(184,211,242);doc.roundedRect(23,y+126,164,31,4,4,'FD');
+        doc.setTextColor(64,90,123);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('CÓDIGO DE ACCESO DEL BARBERO',W/2,y+135,{align:'center'});
+        doc.setTextColor(11,56,116);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text(code,W/2,y+150,{align:'center'});
+        doc.setTextColor(75,99,128);doc.setFont('helvetica','normal');doc.setFontSize(8);
+        doc.text('Registrate · Consultá tus visitas · Conocé tus beneficios',W/2,280,{align:'center'});
+        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text('barber-vip-three.vercel.app',W/2,287,{align:'center'});
+        doc.save('Barber-VIP-'+safePosterFilename(name)+'.pdf');
+        toast('Cartel PDF descargado. Ya podés imprimirlo en tu local.','success');
+      } catch(error) {
+        notifyErrorOnce('barber-poster-pdf','No se pudo generar el PDF. Revisá tu conexión e intentá nuevamente.',error,5000);
+      } finally { if(btn){btn.disabled=false;btn.textContent=original;} }
+    }
+
     async function copyText(value){
       const text=String(value??'');
       if(!text)throw new Error('No hay nada para copiar.');
@@ -1203,7 +1331,23 @@
       return `${sectionHeading('TU ESPACIO','Configuración','Datos profesionales, acceso y fidelización.')}
       <div class="settings-grid settings-grid-final">
         <section class="panel settings-profile-summary"><div class="panel-head"><div><span class="eyebrow">PERFIL PROFESIONAL</span><h2>Datos de tu perfil</h2><p>Completá tus datos para que tus clientes sepan cómo encontrarte.</p></div><strong class="settings-percent">${pct}%</strong></div><div class="profile-progress"><span style="width:${pct}%"></span></div><div class="settings-profile-summary-details"><div><small>Nombre</small><strong>${escapeHtml(b.displayName||'Sin configurar')}</strong></div><div><small>Local</small><strong>${escapeHtml(b.barberName||'Profesional independiente')}</strong></div><div><small>WhatsApp</small><strong>${escapeHtml(wa||'Sin configurar')}</strong></div><div><small>Horarios activos</small><strong>${scheduleDays} de 7 días</strong></div></div><button class="btn btn-primary btn-block" data-action="edit-profile">Editar tus datos profesionales</button></section>
-        <section class="panel access-card"><div class="setting-subheading"><span class="eyebrow">COMPARTIR ACCESO</span><h3 class="setting-section-title">Datos para tus clientes</h3><p class="field-hint">Pasales estos dos datos para que entren a su tarjeta VIP.</p></div><div class="access-share-row"><div><small>1 · Enlace de Barber VIP</small><strong>${escapeHtml(CUSTOMER_APP_URL)}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-app-link">Copiar enlace</button></div><div class="access-share-row"><div><small>2 · Código de acceso</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-code">Copiar código</button></div></section>
+        <section class="panel access-card"><div class="setting-subheading"><span class="eyebrow">COMPARTIR ACCESO</span><h3 class="setting-section-title">Datos para tus clientes</h3><p class="field-hint">Pasales estos dos datos para que entren a su tarjeta VIP.</p></div><div class="access-share-row"><div><small>1 · Enlace de Barber VIP</small><strong>${escapeHtml(CUSTOMER_APP_URL)}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-app-link">Copiar enlace</button></div><div class="access-share-row"><div><small>2 · Código de acceso</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-code">Copiar código</button></div>
+        <div class="barber-poster-settings">
+          <div class="barber-poster-intro"><span class="eyebrow">PARA TU LOCAL</span><h4>Tu cartel de Barber VIP</h4><p>Mostrá este cartel, invitá a tus clientes a registrarse y dejá que conozcan su progreso desde el celular.</p></div>
+          <div class="barber-poster-preview" id="barberPosterPreview">
+            <div class="barber-poster-preview-head"><span class="barber-poster-brand">BARBER VIP</span><span class="barber-poster-pill">FIDELIZACIÓN</span></div>
+            <h5>${escapeHtml(b.displayName||b.barberName||'Tu nombre de barbero')}</h5>
+            <p class="barber-poster-callout">Tu próxima visita tiene más motivos para volver.</p>
+            <div class="barber-poster-qr" id="barberPosterQr"><span>Preparando tu código QR…</span></div>
+            <div class="barber-poster-scan">ESCANEÁ Y ENTRÁ A BARBER VIP</div>
+            <p class="barber-poster-instructions">Elegí «Cliente» e ingresá el código de tu barbero.</p>
+            <div class="barber-poster-code"><small>CÓDIGO DE ACCESO</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div>
+            ${b.instagramUrl?'<div class="barber-poster-instagram">'+escapeHtml(String(b.instagramUrl).match(/instagram\\.com\\/([^/?#]+)/i)?.[1]||'Instagram')+'</div>':''}
+          </div>
+          <p class="field-hint barber-poster-help">El QR abre la app como el enlace habitual. El código impreso permite al cliente vincularse con vos. No agrega lecturas a Firebase.</p>
+          <button type="button" class="btn btn-primary btn-block" data-action="download-barber-poster">Descargar cartel en PDF ↓</button>
+        </div>
+        </section>
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Un único ciclo editable para todos los clientes. Las promociones comerciales se configuran por separado.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
@@ -1337,6 +1481,7 @@
       else { renderCustomer(); startPromoCountdowns(); }
       // Update relative times immediately after painting; subsequent updates are local-only.
       refreshRelativeTimes();
+      if(state.role==='barber'&&state.section==='settings') void renderBarberPosterPreview();
       // Repainting after a Firestore snapshot should not unexpectedly jump the viewport.
       if(Math.abs(window.scrollY-previousScrollY)>1) window.scrollTo(0,previousScrollY);
       void maybeShowInstallPrompt();
@@ -1775,6 +1920,7 @@
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}
         else if(action==='copy-app-link'){await copyText(CUSTOMER_APP_URL);toast('Enlace para tus clientes copiado.','success');}
+        else if(action==='download-barber-poster'){await downloadBarberPosterPdf();}
         else if(action==='book-turn'){contactBarber(false);}
         else if(action==='contact-barber'){contactBarber(false);}
       } catch(error){notifyErrorOnce('action:'+action,userFacingError(error,'No se pudo completar esta acción. Revisá la conexión e intentá nuevamente.'),error,4000);}

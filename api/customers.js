@@ -73,49 +73,95 @@ module.exports = async function handler(req, res) {
     }
 
     const current = customerSnap.data();
-    const updates = { updatedAt: admin().firestore.FieldValue.serverTimestamp() };
+    const updates = {};
+    let fullNameChanged = false;
+    let passwordChanged = false;
+    let activeChanged = false;
+
     if (data.fullName !== undefined) {
       const fullName = text(data.fullName, 100);
       const usernameNormalized = normalizeName(fullName);
       if (fullName.length < 3) return send(res, 400, { ok: false, error: 'Ingresá el nombre y apellido del cliente.' });
-      // A normal edit resubmits the current name. Only query for duplicates when
-      // the normalized name changes; keep validation for actual edits.
-      const currentNormalizedName = String(current.usernameNormalized || normalizeName(current.fullName || ''));
-      if (usernameNormalized !== currentNormalizedName) {
+
+      // If the normalized name is unchanged, an ordinary edit cannot create a duplicate.
+      // Legacy records without the normalized field still take the validation query once.
+      const storedNormalizedName = String(current.usernameNormalized || '');
+      if (!storedNormalizedName || usernameNormalized !== storedNormalizedName) {
         const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).get();
-        if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de este espacio profesional.' });
+        if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) {
+          return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de este espacio profesional.' });
+        }
       }
-      updates.fullName = fullName;
-      updates.usernameNormalized = usernameNormalized;
       if (fullName !== String(current.fullName || '')) {
-        await auth().updateUser(customerId, { displayName: fullName }).catch(() => {});
+        updates.fullName = fullName;
+        fullNameChanged = true;
       }
+      if (usernameNormalized !== storedNormalizedName) updates.usernameNormalized = usernameNormalized;
     }
+
     if (data.whatsapp !== undefined) {
       const whatsapp = normalizeArgentinaPhone(data.whatsapp);
-      if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
-      // Unchanged phone numbers cannot introduce a duplicate; skip that billed query.
-      const currentWhatsapp = normalizeArgentinaPhone(current.whatsapp || '');
+      if (!validArgentinaWhatsapp(data.whatsapp)) {
+        return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
+      }
+      const storedWhatsapp = String(current.whatsapp || '');
+      const currentWhatsapp = normalizeArgentinaPhone(storedWhatsapp);
       if (whatsapp !== currentWhatsapp) {
         const duplicatePhone = await customers.where('whatsapp', '==', whatsapp).get();
-        if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de este espacio profesional.' });
+        if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) {
+          return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de este espacio profesional.' });
+        }
       }
-      updates.whatsapp = whatsapp;
+      if (whatsapp !== storedWhatsapp) updates.whatsapp = whatsapp;
     }
-    if (data.cutStyle !== undefined) updates.cutStyle = text(data.cutStyle, 100);
-    if (data.conversationPreference !== undefined) updates.conversationPreference = ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '';
-    if (data.password !== undefined && String(data.password).length) {
-      if (String(data.password).length < 6) return send(res, 400, { ok: false, error: 'La contraseña nueva debe tener al menos 6 caracteres.' });
-      await auth().updateUser(customerId, { password: String(data.password) });
+
+    if (data.cutStyle !== undefined) {
+      const cutStyle = text(data.cutStyle, 100);
+      if (cutStyle !== String(current.cutStyle || '')) updates.cutStyle = cutStyle;
     }
+    if (data.conversationPreference !== undefined) {
+      const preference = ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '';
+      if (preference !== String(current.conversationPreference || '')) updates.conversationPreference = preference;
+    }
+
+    const password = data.password === undefined ? '' : String(data.password);
+    if (password.length) {
+      if (password.length < 6) return send(res, 400, { ok: false, error: 'La contraseña nueva debe tener al menos 6 caracteres.' });
+      await auth().updateUser(customerId, { password });
+      passwordChanged = true;
+    }
+
     if (data.active !== undefined) {
-      updates.active = Boolean(data.active);
+      const nextActive = Boolean(data.active);
+      const currentActive = current.active !== false;
+      if (nextActive !== currentActive) {
+        updates.active = nextActive;
+        activeChanged = true;
+      }
+    }
+
+    if (fullNameChanged) {
+      await auth().updateUser(customerId, { displayName: updates.fullName }).catch(() => {});
+    }
+    if (activeChanged) {
       await auth().updateUser(customerId, { disabled: !updates.active }).catch(() => {});
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
     }
-    await customerRef.update(updates);
-    // customerSnap was already read above; echo the updated fields instead of reading again.
-    return send(res, 200, { ok: true, customer: { ...current, ...updates, updatedAt: new Date().toISOString() } });
+
+    const hasDocumentChanges = Object.keys(updates).length > 0;
+    if (hasDocumentChanges) {
+      updates.updatedAt = admin().firestore.FieldValue.serverTimestamp();
+      await customerRef.update(updates);
+    }
+
+    // Avoid a no-op Firestore write; it would trigger customer listeners despite unchanged data.
+    const customerResponse = hasDocumentChanges
+      ? { ...current, ...updates, updatedAt: new Date().toISOString() }
+      : current;
+    if (!hasDocumentChanges && !passwordChanged) {
+      return send(res, 200, { ok: true, customer: customerResponse, unchanged: true });
+    }
+    return send(res, 200, { ok: true, customer: customerResponse });
   } catch (error) {
     console.error('customers error', error);
     if (error && error.code === 'auth/email-already-exists') return send(res, 409, { ok: false, error: 'No se pudo crear el usuario del cliente; probá otra vez.' });

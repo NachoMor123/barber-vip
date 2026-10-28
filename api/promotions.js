@@ -1,6 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireUser, requireBarber, subscription } = require('../lib/security');
+const { sendPushToBarberCustomers } = require('../lib/push');
 
 const cleanDate = value => {
   if (!value) return null;
@@ -115,11 +116,39 @@ module.exports = async function handler(req, res) {
       payload.createdAt = now;
       const ref = await collection.add(payload);
       await touchPromotionRevision(barberRef);
+      const nowMs = Date.now();
+      const currentlyActive = payload.active !== false && (!startsAt || startsAt.getTime() <= nowMs) && (!endsAt || endsAt.getTime() >= nowMs);
+      if (currentlyActive) {
+        await sendPushToBarberCustomers({
+          barberUid: ctx.uid,
+          customerIds: audience === 'selected' ? customerIds : null,
+          title: 'Nueva promoción: '+title,
+          body: 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
+          tag: 'barber-vip-promo-'+ref.id,
+          url: '/'
+        });
+      }
       return send(res, 201, {ok:true,id:ref.id});
     }
     if (!id) return send(res, 400, {ok:false,error:'Falta identificar la promoción.'});
-    await collection.doc(id).update(payload);
+    const promotionRef = collection.doc(id);
+    const existingPromotion = await promotionRef.get();
+    if (!existingPromotion.exists) return send(res, 404, {ok:false,error:'No se encontró esa promoción.'});
+    const wasActive = existingPromotion.data().active !== false;
+    await promotionRef.update(payload);
     await touchPromotionRevision(barberRef);
+    const nowMs = Date.now();
+    const currentlyActive = payload.active !== false && (!startsAt || startsAt.getTime() <= nowMs) && (!endsAt || endsAt.getTime() >= nowMs);
+    if (!wasActive && currentlyActive) {
+      await sendPushToBarberCustomers({
+        barberUid: ctx.uid,
+        customerIds: audience === 'selected' ? customerIds : null,
+        title: 'Nueva promoción: '+title,
+        body: 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
+        tag: 'barber-vip-promo-'+id,
+        url: '/'
+      });
+    }
     return send(res, 200, {ok:true,id});
   } catch (error) {
     console.error('promotions error', error);

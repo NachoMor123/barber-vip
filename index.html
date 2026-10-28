@@ -276,7 +276,9 @@
     .push-notification-main p{font-size:10px;line-height:1.55;color:var(--muted);margin:0;max-width:540px}
     .push-notification-card .btn{flex-shrink:0;white-space:nowrap}
     .push-notification-note{display:block;font-size:10px;line-height:1.5;color:var(--yellow);margin-top:6px}
-    @media(max-width:600px){.push-notification-card{align-items:stretch;flex-direction:column;gap:12px}.push-notification-card .btn{width:100%}}
+    .push-notification-status{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 13px;border:1px solid rgba(69,230,155,.4);border-radius:12px;background:rgba(69,230,155,.09);color:#8ff3bf;font-size:11px;font-weight:750;white-space:nowrap}
+    .push-notification-status span{display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:rgba(69,230,155,.16);font-size:12px}
+    @media(max-width:600px){.push-notification-card{align-items:stretch;flex-direction:column;gap:12px}.push-notification-card .btn,.push-notification-card .push-notification-status{width:100%}}
 
 </style>
 
@@ -874,9 +876,12 @@
         :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
         :active?'Activadas en este dispositivo. Te avisamos por visitas, hitos y nuevas promociones.'
         :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
+      const action=active
+        ?'<div class="push-notification-status" role="status" aria-live="polite"><span aria-hidden="true">✓</span> Avisos activados</div>'
+        :`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
       return `<section class="push-notification-card ${active?'enabled':''}" aria-label="Notificaciones">
         <div class="push-notification-main"><span class="push-notification-icon" aria-hidden="true">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>${description}</p>${denied?'<small class="push-notification-note">Después de cambiar el permiso en el navegador, volvé a esta pantalla.</small>':''}</div></div>
-        <button class="btn ${active?'btn-ghost':'btn-primary'}" type="button" data-action="${active?'disable-push-notifications':'enable-push-notifications'}" ${(denied||iosNeedsInstall)&&!active?'disabled':''}>${active?'Desactivar avisos':denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>
+        ${action}
       </section>`;
     }
     function base64UrlToUint8Array(value){
@@ -895,23 +900,59 @@
       }catch(error){console.warn('[Barber VIP] No se pudo consultar el estado local de notificaciones.',error?.message||error);}
     }
     async function enableCustomerPush(button){
-      if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para activar los avisos.');
-      if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))throw new Error('Este navegador no admite notificaciones push. Probá desde un navegador actualizado.');
-      if(/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp())throw new Error('En iPhone o iPad, primero agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono.');
-      const original=button?.textContent||'Activar notificaciones';if(button){button.disabled=true;button.textContent='Activando avisos…';}
+      const original=button?.textContent||'Activar notificaciones';
+      let createdHere=false,subscription=null,savedOnServer=false;
+      if(button){button.disabled=true;button.textContent='Activando avisos…';}
       try{
+        if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para activar los avisos.');
+        if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))throw new Error('Este navegador no admite notificaciones push. Probá desde Chrome o un navegador actualizado.');
+        if(/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp())throw new Error('En iPhone o iPad, primero agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono.');
+        if(state.pushEnabled&&Notification.permission==='granted'){
+          toast('Los avisos ya están activados en este dispositivo.','success');
+          return;
+        }
         const config=await api('/api/push');
-        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones todavía no está configurado en el servidor. No se activó ningún aviso.');
-        let permission=Notification.permission;if(permission==='default')permission=await Notification.requestPermission();
-        if(permission!=='granted')throw new Error('No se concedió permiso para mostrar notificaciones. Revisá los permisos del sitio en tu navegador.');
-        const registration=await navigator.serviceWorker.ready;
-        let subscription=await registration.pushManager.getSubscription();
-        if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
+        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora. No se activó ningún aviso. Intentá de nuevo más tarde.');
+        let permission=Notification.permission;
+        if(permission==='default')permission=await Notification.requestPermission();
+        if(permission!=='granted')throw new Error(permission==='denied'
+          ?'El navegador bloqueó las notificaciones. Habilitalas en los permisos del sitio y volvé a intentarlo.'
+          :'No se concedió permiso para mostrar notificaciones. No se activó ningún aviso.');
+        let readyTimer;
+        let registration;
+        try{
+          registration=await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(new Error('Barber VIP todavía no pudo preparar el servicio de notificaciones. Recargá la app y probá otra vez.')),15000);})
+          ]);
+        }finally{if(readyTimer)clearTimeout(readyTimer);}
+        subscription=await registration.pushManager.getSubscription();
+        if(!subscription){
+          subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
+          createdHere=true;
+        }
         await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
-        state.pushEnabled=true;try{localStorage.setItem(pushPreferenceKey(),'true');}catch(_){}
-        toast('Notificaciones activadas. Te avisaremos por nuevas promociones, visitas y premios.','success');renderApp();
-      }catch(error){toast(userFacingError(error,'No se pudieron activar las notificaciones. Revisá el permiso e intentá de nuevo.'),'error');}
-      finally{if(button?.isConnected){button.disabled=false;button.textContent=original;}}
+        savedOnServer=true;
+        state.pushEnabled=true;
+        try{localStorage.setItem(pushPreferenceKey(),'true');}catch(_){}
+        toast('Notificaciones activadas. Te avisaremos por nuevas promociones, visitas y premios.','success');
+        renderApp();
+      }catch(error){
+        if(createdHere&&subscription&&!savedOnServer){
+          try{await subscription.unsubscribe();}catch(_){}
+        }
+        state.pushEnabled=false;
+        try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
+        let message;
+        if(error?.name==='NotAllowedError')message='El navegador rechazó la suscripción. Revisá los permisos de notificaciones del sitio y volvé a intentarlo.';
+        else if(error?.name==='InvalidStateError')message='El servicio de notificaciones quedó en un estado incorrecto. Cerrá y volvé a abrir Barber VIP, y probá otra vez.';
+        else if(error?.name==='AbortError')message='El navegador no pudo completar la activación de notificaciones. Revisá la conexión e intentá de nuevo.';
+        else message=userFacingError(error,'No se pudieron activar las notificaciones. Revisá el permiso y tu conexión, e intentá de nuevo.');
+        toast(message,'error');
+        if(state.role==='customer'&&state.user)renderApp();
+      }finally{
+        if(button?.isConnected){button.disabled=false;button.textContent=original;}
+      }
     }
     async function disableCustomerPush(button){
       if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para administrar los avisos.');
@@ -1674,28 +1715,45 @@
       void maybeShowInstallPrompt();
     }
 
+    function stopAdminCustomersListener(){
+      // The full customer-list listener is useful only while the barber is viewing Clientes.
+      // Stopping it elsewhere prevents every customer's edits/visits from refreshing this query in the background.
+      if(state.customersLoading)return; // The first snapshot will stop itself if navigation already changed.
+      const unsubscribe=state.customersUnsubscribe;
+      state.customersUnsubscribe=null;
+      state.customersListenerStarted=false;
+      state.customersLoaded=false;
+      if(typeof unsubscribe==='function'){try{unsubscribe();}catch(_){}}
+    }
     async function ensureAdminCustomersLoaded(){
-      if(state.role!=='barber')return;
+      if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible')return;
       if(state.customersLoaded&&state.customersUnsubscribe)return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
       state.customersLoading=true;
       const promise=new Promise((resolve,reject)=>{
-        let firstSnapshot=true;
+        let firstSnapshot=true,unsubscribe=null;
         const clientsRef=collection(state.db,'barbers',state.barberUid,'customers');
-        const unsubscribe=onSnapshot(clientsRef,snap=>{
+        unsubscribe=onSnapshot(clientsRef,snap=>{
           state.customers=snap.docs.map(d=>{const customer={uid:d.id,...d.data()};delete customer.isOnline;delete customer.lastSeenAt;delete customer.lastConnectedAt;return customer;});
           state.customersLoaded=true;
           state.customersLoading=false;
           if(firstSnapshot){firstSnapshot=false;resolve();}
-          if(state.role==='barber'&&state.section==='clients')renderApp();
+          if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible'){
+            if(state.customersUnsubscribe===unsubscribe)state.customersUnsubscribe=null;
+            state.customersLoaded=false;
+            state.customersListenerStarted=false;
+            try{unsubscribe?.();}catch(_){}
+            return;
+          }
+          renderApp();
         },err=>{
           console.error('customers snapshot',err);
           state.customersLoading=false;
           state.customersLoaded=false;
           state.customersListenerStarted=false;
-          state.customersUnsubscribe=null;
+          if(state.customersUnsubscribe===unsubscribe)state.customersUnsubscribe=null;
           if(firstSnapshot){firstSnapshot=false;reject(err);}
-          else toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');
+          else if(state.role==='barber'&&state.section==='clients')toast('No se pudieron actualizar los clientes. Revisá las reglas de Firestore.','error');
         });
         state.customersUnsubscribe=unsubscribe;
         state.customersListenerStarted=true;
@@ -2077,7 +2135,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&!state.customersLoaded)pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
+        else if(action==='nav'){const previousSection=state.section,nextSection=button.dataset.section;state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&(!state.customersLoaded||!state.customersUnsubscribe))pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='enable-push-notifications'){await enableCustomerPush(button);}
         else if(action==='disable-push-notifications'){await disableCustomerPush(button);}

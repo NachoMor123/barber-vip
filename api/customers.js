@@ -1,6 +1,7 @@
 const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
+const { removeCustomerPushSubscriptions } = require('../lib/push');
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
@@ -69,6 +70,7 @@ module.exports = async function handler(req, res) {
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
       });
+      await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
       return send(res, 200, { ok: true });
     }
 
@@ -146,6 +148,7 @@ module.exports = async function handler(req, res) {
     if (activeChanged) {
       await auth().updateUser(customerId, { disabled: !updates.active }).catch(() => {});
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
+      if (updates.active === false) await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
     }
 
     const hasDocumentChanges = Object.keys(updates).length > 0;

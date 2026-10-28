@@ -78,17 +78,28 @@ module.exports = async function handler(req, res) {
       const fullName = text(data.fullName, 100);
       const usernameNormalized = normalizeName(fullName);
       if (fullName.length < 3) return send(res, 400, { ok: false, error: 'Ingresá el nombre y apellido del cliente.' });
-      const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).get();
-      if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de este espacio profesional.' });
+      // A normal edit resubmits the current name. Only query for duplicates when
+      // the normalized name changes; keep validation for actual edits.
+      const currentNormalizedName = String(current.usernameNormalized || normalizeName(current.fullName || ''));
+      if (usernameNormalized !== currentNormalizedName) {
+        const duplicate = await customers.where('usernameNormalized', '==', usernameNormalized).get();
+        if (duplicate.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese nombre dentro de este espacio profesional.' });
+      }
       updates.fullName = fullName;
       updates.usernameNormalized = usernameNormalized;
-      await auth().updateUser(customerId, { displayName: fullName }).catch(() => {});
+      if (fullName !== String(current.fullName || '')) {
+        await auth().updateUser(customerId, { displayName: fullName }).catch(() => {});
+      }
     }
     if (data.whatsapp !== undefined) {
       const whatsapp = normalizeArgentinaPhone(data.whatsapp);
       if (!validArgentinaWhatsapp(data.whatsapp)) return send(res, 400, { ok: false, error: 'Ingresá un WhatsApp argentino válido, con característica y número completo.' });
-      const duplicatePhone = await customers.where('whatsapp', '==', whatsapp).get();
-      if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de este espacio profesional.' });
+      // Unchanged phone numbers cannot introduce a duplicate; skip that billed query.
+      const currentWhatsapp = normalizeArgentinaPhone(current.whatsapp || '');
+      if (whatsapp !== currentWhatsapp) {
+        const duplicatePhone = await customers.where('whatsapp', '==', whatsapp).get();
+        if (duplicatePhone.docs.some(doc => doc.id !== customerId && doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya hay otro cliente activo con ese WhatsApp dentro de este espacio profesional.' });
+      }
       updates.whatsapp = whatsapp;
     }
     if (data.cutStyle !== undefined) updates.cutStyle = text(data.cutStyle, 100);

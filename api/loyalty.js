@@ -128,6 +128,21 @@ module.exports = async function handler(req, res) {
       return send(res, 400, { ok: false, error: 'El programa de fidelización es único y se aplica a todos los clientes.' });
     }
     const program = normalizeSubmitted(data.programs[0]);
+    const currentProgram = (Array.isArray(current.loyaltyPrograms) ? current.loyaltyPrograms : [])[0] || DEFAULT_PROGRAM;
+    const currentRewards = Array.isArray(currentProgram.rewards) ? currentProgram.rewards : [];
+    const sameRewards = currentRewards.length === program.rewards.length
+      && currentRewards.every((reward, index) =>
+        Number(reward.cut) === Number(program.rewards[index].cut)
+        && Number(reward.discount) === Number(program.rewards[index].discount)
+      );
+    if (current.defaultLoyaltyProgramId === program.id
+      && currentProgram.id === program.id
+      && String(currentProgram.name || '') === program.name
+      && sameRewards) {
+      // The barber document was already read above. An identical save needs no write;
+      // avoiding it also avoids waking the real-time listeners for every customer.
+      return send(res, 200, { ok: true, programs: [currentProgram], defaultLoyaltyProgramId: program.id, updatedCustomers: 0, unchanged: true });
+    }
     const customerRef = barberRef.collection('customers');
     const oldProgramIds = [...new Set((Array.isArray(current.loyaltyPrograms) ? current.loyaltyPrograms : []).map(p => cleanId(p.id, '')).filter(Boolean))];
     const affected = new Map();

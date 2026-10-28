@@ -44,8 +44,13 @@ Configurar en Vercel, no en el frontend:
 - `MP_WEBHOOK_SECRET`
 - `SUBSCRIPTION_PRICE_ARS`
 - `CRON_SECRET`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY` (secreta; nunca se commitea)
+- `VAPID_SUBJECT` (URL HTTPS de producción)
 
 Conservar los valores privados existentes. El nombre visible de la marca no obliga a crear otro proyecto Firebase ni a cambiar identificadores internos. `APP_URL` debe seguir apuntando a la URL de producción que utiliza el proceso de pago.
+
+Las notificaciones utilizan Web Push con permiso explícito por dispositivo. Se envían al registrar visitas/hitos y al activar promociones vigentes; no usan sondeos periódicos. El servidor elimina suscripciones expiradas, y el navegador recibe solo la clave VAPID pública.
 
 ## Costos, límites y escalabilidad
 
@@ -56,7 +61,7 @@ Vercel Hobby está destinado a usos personales/no comerciales según las condici
 ## Lista previa al lanzamiento
 
 - Publicar en Firebase Console las reglas de `firestore.rules` incluidas en el paquete: los clientes ya no deben poder leer el documento privado del perfil profesional directamente.
-- Confirmar que todas las variables privadas estén configuradas en producción.
+- Confirmar que todas las variables privadas estén configuradas en producción, incluidas las tres VAPID para Web Push.
 - Probar acceso de barbero y cliente, altas/bajas, visitas, hitos, promociones, recordatorios y errores de red.
 - Verificar el webhook de Mercado Pago con eventos de prueba y firma configurada.
 - Probar múltiples visitas concurrentes para comprobar la consistencia de premios e historiales.

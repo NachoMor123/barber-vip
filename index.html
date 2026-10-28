@@ -789,7 +789,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -808,9 +808,17 @@
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function dateIso(value){const d=asDate(value);return d?d.toISOString():'';}
     function refreshRelativeTimes(){
-      $$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});
+      $('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});
       const attendance=$('#customer-attendance-live');
       if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);
+      const nextStart=state.promoNextScheduledAt?new Date(state.promoNextScheduledAt).getTime():0;
+      if(state.role==='customer'&&nextStart&&Number.isFinite(nextStart)&&nextStart<=Date.now()){
+        state.promoNextScheduledAt=null;
+        state.promotionsDirty=true;
+        if(state.customerSection==='home'&&document.visibilityState==='visible'){
+          void loadPromotions({renderCustomer:true}).catch(error=>notifyErrorOnce('scheduled-promotion-refresh',userFacingError(error,'No se pudieron actualizar las promociones.'),error));
+        }
+      }
     }
     function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,60000);}
         const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
@@ -1605,6 +1613,7 @@
           return (!p.startsAt||(Number.isFinite(starts)&&starts<=now))&&(!p.endsAt||(Number.isFinite(ends)&&ends>=now));
         });
         state.promoMetaVersion=cached.version;
+        state.promoNextScheduledAt=cached.nextScheduledAt||null;
         state.promotionsLoaded=true;
         state.promotionsDirty=false;
         return true;
@@ -1629,6 +1638,7 @@
             else if(activated.length>1)toast('Hay '+activated.length+' promociones nuevas o reactivadas. Mirá tu tarjeta para verlas.','success');
           }
           state.promotions=nextPromotions;
+          state.promoNextScheduledAt=data.nextScheduledAt||null;
           state.promotionsLoaded=true;
           state.promotionsDirty=false;
           // Cache customer-visible promotions per customer. The revision listener invalidates this cache
@@ -1815,6 +1825,7 @@
         state.promotionsDirty=true;
         state.promotions=[];
         state.promoMetaVersion='';
+        state.promoNextScheduledAt=null;
         restoreCustomerPromotionsCache();
         state.promoMetaListenerFailed=false;
         applyTheme(state.barber.theme);

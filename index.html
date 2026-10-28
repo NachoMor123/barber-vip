@@ -900,10 +900,10 @@
     function pushSubscriptionUsesKey(subscription,publicKey){
       try{
         const currentKey=subscription?.options?.applicationServerKey;
-        if(!currentKey||!publicKey)return false;
+        if(!currentKey||!publicKey)return null;
         const actual=new Uint8Array(currentKey),expected=base64UrlToUint8Array(publicKey);
         return actual.length===expected.length&&actual.every((value,index)=>value===expected[index]);
-      }catch(_){return false;}
+      }catch(_){return null;}
     }
     async function refreshPushStatusFromDevice(){
       if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window))return;
@@ -916,7 +916,7 @@
           // Detect that once at startup and remove it instead of falsely showing an active status.
           try{
             const config=await api('/api/push');
-            if(config?.enabled&&config.publicKey&&!pushSubscriptionUsesKey(subscription,config.publicKey)){
+            if(config?.enabled&&config.publicKey&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
               try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
               await subscription.unsubscribe().catch(()=>false);
               subscription=null;
@@ -959,7 +959,7 @@
           ]);
         }finally{if(readyTimer)clearTimeout(readyTimer);}
         subscription=await registration.pushManager.getSubscription();
-        if(subscription&&!pushSubscriptionUsesKey(subscription,config.publicKey)){
+        if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
           // Remove a prior-key subscription before creating one compatible with the current server key.
           try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
           await subscription.unsubscribe().catch(()=>false);

@@ -1596,6 +1596,8 @@
         const cached=JSON.parse(localStorage.getItem(customerPromotionCacheKey())||'null');
         if(!cached||typeof cached.version!=='string'||!cached.version||!Array.isArray(cached.promotions))return false;
         const now=Date.now();
+        const nextScheduledAt=cached.nextScheduledAt?new Date(cached.nextScheduledAt).getTime():0;
+        if(cached.nextScheduledAt&&(!Number.isFinite(nextScheduledAt)||nextScheduledAt<=now))return false;
         state.promotions=cached.promotions.filter(p=>{
           if(!p||p.active===false)return false;
           const starts=p.startsAt?new Date(p.startsAt).getTime():0;
@@ -1632,7 +1634,7 @@
           // Cache customer-visible promotions per customer. The revision listener invalidates this cache
           // when the barber edits, activates, or deactivates a promotion, avoiding repeat list reads on reopen.
           if(state.role==='customer'&&state.promoMetaVersion){
-            try{localStorage.setItem(customerPromotionCacheKey(),JSON.stringify({version:state.promoMetaVersion,promotions:nextPromotions}));}catch(_){}
+            try{localStorage.setItem(customerPromotionCacheKey(),JSON.stringify({version:state.promoMetaVersion,nextScheduledAt:data.nextScheduledAt||null,savedAt:Date.now(),promotions:nextPromotions}));}catch(_){}
           }
           return true;
         }catch(error){

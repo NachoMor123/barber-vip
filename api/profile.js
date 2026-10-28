@@ -211,8 +211,13 @@ module.exports = async function handler(req, res) {
       mapsUrl = safeHttpsUrl(data.mapsUrl, ['google.com','maps.app.goo.gl','goo.gl']);
       schedule = cleanSchedule(data.schedule || {});
     } catch (error) { return send(res, 400, {ok:false,error:error.message}); }
-    const existingSnap = await ref.get();
-    const existing = existingSnap.exists ? existingSnap.data() : {};
+    // The normal settings form always sends services and showServices. Avoid a read
+    // on every save; only fetch existing values for partial requests that omit either field.
+    let existing = {};
+    if (data.services === undefined || data.showServices === undefined) {
+      const existingSnap = await ref.get();
+      existing = existingSnap.exists ? existingSnap.data() : {};
+    }
     const allowedActivityTypes = ['barberia'];
     let activityType = 'barberia';
     if (data.activityType !== undefined) {

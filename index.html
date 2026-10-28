@@ -1043,8 +1043,8 @@
           {title:'Dale un lugar a la primera visita',action:'Cuando alguien viene por primera vez, explicale en una frase cómo puede registrar sus visitas y ver sus beneficios.',why:'Si se suma desde el comienzo, tiene un progreso propio que puede darle una razón adicional para volver a elegirte.'},
           {title:'Configurá hitos alcanzables',action:'Elegí metas simples —por ejemplo, 2, 4 y 6 visitas— y descuentos que puedas sostener sin perjudicar tu ganancia.',why:'Una meta cercana se entiende rápido; un premio sostenible mantiene el programa viable para vos.'},
           {title:'Reconocé el premio al llegar al hito',action:'Cuando registres una visita que alcanza un hito, contale al cliente qué beneficio consiguió y cuándo corresponde aplicarlo.',why:'Un premio que se explica en el momento se recuerda mejor y hace visible el valor de seguir viniendo.'},
-          {title:'Usá promociones en días tranquilos',action:'Creá una promo breve para un día o una semana con menos movimiento. Poné un título claro, vigencia real y condiciones fáciles de entender.',why:'Una propuesta concreta da un motivo para elegir una fecha, en vez de publicar un descuento sin dirección.'},
-          {title:'Volvé a contactar con criterio',action:'Usá el contacto de clientes para escribir de forma personal cuando tengas una novedad útil. Evitá mandar el mismo mensaje repetidamente.',why:'Un mensaje relevante cuida el vínculo; insistir demasiado puede desgastarlo.'},
+          {title:'Lanzá una promo relámpago del 10%',action:'Probá un 10% OFF durante siete días en días u horarios tranquilos. Cargá las fechas y elegí a quién le aparece la promoción.',why:'Una fecha límite da un motivo concreto para volver. Calculá el margen y no la acumules con otros descuentos si no te conviene.'},
+          {title:'Reactivá a quienes hace tiempo no vuelven',action:'Escribí de forma personal a clientes que hace rato no vienen y contales una propuesta concreta para regresar. Evitá los mensajes masivos.',why:'Un contacto oportuno puede recuperar una relación ya iniciada sin tener que buscar siempre clientes nuevos.'},
           {title:'Completá tu perfil profesional',action:'Cargá horarios, WhatsApp, Instagram, ubicación y servicios si los ofrecés. Mantenelos actualizados.',why:'Cuando el cliente quiere volver, menos dudas y menos pasos le facilitan encontrar cómo contactarte.'},
           {title:'Explicá el progreso en pocas palabras',action:'Mostrá dónde ve sus visitas, el próximo hito y el beneficio alcanzado. No hace falta explicarle toda la app.',why:'Cuando entiende qué sigue, puede recordar la meta sin depender de que vos se la repitas.'},
           {title:'Repetí lo que te dé señales reales',action:'Probá una promoción por vez y observá respuestas, consultas y quién vuelve. Anotá qué propuesta funcionó mejor en tu negocio.',why:'Así aprendés con tus clientes reales en lugar de cambiar muchas cosas a la vez o regalar descuentos sin medir.'}
@@ -1235,7 +1235,7 @@
     }
     function rewardsForCustomer(c,barber=state.barber){return [...(programForCustomer(c,barber).rewards||CYCLE_REWARDS)].map(r=>({...r,cut:Number(r.cut),discount:Number(r.discount),label:r.label||(Number(r.discount)===100?'Servicio gratis':`${Number(r.discount)}% OFF`)})).sort((a,b)=>a.cut-b.cut);}
     function cycleLength(c,barber=state.barber){const rewards=rewardsForCustomer(c,barber);return Math.max(1,...rewards.map(r=>Number(r.cut)||1));}
-    function cycleCount(c){const length=cycleLength(c);if(c?.cyclePausedAtMax||Number(c?.cycleCuts||0)>=length||(Array.isArray(c?.availableRewards)&&c.availableRewards.some(r=>Number(r.cut)>=length)))return length;return c?.cycleVersion>=2?Math.max(0,Math.min(length,Number(c.cycleCuts||0))):Math.max(0,Number(c?.totalCuts||0))%length;}
+    function cycleCount(c){const length=cycleLength(c);if(c?.lastRewardAppliedOnFinalMilestone===true||c?.cyclePausedAtMax||Number(c?.cycleCuts||0)>=length||(Array.isArray(c?.availableRewards)&&c.availableRewards.some(r=>Number(r.cut)>=length)))return length;return c?.cycleVersion>=2?Math.max(0,Math.min(length,Number(c.cycleCuts||0))):Math.max(0,Number(c?.totalCuts||0))%length;}
     function progress(c) { if(c?.lastRewardAppliedOnFinalMilestone===true)return 100; return Math.min(100,Math.max(0,(cycleCount(c)/cycleLength(c))*100)); }
     function availableRewards(c){if(Array.isArray(c?.availableRewards)&&c.availableRewards.length)return [c.availableRewards.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0]];if(!c?.rewardReady)return [];const program=programForCustomer(c);const n=Number(c?.cycleCuts||0);const cut=c?.cyclePausedAtMax||n>=cycleLength(c)?cycleLength(c):[...program.rewards].filter(r=>Number(r.cut)<=n).pop()?.cut;return [program.rewards.find(r=>Number(r.cut)===Number(cut))||program.rewards[0]||{cut:2,discount:10,label:'10% OFF'}];}
     function rewardForNextVisit(c){const saved=availableRewards(c);if(saved.length)return saved;const max=cycleLength(c),count=cycleCount(c);if(c?.cyclePausedAtMax||count>=max)return rewardsForCustomer(c).filter(r=>Number(r.cut)===max).slice(-1);const nextCut=count+1;return rewardsForCustomer(c).filter(r=>Number(r.cut)===nextCut);}
@@ -1451,10 +1451,6 @@
     <div><strong>Guía PIP · Estrategias de uso</strong><small>10 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
     <button class="btn btn-soft btn-block" type="button" data-action="download-pip-guide">Descargar estrategias de uso (PDF) ↗</button>
   </div>
-  <div class="subscription-resource">
-    <div><strong>¿Todo claro?</strong><small>Este consejo final solo aparece cuando lo abrís.</small></div>
-    <button class="btn btn-soft btn-block" type="button" data-action="pip-final-tip">Leer el consejo final de Pip ↗</button>
-  </div>
 </div></section>
       </div>`;
     }
@@ -1483,7 +1479,15 @@
           const promotionUrl=state.role==='customer'&&state.barberUid?'/api/promotions?barberUid='+encodeURIComponent(state.barberUid):'/api/promotions';
           const data=await api(promotionUrl);
           if(sequence!==state.promotionSyncSequence)return false;
-          state.promotions=Array.isArray(data.promotions)?data.promotions:[];
+          const nextPromotions=Array.isArray(data.promotions)?data.promotions:[];
+          const previousPromotions=Array.isArray(state.promotions)?state.promotions:[];
+          const hadLoadedPromotions=state.promotionsLoaded;
+          if(state.role==='customer'&&hadLoadedPromotions&&document.visibilityState==='visible'&&state.customerSection==='home'){
+            const activated=nextPromotions.filter(p=>promoIsActive(p)&&!previousPromotions.some(old=>old.id===p.id&&promoIsActive(old)));
+            if(activated.length===1)toast('Nueva promoción: '+String(activated[0].title||'Hay una promoción vigente')+'.','success');
+            else if(activated.length>1)toast('Hay '+activated.length+' promociones nuevas o reactivadas. Mirá tu tarjeta para verlas.','success');
+          }
+          state.promotions=nextPromotions;
           state.promotionsLoaded=true;
           state.promotionsDirty=false;
           return true;
@@ -1660,7 +1664,20 @@
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
           if(!snap.exists())return;
-          const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;state.customer=freshCustomer;
+          const previousCustomer=state.customer;
+          const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;
+          if(previousCustomer&&document.visibilityState==='visible'&&Number(freshCustomer.totalCuts||0)>Number(previousCustomer.totalCuts||0)){
+            const cycle=cycleCount(freshCustomer),max=cycleLength(freshCustomer),finalHit=freshCustomer.lastRewardAppliedOnFinalMilestone===true;
+            const rewardLabel=String(freshCustomer.lastRewardAppliedLabel||'').trim();
+            const reachedReward=Number(freshCustomer.lastRewardAppliedCut||0)===cycle&&Boolean(rewardLabel);
+            const message=finalHit
+              ?'¡Hito final alcanzado! '+(rewardLabel||'Tu premio')+' se aplicó en esta visita. Ciclo '+max+' de '+max+'. La próxima visita empieza el ciclo nuevo.'
+              :reachedReward
+                ?'¡Hito alcanzado! '+rewardLabel+' se aplicó en esta visita. Vas '+cycle+' de '+max+'.'
+                :'Visita registrada: vas '+cycle+' de '+max+' en tu ciclo.';
+            toast(message,'success');
+          }
+          state.customer=freshCustomer;
           renderApp();
         },err=>notifyErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá la conexión y las reglas de Firestore.',err)));
 
@@ -1811,7 +1828,8 @@
       ['visits','✦ Registrá cada visita','El ciclo avanza cuando la registrás.'],
       ['promos','🔥 Activá una promo','Vigencia clara; se actualiza sola en la tarjeta.'],
       ['customer-view','📱 Miralo como cliente','Probá la experiencia antes de compartir el acceso.'],
-      ['trial','💳 Tu plan','Revisá prueba y vencimiento.']
+      ['trial','💳 Tu plan','Revisá prueba y vencimiento.'],
+      ['final','✅ Todo claro','Cómo ocultar Pip y volver a mostrarlo cuando lo necesites.']
     ];
     const PIP_TOPICS_CUSTOMER = [
       ['card','✨ Tu tarjeta','Visitas y progreso, en un mismo lugar.'],
@@ -1829,6 +1847,7 @@
       promos:'Poné un título claro, fechas reales y elegí quién la recibe. Al guardar, la tarjeta del cliente se actualiza sin que tenga que recargar.',
       'customer-view':'Probá la app entrando por Soy cliente con una cuenta de prueba. Revisá tarjeta, horarios y promociones antes de compartir el acceso.',
       trial:'En Configuración podés revisar el período de prueba, el estado de tu cuenta y su vencimiento.',
+      final:'Listo. Si querés ocultar el botón Pip, entrá a Configuración, buscá “Botón Pip” y elegí “Ocultar botón Pip”. Para volver a verlo, elegí “Mostrar botón Pip”. La preferencia queda guardada en este dispositivo.',
       card:'Acá ves visitas totales, última visita y avance del ciclo. El tiempo de la última visita se calcula en tu dispositivo.',
       turn:'Tocá WhatsApp para coordinar directamente con tu profesional.',
       barber:'Vas a ver los datos que tu profesional decidió compartir: horarios, WhatsApp, Instagram y ubicación.'
@@ -1838,10 +1857,6 @@
       if(!selected)selected=state.role==='customer'?'card':'start';
       const answer=selected?PIP_ANSWERS[selected]:'';
       modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, promociones y contacto, sin vueltas.':'Bienvenido. Empezá arriba; no hace falta leer todo de golpe.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}</section></div>`;
-    }
-
-    function openPipFinalTip(){
-      modalRoot.innerHTML='<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipFinalTitle"><div class="modal-header"><div><span class="eyebrow">PIP · CONSEJO FINAL</span><h2 id="pipFinalTitle">Ya tenés lo importante.</h2><p>Podés seguir usando Barber VIP con tranquilidad.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><p style="margin:0">Y listo, ya leíste lo importante 😊. Si después necesitás una mano, abrí Pip desde su botón. También podés ocultarlo desde Configuración y volver a mostrarlo cuando lo necesites.</p></div><button class="btn btn-primary btn-block" data-action="close-modal">Entendido</button></section></div>';
     }
 
     function showPipTopic(topic){openPipHelp(topic);}
@@ -1983,7 +1998,6 @@
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
         else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&!state.customersLoaded)pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
-        else if(action==='pip-final-tip'){openPipFinalTip();}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}

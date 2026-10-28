@@ -721,6 +721,12 @@
     .barber-poster-instagram{margin-top:10px;color:#385b82;font-size:10px;font-weight:800}
     .barber-poster-help{font-size:11px;line-height:1.65;margin:12px 0}
     @media(max-width:560px){.barber-poster-preview{padding:15px 11px}.barber-poster-qr{width:146px;height:146px}.barber-poster-qr img,.barber-poster-qr canvas{width:136px!important;height:136px!important}}
+
+    .subscription-extra-actions{display:grid;gap:14px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+    .subscription-resource{display:grid;gap:8px}
+    .subscription-resource>div strong{display:block;font-size:12px;line-height:1.5;color:var(--text)}
+    .subscription-resource>div small{display:block;margin-top:2px;color:var(--muted);font-size:10px;line-height:1.5}
+    .subscription-resource .btn{white-space:normal;min-height:42px}
 </style></head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -793,7 +799,7 @@
       const attendance=$('#customer-attendance-live');
       if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);
     }
-    function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,15000);}
+    function startRelativeTimeClock(){if(state.relativeTimeTimer)clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;if(state.role==='barber'||state.role==='customer')state.relativeTimeTimer=setInterval(refreshRelativeTimes,60000);}
         const normalizeName = value => String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
     function argentinaLocalNumber(input){
       let n=String(input||'').trim().replace(/\D/g,'');
@@ -966,14 +972,14 @@
         await loadExternalLibrary('jsPDF','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf?.jsPDF);
         const JsPDF = window.jspdf.jsPDF;
         const doc = new JsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
-        const W=210,H=297, name=String(b.displayName||b.barberName||'Nombre del barber').trim();
+        const W=210,H=297, name=String(b.displayName||b.barberName||'Nombre del profesional').trim();
         let insta=''; try { const igUrl = new URL(String(b.instagramUrl||'')); if (igUrl.hostname.toLowerCase().includes('instagram.com')) insta = igUrl.pathname.split('/').filter(Boolean)[0] || ''; } catch(_) {}
         const code = String(b.barberCode||'—').trim();
         // Premium navy header with blue accents, then a high-contrast QR and visible access code.
         doc.setFillColor(4,12,27);doc.rect(0,0,W,64,'F');
         doc.setFillColor(45,123,255);doc.rect(0,62,W,2,'F');
         doc.setTextColor(244,248,255);doc.setFont('helvetica','bold');doc.setFontSize(28);doc.text('BARBER VIP',W/2,36,{align:'center'});
-        doc.setTextColor(82,112,148);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('TU BARBER',W/2,77,{align:'center'});
+        doc.setTextColor(82,112,148);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('TU PROFESIONAL',W/2,77,{align:'center'});
         doc.setTextColor(5,19,39);doc.setFont('helvetica','bold');doc.setFontSize(20);
         const nameLines=doc.splitTextToSize(name,172);doc.text(nameLines,W/2,88,{align:'center'});
         let y=88+nameLines.length*8;
@@ -994,6 +1000,71 @@
       } catch(error) {
         notifyErrorOnce('barber-poster-pdf','No se pudo generar el PDF. Revisá tu conexión e intentá nuevamente.',error,5000);
       } finally { if(btn){btn.disabled=false;btn.textContent=original;} }
+    }
+
+
+    async function downloadPipStrategiesPdf(){
+      const btn=$('[data-action="download-pip-guide"]');
+      const original=btn?.textContent||'Descargar estrategias de uso (PDF) ↗';
+      if(btn){btn.disabled=true;btn.textContent='Preparando guía…';}
+      try{
+        await loadExternalLibrary('jsPDF','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf?.jsPDF);
+        const JsPDF=window.jspdf.jsPDF;
+        const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+        const W=210, left=14, cardW=182, cardH=43, gap=3;
+        const strategies=[
+          {title:'Poné el QR donde el cliente lo vea',action:'Imprimí el cartel y colocálo cerca del espejo, la recepción o donde se paga el corte. Invitá a escanearlo al terminar.',why:'El registro queda a mano en el momento: nadie tiene que recordar buscar un enlace después.'},
+          {title:'Sumá a tus clientes actuales',action:'Empezá por las personas que ya te eligen. Creales su cuenta desde tu panel o ayudalas a registrarse con tu código.',why:'No necesitás esperar clientes nuevos para empezar: activás la relación que ya construiste.'},
+          {title:'Dale un lugar a la primera visita',action:'Cuando alguien viene por primera vez, explicale en una frase cómo puede registrar sus visitas y ver sus beneficios.',why:'Si se suma desde el comienzo, tiene un progreso propio que puede darle una razón adicional para volver a elegirte.'},
+          {title:'Configurá hitos alcanzables',action:'Elegí metas simples —por ejemplo, 2, 4 y 6 visitas— y descuentos que puedas sostener sin perjudicar tu ganancia.',why:'Una meta cercana se entiende rápido; un premio sostenible mantiene el programa viable para vos.'},
+          {title:'Reconocé el premio al llegar al hito',action:'Cuando registres una visita que alcanza un hito, contale al cliente qué beneficio consiguió y cuándo corresponde aplicarlo.',why:'Un premio que se explica en el momento se recuerda mejor y hace visible el valor de seguir viniendo.'},
+          {title:'Usá promociones en días tranquilos',action:'Creá una promo breve para un día o una semana con menos movimiento. Poné un título claro, vigencia real y condiciones fáciles de entender.',why:'Una propuesta concreta da un motivo para elegir una fecha, en vez de publicar un descuento sin dirección.'},
+          {title:'Volvé a contactar con criterio',action:'Usá el contacto de clientes para escribir de forma personal cuando tengas una novedad útil. Evitá mandar el mismo mensaje repetidamente.',why:'Un mensaje relevante cuida el vínculo; insistir demasiado puede desgastarlo.'},
+          {title:'Completá tu perfil profesional',action:'Cargá horarios, WhatsApp, Instagram, ubicación y servicios si los ofrecés. Mantenelos actualizados.',why:'Cuando el cliente quiere volver, menos dudas y menos pasos le facilitan encontrar cómo contactarte.'},
+          {title:'Explicá el progreso en pocas palabras',action:'Mostrá dónde ve sus visitas, el próximo hito y el beneficio alcanzado. No hace falta explicarle toda la app.',why:'Cuando entiende qué sigue, puede recordar la meta sin depender de que vos se la repitas.'},
+          {title:'Repetí lo que te dé señales reales',action:'Probá una promoción por vez y observá respuestas, consultas y quién vuelve. Anotá qué propuesta funcionó mejor en tu negocio.',why:'Así aprendés con tus clientes reales en lugar de cambiar muchas cosas a la vez o regalar descuentos sin medir.'}
+        ];
+        function header(page){
+          doc.setFillColor(255,255,255);doc.rect(0,0,W,297,'F');
+          doc.setTextColor(20,20,20);doc.setFont('helvetica','bold');doc.setFontSize(34);doc.text('PIP',left,22);
+          doc.setFontSize(14);doc.text('ESTRATEGIAS DE USO',left+31,21);
+          doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(80,80,80);
+          doc.text(page===1?'10 acciones para activar la fidelización':'GUÍA DE CAMPO · CONTINUACIÓN',left,31);
+          doc.text('BARBER VIP  /  USO PRÁCTICO',W-left,31,{align:'right'});
+          doc.setDrawColor(40,40,40);doc.setLineWidth(.45);doc.line(left,36,W-left,36);
+        }
+        function drawCard(item,index,y){
+          doc.setFillColor(252,252,252);doc.setDrawColor(193,193,193);doc.setLineWidth(.25);doc.roundedRect(left,y,cardW,cardH,2,2,'FD');
+          doc.setDrawColor(35,35,35);doc.setLineWidth(.4);doc.circle(left+8,y+8,4.2,'S');
+          doc.setTextColor(20,20,20);doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(String(index+1).padStart(2,'0'),left+8,y+9.2,{align:'center'});
+          doc.setFont('helvetica','bold');doc.setFontSize(10.2);
+          const titleLines=doc.splitTextToSize(item.title,cardW-23);
+          doc.text(titleLines,left+15,y+8.2);
+          const actionLines=doc.splitTextToSize(item.action,cardW-38);
+          const whyLines=doc.splitTextToSize(item.why,cardW-38);
+          let cy=y+14.5;
+          if(titleLines.length>1)cy+=3.8;
+          doc.setFont('helvetica','bold');doc.setFontSize(6.8);doc.setTextColor(78,78,78);doc.text('HACÉ',left+5,cy+1.2);
+          doc.setFont('helvetica','normal');doc.setFontSize(7.6);doc.setTextColor(33,33,33);doc.text(actionLines,left+24,cy+1.2);
+          cy+=Math.max(3.4,actionLines.length*3.1)+2.2;
+          doc.setFont('helvetica','bold');doc.setFontSize(6.8);doc.setTextColor(78,78,78);doc.text('POR QUÉ',left+5,cy+1.2);
+          doc.setFont('helvetica','normal');doc.setFontSize(7.6);doc.setTextColor(33,33,33);doc.text(whyLines,left+24,cy+1.2);
+        }
+        for(let page=0;page<2;page++){
+          if(page>0)doc.addPage();
+          header(page+1);
+          for(let j=0;j<5;j++)drawCard(strategies[page*5+j],page*5+j,41+j*(cardH+gap));
+          doc.setDrawColor(190,190,190);doc.line(left,282,W-left,282);
+          doc.setTextColor(86,86,86);doc.setFont('helvetica','normal');doc.setFontSize(7.4);
+          doc.text(page===0?'Elegí una o dos ideas para empezar. No hace falta cambiar todo de golpe.':'Probá, observá la respuesta y repetí lo que funcione para tu negocio.',left,288);
+          doc.setFont('helvetica','bold');doc.text((page+1)+' / 2',W-left,288,{align:'right'});
+        }
+        doc.save('PIP-Guia-de-estrategias-Barber-VIP.pdf');
+        toast('Guía de estrategias descargada. Se generó en tu dispositivo, sin consultar Firebase.','success');
+      }catch(error){
+        console.error('[Barber VIP] No se pudo generar la guía PIP.',error);
+        toast('No se pudo generar el PDF. Revisá tu conexión e intentá nuevamente.','error');
+      }finally{if(btn){btn.disabled=false;btn.textContent=original;}}
     }
 
     async function copyText(value){
@@ -1204,7 +1275,7 @@
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
     function promoIsActive(p){const now=Date.now(),start=asDate(p.startsAt)?.getTime(),end=asDate(p.endsAt)?.getTime();return p.active!==false&&(!start||start<=now)&&(!end||end>=now);}
     function promoCountdown(value){const d=asDate(value);if(!d)return 'Sin vencimiento';const ms=d.getTime()-Date.now();if(ms<=0)return 'Finalizada';const total=Math.floor(ms/1000),days=Math.floor(total/86400),hours=Math.floor(total%86400/3600),minutes=Math.floor(total%3600/60),seconds=total%60;return days?`${days} d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;}
-    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible)return;const tick=()=>{let expired=false;$$('[data-promo-countdown]').forEach(el=>{const next=promoCountdown(el.dataset.promoCountdown);if(el.textContent!==next)el.textContent=next;if(next==='Finalizada')expired=true;});if(expired&&state.role==='customer'){const before=state.promotions.length;state.promotions=state.promotions.filter(p=>!p.endsAt||asDate(p.endsAt)?.getTime()>Date.now());if(before!==state.promotions.length)renderApp();}};tick();if(state.promotions.some(p=>p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))state.promoTimer=setInterval(tick,250);}
+    function startPromoCountdowns(){if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}const visible=(state.role==='customer'&&state.customerSection==='home')||(state.role==='barber'&&state.section==='promotions');if(!visible)return;const tick=()=>{let expired=false;$$('[data-promo-countdown]').forEach(el=>{const next=promoCountdown(el.dataset.promoCountdown);if(el.textContent!==next)el.textContent=next;if(next==='Finalizada')expired=true;});if(expired&&state.role==='customer'){const before=state.promotions.length;state.promotions=state.promotions.filter(p=>!p.endsAt||asDate(p.endsAt)?.getTime()>Date.now());if(before!==state.promotions.length)renderApp();}};tick();if(state.promotions.some(p=>p.endsAt&&asDate(p.endsAt)?.getTime()>Date.now()))state.promoTimer=setInterval(tick,1000);}
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function subscriptionBanner() {
       const s=subStatus(); const cls=s.status; const message=s.status==='active'?(s.isTrial?`Tu prueba gratuita sigue activa por ${s.daysRemaining} día${s.daysRemaining===1?'':'s'}. Podés activar el plan pago cuando quieras.`:`Tu cuenta está activa. Quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} antes del período de gracia.`):s.status==='grace'?`Te quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} de servicio. Pagá para extender el acceso por 30 días.`:'La cuenta está vencida o todavía no tiene fecha de vencimiento. No se pueden registrar visitas hasta renovarla.';
@@ -1334,8 +1405,8 @@
           <div class="barber-poster-intro"><span class="eyebrow">PARA TU LOCAL</span><h4>Tu cartel de Barber VIP</h4><p>Mostrá este cartel, invitá a tus clientes a registrarse y dejá que conozcan su progreso desde el celular.</p></div>
           <div class="barber-poster-preview" id="barberPosterPreview">
             <div class="barber-poster-preview-head"><span class="barber-poster-brand">BARBER VIP</span></div>
-            <div class="barber-poster-owner-label">TU BARBER</div>
-            <h5>${escapeHtml(b.displayName||b.barberName||'Nombre del barber')}</h5>
+            <div class="barber-poster-owner-label">TU PROFESIONAL</div>
+            <h5>${escapeHtml(b.displayName||b.barberName||'Nombre del profesional')}</h5>
             <div class="barber-poster-qr" id="barberPosterQr"><span>Preparando tu código QR…</span></div>
             <div class="barber-poster-scan">ESCANEÁ EL QR PARA ENTRAR</div>
             <p class="barber-poster-instructions">En la app, elegí «Cliente» e ingresá el código de acceso.</p>
@@ -1349,7 +1420,17 @@
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Un único ciclo editable para todos los clientes. Las promociones comerciales se configuran por separado.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
-        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Pagar ${money(price)} con Mercado Pago ↗`}</button></div></section>
+        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Pagar ${money(price)} con Mercado Pago ↗`}</button></div>
+<div class="subscription-extra-actions">
+  <div class="subscription-resource">
+    <div><strong>Guía PIP · Estrategias de uso</strong><small>10 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
+    <button class="btn btn-soft btn-block" type="button" data-action="download-pip-guide">Descargar estrategias de uso (PDF) ↗</button>
+  </div>
+  <div class="subscription-resource">
+    <div><strong>¿Todo claro?</strong><small>Este consejo final solo aparece cuando lo abrís.</small></div>
+    <button class="btn btn-soft btn-block" type="button" data-action="pip-final-tip">Leer el consejo final de Pip ↗</button>
+  </div>
+</div></section>
       </div>`;
     }
 
@@ -1731,8 +1812,13 @@
       const topics=state.role==='customer'?PIP_TOPICS_CUSTOMER:PIP_TOPICS_ADMIN;
       if(!selected)selected=state.role==='customer'?'card':'start';
       const answer=selected?PIP_ANSWERS[selected]:'';
-      modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, promociones y contacto, sin vueltas.':'Bienvenido. Empezá arriba; no hace falta leer todo de golpe.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}<p class="tiny muted" style="margin:12px 0 0">Y listo, ya leíste lo importante 😊. Si preferís, andá a Configuración y ocultá el botón de Pip. Si después me necesitás, lo volvés a mostrar.</p></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipHelpTitle"><div class="modal-header"><div><span class="eyebrow">✦ BARBER VIP</span><h2 id="pipHelpTitle">Pip · guía rápida</h2><p>${state.role==='customer'?'Tu tarjeta, promociones y contacto, sin vueltas.':'Bienvenido. Empezá arriba; no hace falta leer todo de golpe.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-topic-grid">${topics.map(([id,title])=>`<button class="pip-topic-btn ${selected===id?'active':''}" data-action="pip-topic" data-topic="${id}">${title}</button>`).join('')}</div>${answer?`<div class="pip-answer"><strong>${escapeHtml(topics.find(t=>t[0]===selected)?.[1]||'Respuesta')}</strong><p>${escapeHtml(answer)}</p></div>`:`<div class="pip-answer muted">Seleccioná una pregunta para ver una explicación breve.</div>`}</section></div>`;
     }
+
+    function openPipFinalTip(){
+      modalRoot.innerHTML='<div class="modal-backdrop pip-backdrop" data-action="backdrop-close"><section class="modal-card pip-help-card" role="dialog" aria-modal="true" aria-labelledby="pipFinalTitle"><div class="modal-header"><div><span class="eyebrow">PIP · CONSEJO FINAL</span><h2 id="pipFinalTitle">Ya tenés lo importante.</h2><p>Podés seguir usando Barber VIP con tranquilidad.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><p style="margin:0">Y listo, ya leíste lo importante 😊. Si después necesitás una mano, abrí Pip desde su botón. También podés ocultarlo desde Configuración y volver a mostrarlo cuando lo necesites.</p></div><button class="btn btn-primary btn-block" data-action="close-modal">Entendido</button></section></div>';
+    }
+
     function showPipTopic(topic){openPipHelp(topic);}
     function pipEnabled(){try{return localStorage.getItem('barberVipPipVisible')!=='false';}catch(_){return true;}}
     function isStandaloneApp(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;}
@@ -1773,7 +1859,7 @@
         kicker='APLICACIÓN INSTALADA';title='Barber VIP ya está instalada';copy='No hace falta instalarla de nuevo. En algunos navegadores, un enlace abre primero una pestaña web en lugar de lanzar la aplicación.';
         content=`<div class="install-help-copy"><strong>📲 Para abrirla como aplicación:</strong><br>1. Volvé a la pantalla de inicio del teléfono.<br>2. Tocá el ícono Barber VIP que ya instalaste.<br>3. Vas a entrar directamente, sin esta pantalla de instalación.</div><p class="tiny muted">Si el navegador ya abrió Barber VIP como aplicación, esta pantalla no aparecerá.</p><button class="btn btn-primary btn-block" data-action="continue-installed-browser">Continuar en esta pestaña</button>`;
       } else if(installPhase==='waiting'){
-        kicker='INSTALACIÓN EN CURSO';title='Esperando instalación…';copy='Mientras termina la instalación, Barber VIP queda bloqueada en esta pestaña. Cuando termine, abrila desde el ícono de la aplicación.';
+        kicker='INSTALACIÓN EN CURSO';title='Esperando instalación…';copy='Estamos preparando el acceso como aplicación. Cuando termine, abrí Barber VIP desde el ícono que aparece en tu pantalla de inicio.';
         content=`<div class="install-waiting"><span class="install-spinner"></span><strong>Esperando instalación</strong></div><p class="install-help-copy">Esta pestaña no puede abrir por la fuerza la aplicación instalada. Si ya aceptaste la instalación, podés ver cómo abrir el ícono nuevo.</p><button class="btn btn-soft btn-block" data-action="install-manual-check">Ver instrucciones de apertura</button>`;
       } else if(installPhase==='installed'||installPhase==='instructions'){
         kicker='INSTALACIÓN COMPLETADA';title='Abrí Barber VIP desde su ícono';copy='La instalación ya terminó. Abrí el ícono de Barber VIP en la pantalla de inicio para entrar en el modo aplicación.';
@@ -1872,6 +1958,8 @@
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
         else if(action==='nav'){const nextSection=button.dataset.section;state.section=nextSection;saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&!state.customersLoaded)pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
+        else if(action==='pip-final-tip'){openPipFinalTip();}
+        else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}
         else if(action==='confirm-logout'){modalRoot.innerHTML='';await signOutAndReturn();}

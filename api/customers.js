@@ -49,8 +49,8 @@ module.exports = async function handler(req, res) {
         batch.set(database.collection('userProfiles').doc(uid), { uid, role: 'customer', barberUid: ctx.uid, createdAt: now });
         await batch.commit();
       } catch (error) {
-        await database.collection('barbers').doc(ctx.uid).collection('customers').doc(uid).delete().catch(() => {});
-        await database.collection('userProfiles').doc(uid).delete().catch(() => {});
+        // Firestore batch writes are atomic: a failed commit leaves both documents unwritten.
+        // Deleting them here would add two redundant Firestore writes; only roll back Auth.
         await auth().deleteUser(uid).catch(() => {});
         throw error;
       }

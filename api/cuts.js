@@ -1,6 +1,7 @@
 const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
+const { sendPushToCustomer } = require('../lib/push');
 
 function defaultProgram(barber) {
   const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];
@@ -37,7 +38,7 @@ module.exports = async function handler(req, res) {
 
     if (action === 'add') {
       let resultCustomer = null;
-      let outcome = { appliedReward: null, cycleCut: 0, cyclePausedAtMax: false, cycleReset: false };
+      let outcome = { appliedReward: null, cycleCut: 0, cycleMax: 0, cyclePausedAtMax: false, cycleReset: false };
       await ctx.db.runTransaction(async transaction => {
         const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
         if (!customerSnap.exists || customerSnap.data().active === false) throw new Error('El cliente no existe o fue dado de baja.');
@@ -118,11 +119,19 @@ module.exports = async function handler(req, res) {
           lastRewardAppliedCut: storedReward ? storedReward.cut : null,
           lastRewardAppliedOnFinalMilestone: storedReward ? Boolean(storedReward.finalMilestone) : null
         };
-        outcome = { appliedReward, cycleCut: cycleForVisit, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
+        outcome = { appliedReward, cycleCut: cycleForVisit, cycleMax, cyclePausedAtMax, cycleReset: appliedOnFinalMilestone };
       });
       let message = 'Visita registrada correctamente.';
       if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en esta visita.'; }
       if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
+      const rewardLabel = outcome.appliedReward && String(outcome.appliedReward.label || (Number(outcome.appliedReward.discount)||0)+'% OFF');
+      const pushTitle = outcome.cycleReset ? '¡Ciclo completado!' : outcome.appliedReward ? '¡Premio alcanzado!' : 'Tu tarjeta se actualizó';
+      const pushBody = outcome.cycleReset
+        ? 'Completaste '+outcome.cycleMax+' de '+outcome.cycleMax+' visitas. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita. El próximo corte inicia otro ciclo.'
+        : outcome.appliedReward
+          ? 'Alcanzaste el hito '+outcome.cycleCut+'. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita.'
+          : 'Tu ciclo va '+outcome.cycleCut+' de '+outcome.cycleMax+' visitas.';
+      await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId,url:'/'});
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 

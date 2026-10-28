@@ -1589,6 +1589,25 @@
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true"><div class="modal-header"><div><h2>${p?'Editar promoción':'Nueva promoción'}</h2><p>La visibilidad se controla con el interruptor de la tarjeta.</p></div><button class="close-modal btn-back" data-action="close-modal">×</button></div><form id="promotionForm" data-id="${escapeHtml(p?.id||'')}" autocomplete="off"><div class="form-field"><label>Título de la promoción *</label><input id="promotionTitle" name="title" autocomplete="off" data-lpignore="true" required maxlength="80" value="${escapeHtml(p?.title||'')}"><div class="emoji-quick-row" aria-label="Agregar emoji"><button type="button" data-action="insert-promo-emoji" data-emoji="🔥">🔥</button><button type="button" data-action="insert-promo-emoji" data-emoji="✨">✨</button><button type="button" data-action="insert-promo-emoji" data-emoji="💈">💈</button><button type="button" data-action="insert-promo-emoji" data-emoji="🎁">🎁</button><button type="button" data-action="insert-promo-emoji" data-emoji="⚡">⚡</button><button type="button" data-action="insert-promo-emoji" data-emoji="💙">💙</button></div></div><p class="field-hint">Podés escribir o combinar emojis. En la tarjeta se muestra el título y el cronómetro.</p><div class="field-grid"><div class="form-field"><label>Comienza (fecha y hora)</label><input name="startsAt" type="datetime-local" value="${p?.startsAt?escapeHtml(dateTimeLocalInput(p.startsAt)):''}"></div><div class="form-field"><label>Termina (fecha y hora)</label><input name="endsAt" type="datetime-local" value="${p?.endsAt?escapeHtml(dateTimeLocalInput(p.endsAt)):''}"></div></div><div class="form-field"><label>Asignar a</label><select name="audience" id="promotionAudience" class="setting-input"><option value="all" ${p?.audience!=='selected'?'selected':''}>Todos los clientes</option><option value="selected" ${p?.audience==='selected'?'selected':''}>Clientes seleccionados</option></select></div><div class="promotion-select-clients ${p?.audience==='selected'?'':'hidden'}">${clients.map(c=>`<label class="bulk-row"><input type="checkbox" name="customerIds" value="${escapeHtml(c.uid)}" ${(p?.customerIds||[]).includes(c.uid)?'checked':''}><span>${escapeHtml(c.fullName)}</span></label>`).join('')||'<span class="tiny muted">No hay clientes activos.</span>'}</div><div class="modal-footer"><button class="btn btn-danger" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">Guardar promoción</button></div></form></section></div>`;
     }
     function promotionRevisionKey(value){const d=asDate(value);return d?String(d.getTime()):String(value||'');}
+    function customerPromotionCacheKey(){return 'barberVipPromotionsCache:v1:'+String(state.barberUid||'')+':'+String(state.user?.uid||'');}
+    function restoreCustomerPromotionsCache(){
+      if(state.role!=='customer'||!state.barberUid||!state.user)return false;
+      try{
+        const cached=JSON.parse(localStorage.getItem(customerPromotionCacheKey())||'null');
+        if(!cached||typeof cached.version!=='string'||!cached.version||!Array.isArray(cached.promotions))return false;
+        const now=Date.now();
+        state.promotions=cached.promotions.filter(p=>{
+          if(!p||p.active===false)return false;
+          const starts=p.startsAt?new Date(p.startsAt).getTime():0;
+          const ends=p.endsAt?new Date(p.endsAt).getTime():Infinity;
+          return (!p.startsAt||(Number.isFinite(starts)&&starts<=now))&&(!p.endsAt||(Number.isFinite(ends)&&ends>=now));
+        });
+        state.promoMetaVersion=cached.version;
+        state.promotionsLoaded=true;
+        state.promotionsDirty=false;
+        return true;
+      }catch(_){return false;}
+    }
     async function loadPromotions({renderCustomer=false}={}) {
       if(state.promotionsLoadPromise){const loaded=await state.promotionsLoadPromise;if(renderCustomer&&state.role==='customer'&&state.customerSection==='home')renderApp();return loaded;}
       const sequence=(state.promotionSyncSequence||0)+1;
@@ -1610,6 +1629,11 @@
           state.promotions=nextPromotions;
           state.promotionsLoaded=true;
           state.promotionsDirty=false;
+          // Cache customer-visible promotions per customer. The revision listener invalidates this cache
+          // when the barber edits, activates, or deactivates a promotion, avoiding repeat list reads on reopen.
+          if(state.role==='customer'&&state.promoMetaVersion){
+            try{localStorage.setItem(customerPromotionCacheKey(),JSON.stringify({version:state.promoMetaVersion,promotions:nextPromotions}));}catch(_){}
+          }
           return true;
         }catch(error){
           if(sequence===state.promotionSyncSequence){
@@ -1653,7 +1677,7 @@
         if(firstSnapshot){
           firstSnapshot=false;
           state.promoMetaVersion=version;
-          if(previousVersion&&version&&version!==previousVersion)state.promotionsDirty=true;
+          if(previousVersion&&previousVersion!==version)state.promotionsDirty=true;
           resolveReady();
           return;
         }
@@ -1788,6 +1812,8 @@
         state.promotionsLoaded=false;
         state.promotionsDirty=true;
         state.promotions=[];
+        state.promoMetaVersion='';
+        restoreCustomerPromotionsCache();
         state.promoMetaListenerFailed=false;
         applyTheme(state.barber.theme);
 

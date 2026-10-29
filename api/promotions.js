@@ -118,6 +118,7 @@ module.exports = async function handler(req, res) {
     if (startsAt && !String(data.startsAt).includes('T')) startsAt.setHours(0,0,0,0);
     if (endsAt && !String(data.endsAt).includes('T')) endsAt.setHours(23,59,59,999);
     if (title.length < 3) return send(res, 400, {ok:false,error:'El título debe tener al menos 3 caracteres.'});
+    if (/\\[[^\\]]{1,100}\\]/.test(title+' '+description+' '+conditions)) return send(res, 400, {ok:false,error:'Reemplazá los textos entre corchetes por el beneficio y las condiciones reales antes de guardar la promoción.'});
     if (startsAt && endsAt && endsAt < startsAt) return send(res, 400, {ok:false,error:'La fecha de fin no puede ser anterior a la fecha de inicio.'});
     if (audience === 'selected' && !customerIds.length) return send(res, 400, {ok:false,error:'Seleccioná al menos un cliente para esta promoción.'});
     const now = admin().firestore.FieldValue.serverTimestamp();
@@ -133,7 +134,7 @@ module.exports = async function handler(req, res) {
           barberUid: ctx.uid,
           customerIds: audience === 'selected' ? customerIds : null,
           title: 'Nueva promoción: '+title,
-          body: 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
+          body: description || 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
           tag: 'barber-vip-promo-'+ref.id,
           url: '/'
         });
@@ -154,7 +155,7 @@ module.exports = async function handler(req, res) {
         barberUid: ctx.uid,
         customerIds: audience === 'selected' ? customerIds : null,
         title: 'Nueva promoción: '+title,
-        body: 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
+        body: description || 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
         tag: 'barber-vip-promo-'+id,
         url: '/'
       });

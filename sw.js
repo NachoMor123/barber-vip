@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v55-force-refresh-fixed-loyalty';
+const CACHE_NAME = 'barber-vip-shell-v56-fixed-milestones-generic-share-push-hide';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

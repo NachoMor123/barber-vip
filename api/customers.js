@@ -103,7 +103,7 @@ module.exports = async function handler(req, res) {
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
       });
-      await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
+      if (customerSnap.data().pushEnabled === true) await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
       return send(res, 200, { ok: true });
     }
 
@@ -191,7 +191,7 @@ module.exports = async function handler(req, res) {
     if (activeChanged) {
       await auth().updateUser(customerId, { disabled: !updates.active }).catch(() => {});
       await database.collection('userProfiles').doc(customerId).set({ disabled: !updates.active }, { merge: true });
-      if (updates.active === false) await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
+      if (updates.active === false && current.pushEnabled === true) await removeCustomerPushSubscriptions(customerId, database).catch(() => {});
     }
 
     const hasDocumentChanges = Object.keys(updates).length > 0;

@@ -2,6 +2,7 @@ const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, digits, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
 const { removeCustomerPushSubscriptions } = require('../lib/push');
+const { normalizeCustomerLoyaltyOverride } = require('../lib/loyalty');
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
@@ -20,6 +21,9 @@ module.exports = async function handler(req, res) {
     const customers = barberRef.collection('customers');
 
     if (req.method === 'POST') {
+      let loyaltyOverride;
+      try { loyaltyOverride = normalizeCustomerLoyaltyOverride(data.loyaltyMode, data.loyaltyRewards); }
+      catch (error) { return send(res, 400, { ok: false, error: error.message }); }
       const fullName = text(data.fullName, 100);
       const usernameNormalized = normalizeName(fullName);
       const password = String(data.password || '');
@@ -41,6 +45,7 @@ module.exports = async function handler(req, res) {
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
+        loyaltyOverride, pushNotificationsEnabled: false,
         totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
         createdAt: now, updatedAt: now, lastCutAt: null
       };
@@ -65,7 +70,7 @@ module.exports = async function handler(req, res) {
     if (!customerSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró ese cliente.' });
 
     if (req.method === 'DELETE') {
-      await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      await customerRef.update({ active: false, pushNotificationsEnabled: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: admin().firestore.FieldValue.serverTimestamp() });
       await database.collection('userProfiles').doc(customerId).set({ disabled: true, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
@@ -76,6 +81,17 @@ module.exports = async function handler(req, res) {
 
     const current = customerSnap.data();
     const updates = {};
+    if (data.loyaltyMode !== undefined || data.loyaltyRewards !== undefined) {
+      try {
+        const nextOverride = normalizeCustomerLoyaltyOverride(
+          data.loyaltyMode !== undefined ? data.loyaltyMode : current.loyaltyOverride?.mode,
+          data.loyaltyRewards !== undefined ? data.loyaltyRewards : current.loyaltyOverride?.rewards
+        );
+        if (JSON.stringify(current.loyaltyOverride || { mode: 'standard' }) !== JSON.stringify(nextOverride)) updates.loyaltyOverride = nextOverride;
+      } catch (error) {
+        return send(res, 400, { ok: false, error: error.message });
+      }
+    }
     let fullNameChanged = false;
     let passwordChanged = false;
     let activeChanged = false;
@@ -138,6 +154,7 @@ module.exports = async function handler(req, res) {
       const currentActive = current.active !== false;
       if (nextActive !== currentActive) {
         updates.active = nextActive;
+        if (!nextActive) updates.pushNotificationsEnabled = false;
         activeChanged = true;
       }
     }

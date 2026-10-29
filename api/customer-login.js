@@ -89,7 +89,7 @@ module.exports = async function handler(req, res) {
           uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'self',
           cutStyle: '', conversationPreference: '',
           totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
-          active: true,
+          active: true, pushEnabled: false,
           createdAt: now, updatedAt: now, lastCutAt: null
         };
         const batch = database.batch();

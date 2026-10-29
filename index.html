@@ -884,9 +884,7 @@
         :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
         :active?'Activadas en este dispositivo. Te avisamos por visitas, hitos y nuevas promociones.'
         :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
-      const action=active
-        ?'<div class="push-notification-status" role="status" aria-live="polite"><span aria-hidden="true">✓</span> Avisos activados</div>'
-        :`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
+      const action=`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
       return `<section class="push-notification-card ${active?'enabled':''}" aria-label="Notificaciones">
         <div class="push-notification-main"><span class="push-notification-icon" aria-hidden="true">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>${description}</p>${denied?'<small class="push-notification-note">Después de cambiar el permiso en el navegador, volvé a esta pantalla.</small>':''}</div></div>
         ${action}
@@ -973,7 +971,6 @@
         savedOnServer=true;
         state.pushEnabled=true;
         try{localStorage.setItem(pushPreferenceKey(),'true');}catch(_){}
-        toast('Notificaciones activadas. Te avisaremos por nuevas promociones, visitas y premios.','success');
         renderApp();
       }catch(error){
         if(createdHere&&subscription&&!savedOnServer){
@@ -1570,7 +1567,7 @@
       return `${sectionHeading('TU ESPACIO','Configuración','Datos profesionales, acceso y fidelización.')}
       <div class="settings-grid settings-grid-final">
         <section class="panel settings-profile-summary"><div class="panel-head"><div><span class="eyebrow">PERFIL PROFESIONAL</span><h2>Datos de tu perfil</h2><p>Completá tus datos para que tus clientes sepan cómo encontrarte.</p></div><strong class="settings-percent">${pct}%</strong></div><div class="profile-progress"><span style="width:${pct}%"></span></div><div class="settings-profile-summary-details"><div><small>Nombre</small><strong>${escapeHtml(b.displayName||'Sin configurar')}</strong></div><div><small>Local</small><strong>${escapeHtml(b.barberName||'Profesional independiente')}</strong></div><div><small>WhatsApp</small><strong>${escapeHtml(wa||'Sin configurar')}</strong></div><div><small>Horarios activos</small><strong>${scheduleDays} de 7 días</strong></div></div><button class="btn btn-primary btn-block" data-action="edit-profile">Editar tus datos profesionales</button></section>
-        <section class="panel access-card"><div class="setting-subheading"><span class="eyebrow">COMPARTIR ACCESO</span><h3 class="setting-section-title">Datos para tus clientes</h3><p class="field-hint">Pasales estos dos datos para que entren a su tarjeta VIP.</p></div><div class="access-share-row"><div><small>1 · Enlace directo de registro</small><strong>${escapeHtml(customerSignupUrl(b.barberCode))}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-app-link">Copiar enlace</button></div><div class="access-share-row"><div><small>2 · Código de acceso</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-code">Copiar código</button></div>
+        <section class="panel access-card"><div class="setting-subheading"><span class="eyebrow">COMPARTIR ACCESO</span><h3 class="setting-section-title">Datos para tus clientes</h3><p class="field-hint">Pasales estos dos datos para que entren a su tarjeta VIP.</p></div><div class="access-share-row"><div><small>1 · Enlace de Barber VIP</small><strong>${escapeHtml(customerSignupUrl())}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-app-link">Copiar enlace</button></div><div class="access-share-row"><div><small>2 · Código de acceso</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div><button type="button" class="btn btn-soft btn-mini" data-action="copy-code">Copiar código</button></div>
         <div class="barber-poster-settings">
           <div class="barber-poster-intro"><span class="eyebrow">PARA TU LOCAL</span><h4>Tu cartel de Barber VIP</h4><p>Mostrá este cartel, invitá a tus clientes a registrarse y dejá que conozcan su progreso desde el celular.</p></div>
           <div class="barber-poster-preview" id="barberPosterPreview">
@@ -2282,7 +2279,7 @@
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='instructions';renderInstallGate();}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}
-        else if(action==='copy-app-link'){await copyText(customerSignupUrl());toast('Enlace a Barber VIP copiado. El cliente elige Cliente e ingresa tu código.','success');}
+        else if(action==='copy-app-link'){await copyText(customerSignupUrl());toast('Enlace de Barber VIP copiado.','success');}
         else if(action==='download-barber-poster'){await downloadBarberPosterPdf();}
         else if(action==='book-turn'){contactBarber(false);}
         else if(action==='contact-barber'){contactBarber(false);}

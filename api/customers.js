@@ -64,12 +64,12 @@ module.exports = async function handler(req, res) {
       if (duplicateNames.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese nombre en este espacio profesional. Agregá una inicial para distinguirlo.' });
       if (duplicatePhones.docs.some(doc => doc.data().active !== false)) return send(res, 409, { ok: false, error: 'Ya existe un cliente activo con ese WhatsApp en este espacio profesional.' });
 
+      const barberData = barberSnap.data();
+      const loyaltyOverride = normalizeLoyaltyOverride(data.loyaltyMode, data.loyaltyRewards, barberData);
       const uid = crypto.randomUUID();
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
       await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
       const now = admin().firestore.FieldValue.serverTimestamp();
-      const barberData = barberSnap.data();
-      const loyaltyOverride = normalizeLoyaltyOverride(data.loyaltyMode, data.loyaltyRewards, barberData);
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',

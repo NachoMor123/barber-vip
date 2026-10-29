@@ -876,7 +876,8 @@
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
       if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))return '';
-      const permission=Notification.permission,active=state.pushEnabled===true&&permission==='granted';
+      let storedPreference=false;try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
+      const permission=Notification.permission,active=permission==='granted'&&(state.pushEnabled===true||storedPreference);
       if(active)return '';
       const denied=permission==='denied',iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
       const description=denied?'El navegador bloqueó los avisos. Habilitá las notificaciones desde los permisos de este sitio.'

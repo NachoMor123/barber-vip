@@ -2040,7 +2040,7 @@
           : renewalPending
             ? '<button class="btn btn-primary" data-action="continue-auto-renewal">Continuar autorización ↗</button>'
             : '<button class="btn btn-primary" data-action="enable-auto-renewal">Activar renovación automática ↗</button>';
-        const trialAction=trial&&!renewalOn
+        const trialAction=trial&&!renewalOn&&!renewalPending
           ? '<button class="btn btn-ghost" data-action="start-trial-payment">Pagar ahora y activar renovación ↗</button>'
           : '';
         modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Tu prueba gratuita':renewalOn?'Renovación automática activada':'Tu cuenta está activa'}</h2><p>Suscripción mensual · ${price}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+current.daysRemaining+' día'+(current.daysRemaining===1?'':'s'):current.label}</strong><p>${bodyText}${expires?' Período actual hasta el '+expires+'.':''}</p></div><div class="modal-footer">${mainAction}${trialAction}<button class="btn btn-ghost" data-action="close-modal">Cerrar</button></div></section></div>`;

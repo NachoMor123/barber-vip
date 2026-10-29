@@ -18,12 +18,12 @@ test('normaliza hitos históricos 2, 4 y 8 a los hitos fijos 2, 4 y 6 sin perder
   );
 });
 
-test('los descuentos personalizados siempre quedan asociados a 2, 4 y 6 visitas', () => {
+test('los descuentos personalizados solo aceptan los hitos fijos 2, 4 y 6', () => {
   assert.deepEqual(
     normalizeCustomerLoyaltyOverride('custom', [
       { cut: 2, discount: 10 },
       { cut: 4, discount: 25 },
-      { cut: 8, discount: 75 }
+      { cut: 6, discount: 75 }
     ]),
     {
       mode: 'custom',
@@ -34,6 +34,11 @@ test('los descuentos personalizados siempre quedan asociados a 2, 4 y 6 visitas'
       ]
     }
   );
+  assert.throws(() => normalizeCustomerLoyaltyOverride('custom', [
+    { cut: 2, discount: 10 },
+    { cut: 4, discount: 25 },
+    { cut: 8, discount: 75 }
+  ]), /son fijos/);
 });
 
 test('mantiene el modo estándar sin crear un programa de premios personalizado', () => {

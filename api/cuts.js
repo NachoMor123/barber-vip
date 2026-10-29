@@ -127,7 +127,9 @@ module.exports = async function handler(req, res) {
         : outcome.appliedReward
           ? 'Alcanzaste el hito '+outcome.cycleCut+'. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita.'
           : 'Tu ciclo va '+outcome.cycleCut+' de '+outcome.cycleMax+' visitas.';
-      await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId+'-'+String(resultCustomer.totalCuts||Date.now()),url:'/'});
+      if(customer.pushEnabled === true) {
+        await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId+'-'+String(resultCustomer.totalCuts||Date.now()),url:'/'});
+      }
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 

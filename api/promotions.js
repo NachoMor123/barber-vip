@@ -15,16 +15,24 @@ const view = doc => {
 };
 function customerPromotions(snapshot, customerId) {
   const now = Date.now();
-  return snapshot.docs.map(view).filter(promo => {
+  const eligible = snapshot.docs.map(view).filter(promo => {
+    return promo.audience === 'all'
+      || (Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId));
+  });
+  // Return the next eligible scheduled start without exposing other customers' targeted promotions.
+  // This lets clients expire their local cache at the right time without polling Firestore.
+  const nextScheduledAt = eligible
+    .filter(promo => promo.active !== false && promo.startsAt && new Date(promo.startsAt).getTime() > now)
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())[0]?.startsAt || null;
+  const promotions = eligible.filter(promo => {
     const start = promo.startsAt ? new Date(promo.startsAt).getTime() : 0;
     const end = promo.endsAt ? new Date(promo.endsAt).getTime() : Infinity;
-    const assigned = promo.audience === 'all'
-      || (Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId));
-    return assigned && start <= now && end >= now;
+    return promo.active !== false && start <= now && end >= now;
   }).map(promo => {
     const { customerIds, ...publicPromo } = promo;
     return publicPromo;
   });
+  return { promotions, nextScheduledAt };
 }
 
 async function touchPromotionRevision(barberRef) {
@@ -53,7 +61,8 @@ module.exports = async function handler(req, res) {
           return send(res, 403, {ok:false,error:'No tenés permiso para ver estas promociones.'});
         }
         const promosSnap = await database.collection('barbers').doc(requestedBarberUid).collection('promotions').where('active','==',true).limit(100).get();
-        return send(res, 200, {ok:true,promotions:customerPromotions(promosSnap,decoded.uid)});
+        const result = customerPromotions(promosSnap, decoded.uid);
+        return send(res, 200, {ok:true,...result});
       }
       const profileSnap = await database.collection('userProfiles').doc(decoded.uid).get();
       if (!profileSnap.exists) return send(res, 403, { ok:false, error:'No se encontró tu perfil.' });
@@ -80,7 +89,8 @@ module.exports = async function handler(req, res) {
         const customerSnap = await database.collection('barbers').doc(profile.barberUid).collection('customers').doc(decoded.uid).get();
         if (!customerSnap.exists || customerSnap.data().active === false) return send(res, 403, { ok:false, error:'Este cliente no está activo.' });
         const snap = await database.collection('barbers').doc(profile.barberUid).collection('promotions').where('active','==',true).limit(100).get();
-        return send(res, 200, { ok:true, promotions:customerPromotions(snap,decoded.uid) });
+        const result = customerPromotions(snap, decoded.uid);
+        return send(res, 200, { ok:true, ...result });
       }
       return send(res, 403, { ok:false, error:'No tenés permiso para ver estas promociones.' });
     }

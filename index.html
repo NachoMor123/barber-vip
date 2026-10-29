@@ -1108,7 +1108,7 @@
         host.style.cssText = 'position:fixed;left:-10000px;top:0;width:360px;height:360px;opacity:0;pointer-events:none';
         document.body.appendChild(host);
         try {
-          new window.QRCode(host, {text:customerSignupUrl(state.barber?.barberCode),width:360,height:360,colorDark:'#06152b',colorLight:'#ffffff',correctLevel:window.QRCode.CorrectLevel.H});
+          new window.QRCode(host, {text:customerSignupUrl(),width:360,height:360,colorDark:'#06152b',colorLight:'#ffffff',correctLevel:window.QRCode.CorrectLevel.H});
           const canvas = host.querySelector('canvas');
           const image = host.querySelector('img');
           if (canvas) barberPosterQrDataUrl = canvas.toDataURL('image/png');
@@ -2038,7 +2038,7 @@
         const mainAction=renewalOn
           ? '<button class="btn btn-danger" data-action="cancel-auto-renewal">Cancelar renovación automática</button>'
           : renewalPending
-            ? '<button class="btn btn-primary" data-action="continue-auto-renewal">Continuar autorización ↗</button>'
+            ? '<button class="btn btn-primary" data-action="continue-auto-renewal">Continuar autorización ↗</button><button class="btn btn-danger" data-action="cancel-auto-renewal">Cancelar solicitud</button>'
             : '<button class="btn btn-primary" data-action="enable-auto-renewal">Activar renovación automática ↗</button>';
         const trialAction=trial&&!renewalOn&&!renewalPending
           ? '<button class="btn btn-ghost" data-action="start-trial-payment">Pagar ahora y activar renovación ↗</button>'

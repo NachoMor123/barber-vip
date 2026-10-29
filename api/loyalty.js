@@ -113,8 +113,6 @@ function normalizeSubmitted(raw) {
   return { id, name, audience: 'all', customerIds: [], rewards: normalizeFixedRewards(sorted) };
 }
 
-module.exports = async function handler}
-
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'PUT'])) return;
   try {

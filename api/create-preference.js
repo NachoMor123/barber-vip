@@ -18,6 +18,11 @@ async function getPreapproval(id, token) {
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
+  // Preview deployments share production credentials unless a separate sandbox is configured.
+  // Never create a real recurring contract from a protected preview URL.
+  if (process.env.VERCEL_ENV === 'preview') {
+    return send(res, 503, { ok:false, error:'Los cobros automáticos están deshabilitados en vistas previas para evitar cargos reales. Probá este flujo únicamente en el entorno de pruebas de Mercado Pago.' });
+  }
   try {
     const ctx = await requireBarber(req, res);
     if (!ctx) return;

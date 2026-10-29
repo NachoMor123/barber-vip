@@ -894,11 +894,8 @@
       const denied=permission==='denied',iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
       const description=denied?'El navegador bloqueó los avisos. Habilitá las notificaciones desde los permisos de este sitio.'
         :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
-        :active?'Activadas en este dispositivo. Te avisamos por visitas, hitos y nuevas promociones.'
         :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
-      const action=active
-        ?'<div class="push-notification-status" role="status" aria-live="polite"><span aria-hidden="true">✓</span> Avisos activados</div>'
-        :`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
+      const action=`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
       return `<section class="push-notification-card ${active?'enabled':''}" aria-label="Notificaciones">
         <div class="push-notification-main"><span class="push-notification-icon" aria-hidden="true">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>${description}</p>${denied?'<small class="push-notification-note">Después de cambiar el permiso en el navegador, volvé a esta pantalla.</small>':''}</div></div>
         ${action}

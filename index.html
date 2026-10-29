@@ -992,17 +992,6 @@
         if(button?.isConnected){button.disabled=false;button.textContent=original;}
       }
     }
-    async function disableCustomerPush(button){
-      if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para administrar los avisos.');
-      const original=button?.textContent||'Desactivar avisos';if(button){button.disabled=true;button.textContent='Desactivando…';}
-      try{
-        const registration=await navigator.serviceWorker.ready,subscription=await registration.pushManager.getSubscription();
-        if(subscription){await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});await subscription.unsubscribe().catch(()=>false);}
-        state.pushEnabled=false;try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
-        toast('Notificaciones desactivadas en este dispositivo.','success');renderApp();
-      }catch(error){toast(userFacingError(error,'No se pudieron desactivar por completo los avisos. Revisá tu conexión e intentá de nuevo.'),'error');}
-      finally{if(button?.isConnected){button.disabled=false;button.textContent=original;}}
-    }
     const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
     function greetingForNow(){const h=new Date().getHours();return h>=5&&h<12?'Buen día':h>=12&&h<20?'Buenas tardes':'Buenas noches';}
     const nameInitials = name => String(name||'BV').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'BV';
@@ -2248,7 +2237,6 @@
         else if(action==='nav'){const previousSection=state.section,nextSection=button.dataset.section;state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&(!state.customersLoaded||!state.customersUnsubscribe))pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='enable-push-notifications'){await enableCustomerPush(button);}
-        else if(action==='disable-push-notifications'){await disableCustomerPush(button);}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
         else if(action==='logout'){openLogoutConfirmation();}

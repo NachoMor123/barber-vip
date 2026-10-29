@@ -138,6 +138,8 @@ async function processOneTimePayment(payment) {
 }
 module.exports=async function handler(req,res) {
   if(!['POST','GET'].includes(req.method))return send(res,405,{ok:false,error:'Método no permitido.'});
+  // A preview uses the production Firebase project. Never let preview webhooks mutate billing state.
+  if(process.env.VERCEL_ENV==='preview')return send(res,503,{ok:false,error:'Webhooks de facturación deshabilitados en vistas previas.'});
   try {
     const body=req.body&&typeof req.body==='object'?req.body:{};
     const notificationId=String((req.query&&req.query['data.id'])||(req.query&&req.query.id)||(body.data&&body.data.id)||body.id||'');

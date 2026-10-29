@@ -33,7 +33,7 @@
           <div id="formStatus" class="loading" role="status"></div>
           <button id="submitButton" class="submit" type="submit">Crear mi cuenta VIP&nbsp; ↗</button>
         </form>
-        <div id="createdPanel" class="account-created"><span class="badge">✓ Cuenta creada</span><h2>¡Bienvenido a Barber VIP!</h2><p>Tu perfil ya está guardado. Estamos abriendo tu tarjeta VIP en esta aplicación.</p><button id="openAppButton" class="submit" type="button">Abrir mi tarjeta VIP</button><div id="signinError" class="error" role="alert"></div></div>
+        <div id="createdPanel" class="account-created"><span class="badge">✓ Cuenta creada</span><h2>¡Tu cuenta está lista!</h2><p>Tu perfil ya está guardado. Estamos abriendo tu tarjeta VIP en esta aplicación.</p><button id="openAppButton" class="submit" type="button">Abrir mi tarjeta VIP</button><div id="signinError" class="error" role="alert"></div></div>
       </div>
     </section>
     <footer class="footer">Una invitación personal vinculada a un profesional.<br><b>Barber VIP</b> · Tus visitas, tus beneficios.</footer>
@@ -64,7 +64,7 @@
 
   function renderInvite(data) {
     const label = data.barberProfessionalName || data.barberName || 'tu espacio profesional';
-    summary.innerHTML = `<div class="avatar">✦</div><span class="eyebrow">INVITACIÓN VINCULADA</span><p>Te invitó <strong>${escapeHtml(data.referrerName || 'Un amigo')}</strong> para sumarte al espacio profesional de <strong>${escapeHtml(label)}</strong>.</p><div class="code">CÓDIGO · ${escapeHtml(data.barberCode || '—')}</div><p style="margin-top:11px">Tu cuenta quedará vinculada a este espacio profesional y a la persona que te invitó. Cada corte real puede ayudarle a avanzar en su ciclo, salvo que tenga pausado el beneficio máximo. La vinculación no se puede cambiar después del registro.</p>`;
+    summary.innerHTML = `<div class="avatar">✦</div><span class="eyebrow">INVITACIÓN VINCULADA</span><p>Te invitó <strong>${escapeHtml(data.referrerName || 'Una persona cercana')}</strong> para sumarte al espacio profesional de <strong>${escapeHtml(label)}</strong>.</p><div class="code">CÓDIGO · ${escapeHtml(data.barberCode || '—')}</div><p style="margin-top:11px">Tu cuenta quedará vinculada a este espacio profesional y a la persona que te invitó. Cada corte real puede ayudarle a avanzar en su ciclo, salvo que tenga pausado el beneficio máximo. La vinculación no se puede cambiar después del registro.</p>`;
   }
   function setBusy(busy, message='') {
     button.disabled = busy;

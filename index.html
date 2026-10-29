@@ -1377,7 +1377,7 @@
     function loyaltyProgramEditorMarkup(program){
       const rewards=fixedLoyaltyRewards(program?.rewards);
       return `<div class="loyalty-program-editor" data-program-card data-program-id="${escapeHtml(program?.id||DEFAULT_LOYALTY_PROGRAM.id)}"><div class="program-reward-rows">${rewards.map(r=>`<div class="program-reward-row" data-reward-row data-cut="${r.cut}"><label><span>${r.cut} visitas</span></label><label><span>Descuento (%)</span><input class="setting-input" type="number" min="0" max="100" step="1" data-reward-discount value="${r.discount}" required></label></div>`).join('')}</div></div>`;}
-    function loyaltyPrograms(function loyaltyPrograms(barber=state.barber){
+    function loyaltyPrograms(barber=state.barber){
       const programs=Array.isArray(barber?.loyaltyPrograms)?barber.loyaltyPrograms.filter(p=>Array.isArray(p.rewards)&&p.rewards.length):[];
       const chosen=programs.find(p=>p.id===barber?.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];
       if(!chosen)return [DEFAULT_LOYALTY_PROGRAM];
@@ -2015,7 +2015,7 @@
       for(let i=0;i<3;i++){if(Number(p.rewards[i]?.cut)!==[2,4,6][i])throw new Error('Los hitos son fijos: 2, 4 y 6 visitas.');if(!Number.isInteger(Number(p.rewards[i]?.discount))||Number(p.rewards[i].discount)<0||Number(p.rewards[i].discount)>100)throw new Error('Cada descuento debe estar entre 0% y 100%.');}
       p.rewards=rewards;p.audience='all';p.customerIds=[];
     }
-    async function saveLoyaltyFormasync function saveLoyaltyForm(form){
+    async function saveLoyaltyForm(form){
       const programs=collectLoyaltyPrograms();try{validateLoyaltyDraft(programs);}catch(error){toast(error.message,'error');return;}
       const btn=$('button[type="submit"]',form);if(btn){btn.disabled=true;btn.textContent='Guardando…';}
       try{const data=await api('/api/loyalty',{method:'PUT',body:JSON.stringify({programs})});const only=data.programs?.[0]||programs[0];state.barber={...state.barber,loyaltyPrograms:[{...only,audience:'all',customerIds:[]}],defaultLoyaltyProgramId:data.defaultLoyaltyProgramId||only.id};state.customers=state.customers.map(c=>({...c,loyaltyProgramId:state.barber.defaultLoyaltyProgramId}));renderApp();toast('Programa de premios guardado para todos los clientes.','success');}

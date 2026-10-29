@@ -4,6 +4,36 @@ const { requireBarber, subscription } = require('../lib/security');
 const { removeCustomerPushSubscriptions } = require('../lib/push');
 const crypto = require('crypto');
 
+const FIXED_MILESTONES = [2, 4, 6];
+const DEFAULT_REWARDS = [{cut:2,discount:10},{cut:4,discount:20},{cut:6,discount:30}];
+function standardRewards(barber = {}) {
+  const programs = Array.isArray(barber.loyaltyPrograms) ? barber.loyaltyPrograms : [];
+  const selected = programs.find(p => p.id === barber.defaultLoyaltyProgramId)
+    || programs.find(p => p.audience === 'all') || programs[0] || {};
+  const raw = (Array.isArray(selected.rewards) ? selected.rewards : DEFAULT_REWARDS)
+    .slice().sort((a,b) => Number(a.cut) - Number(b.cut)).slice(0,3);
+  return FIXED_MILESTONES.map((cut,index) => ({
+    cut,
+    discount: Number.isInteger(Number(raw[index]?.discount))
+      ? Math.min(100,Math.max(0,Number(raw[index].discount))) : DEFAULT_REWARDS[index].discount
+  }));
+}
+function normalizeLoyaltyOverride(mode, input, barber = {}, current = {}) {
+  if (mode !== 'custom') return {mode:'standard',rewards:[]};
+  const fallback = standardRewards(barber);
+  const source = Array.isArray(input) && input.length
+    ? input.map(item => ({cut:Number(item.cut),discount:Number(item.discount)})).sort((a,b) => a.cut-b.cut).slice(0,3)
+    : [];
+  for (const reward of source) {
+    if (!Number.isInteger(reward.discount) || reward.discount < 0 || reward.discount > 100) {
+      throw new Error('Configurá los descuentos de los hitos 2, 4 y 6 entre 0% y 100%.');
+    }
+  }
+  return {mode:'custom',rewards:FIXED_MILESTONES.map((cut,index)=>({
+    cut,discount:source[index]?.discount ?? fallback[index].discount
+  }))};
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST', 'PUT', 'DELETE'])) return;
   try {
@@ -38,9 +68,12 @@ module.exports = async function handler(req, res) {
       const loginEmail = `cliente-${uid}@accounts.barbervip.app`;
       await auth().createUser({ uid, email: loginEmail, password, displayName: fullName, emailVerified: true, disabled: false });
       const now = admin().firestore.FieldValue.serverTimestamp();
+      const barberData = barberSnap.data();
+      const loyaltyOverride = normalizeLoyaltyOverride(data.loyaltyMode, data.loyaltyRewards, barberData);
       const customer = {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
+        loyaltyOverride,
         totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
         createdAt: now, updatedAt: now, lastCutAt: null
       };
@@ -126,6 +159,15 @@ module.exports = async function handler(req, res) {
       if (preference !== String(current.conversationPreference || '')) updates.conversationPreference = preference;
     }
 
+    if (data.loyaltyMode !== undefined || data.loyaltyRewards !== undefined) {
+      const mode = data.loyaltyMode !== undefined ? data.loyaltyMode : current.loyaltyOverride?.mode;
+      const rewards = data.loyaltyRewards !== undefined ? data.loyaltyRewards : current.loyaltyOverride?.rewards;
+      const nextOverride = normalizeLoyaltyOverride(mode, rewards, barberSnap.data(), current.loyaltyOverride || {});
+      if (JSON.stringify(current.loyaltyOverride || {mode:'standard',rewards:[]}) !== JSON.stringify(nextOverride)) {
+        updates.loyaltyOverride = nextOverride;
+      }
+    }
+
     const password = data.password === undefined ? '' : String(data.password);
     if (password.length) {
       if (password.length < 6) return send(res, 400, { ok: false, error: 'La contraseña nueva debe tener al menos 6 caracteres.' });
@@ -167,6 +209,7 @@ module.exports = async function handler(req, res) {
     return send(res, 200, { ok: true, customer: customerResponse });
   } catch (error) {
     console.error('customers error', error);
+    if (/^Configurá los descuentos de los hitos 2, 4 y 6/.test(String(error?.message||''))) return send(res, 400, {ok:false,error:error.message});
     if (error && error.code === 'auth/email-already-exists') return send(res, 409, { ok: false, error: 'No se pudo crear el usuario del cliente; probá otra vez.' });
     if (error && error.code === 'auth/user-not-found') return send(res, 404, { ok: false, error: 'No se encontró la cuenta de acceso de este cliente. Verificá sus datos e intentá nuevamente.' });
     return send(res, 500, { ok: false, error: 'No se pudo guardar el cliente por un problema temporal. Revisá tu conexión e intentá nuevamente.' });

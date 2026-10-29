@@ -28,11 +28,7 @@ function configuredPrice() {
 }
 async function processApprovedRecurringPayment({payment,preapprovalId,eventBillingAction,token}) {
   if(String(payment.status||'')!=='approved')return {ignored:true,reason:'not-approved'};
-  const price=configuredPrice();
-  if(Number(payment.transaction_amount)!==price||payment.currency_id!=='ARS') {
-    console.warn('[Mercado Pago] Recurring payment amount/currency did not match configured subscription.');
-    return {ignored:true,reason:'amount-mismatch'};
-  }
+  const fallbackPrice=configuredPrice();
   let barberUid=String(payment.external_reference||'');
   const paymentId=String(payment.id||'');
   if(!paymentId||!preapprovalId)throw new Error('El pago recurrente no contiene referencias válidas.');
@@ -46,11 +42,17 @@ async function processApprovedRecurringPayment({payment,preapprovalId,eventBilli
   const recurringRef=barberRef.collection('recurringSubscriptions').doc(String(preapprovalId));
   const approvedAt=payment.date_approved?new Date(payment.date_approved):new Date();
   if(Number.isNaN(approvedAt.getTime()))throw new Error('La fecha de aprobación del pago recurrente no es válida.');
-  let duplicate=false;
+  let duplicate=false, amountMismatch=false;
   await db().runTransaction(async transaction=>{
-    const [barberSnap,paidSnap]=await Promise.all([transaction.get(barberRef),transaction.get(paymentRef)]);
+    const [barberSnap,paidSnap,recurringSnap]=await Promise.all([transaction.get(barberRef),transaction.get(paymentRef),transaction.get(recurringRef)]);
     if(paidSnap.exists){duplicate=true;return;}
     if(!barberSnap.exists)throw new Error('No existe la cuenta asociada al pago recurrente.');
+    const expectedPrice=recurringSnap.exists&&Number.isFinite(Number(recurringSnap.data().amount))
+      ?Number(recurringSnap.data().amount):fallbackPrice;
+    if(Number(payment.transaction_amount)!==expectedPrice||payment.currency_id!=='ARS'){
+      amountMismatch=true;
+      return;
+    }
     const barber=barberSnap.data();
     if(String(barber.mpSubscriptionId||'')!==String(preapprovalId))throw new Error('El pago corresponde a una suscripción que ya no es la actual.');
     const firstInvoice=barber.autoRenewalInitialPaymentProcessed!==true;
@@ -76,6 +78,10 @@ async function processApprovedRecurringPayment({payment,preapprovalId,eventBilli
       updatedAt:admin().firestore.FieldValue.serverTimestamp()
     },{merge:true});
   });
+  if(amountMismatch){
+    console.warn('[Mercado Pago] Recurring payment amount/currency did not match its stored subscription amount.');
+    return {ignored:true,reason:'amount-mismatch'};
+  }
   return {duplicate,received:true};
 }
 async function processSubscriptionState(id,token) {
@@ -157,7 +163,7 @@ module.exports=async function handler(req,res) {
     return send(res,200,{ok:true,...await processOneTimePayment(payment)});
   } catch(error) {
     console.error('Mercado Pago webhook error',error.message||error);
-    const status=Number(error.status);
-    return send(res,status>=400&&status<500?400:500,{ok:false,error:'No se pudo procesar la notificación de pago por un problema temporal.'});
+    // A server error allows Mercado Pago to retry events after temporary failures.
+    return send(res,500,{ok:false,error:'No se pudo procesar la notificación de pago por un problema temporal.'});
   }
 };

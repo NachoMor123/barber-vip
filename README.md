@@ -13,13 +13,14 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 - Perfil de cada barbero con horarios, WhatsApp, Instagram y ubicación.
 - Clientes con cuenta individual, datos de contacto, frecuencia aproximada de visita, historial y seguimiento.
 - Registro de visitas desde el panel profesional y acceso separado para cada cliente.
-- Ciclo de fidelización con hitos y beneficios configurables.
+- Fidelización con hitos fijos de 2, 4 y 6 visitas; se pueden configurar los descuentos del programa estándar o de cada cliente.
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: WhatsApp se abre sin texto preescrito; la app muestra una sugerencia opcional y el profesional confirma que intentó contactar manualmente. Esto no verifica la entrega del mensaje.
-- Presencia de bajo consumo: los pulsos del cliente se guardan en `barbers/{barberUid}/presence/{customerUid}`, separados de la lista de clientes para que cada pulso no vuelva a leer el listado completo. El pulso ocurre cada 5 minutos mientras la app está visible; la fecha en la ficha general se copia cada 10 minutos y al salir. La interfaz actualiza el texto relativo localmente cada 15 segundos, sin lecturas de Firestore.
-- El botón circular de refresco junto al contador consulta solo la actividad reciente (ventana de 12 minutos), no toda la colección de clientes. Se mantiene manual, con cuenta regresiva de 10 segundos, para evitar sondeos constantes.
+- Estado en línea/última conexión: desactivado para evitar pulsos, escrituras y consultas periódicas. La última visita del cliente se calcula localmente en el dispositivo a partir de `lastCutAt`; no necesita un temporizador de Firebase.
+- El listado de clientes conserva sincronización en tiempo real para reflejar visitas, ciclos y promociones cuando cambian datos relevantes, sin un sistema paralelo de presencia. con cuenta regresiva de 10 segundos, para evitar sondeos constantes.
 - La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
-- Suscripción mensual con Mercado Pago y webhook de confirmación.
+- Suscripción mensual recurrente de Mercado Pago con webhook de autorización, renovaciones aprobadas y cancelación sin perder los días ya pagados.
+- El total de visitas de cada cliente es acumulativo y permanente; la limpieza programada solo elimina registros detallados de visitas de más de 60 días.
 - Historial de visitas retenido durante 60 días con limpieza programada. No se carga automáticamente al abrir el panel: el administrador lo trae cuando elige «Ver historial», evitando hasta 100 lecturas en cada inicio. Se eliminó el conteo total de cortes que no se mostraba en la interfaz.
 
 ## Arquitectura

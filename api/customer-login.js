@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { db, auth, admin } = require('../lib/admin');
 const { send, method, body, text, normalizeName, normalizeArgentinaPhone, validArgentinaWhatsapp } = require('../lib/http');
+const { normalizeCustomerLoyaltyOverride } = require('../lib/loyalty');
 const { subscription } = require('../lib/security');
 
 
@@ -87,7 +88,7 @@ module.exports = async function handler(req, res) {
         const now = admin().firestore.FieldValue.serverTimestamp();
         const customer = {
           uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'self',
-          cutStyle: '', conversationPreference: '',
+          cutStyle: '', conversationPreference: '', loyaltyOverride: normalizeCustomerLoyaltyOverride('standard', []), pushNotificationsEnabled: false,
           totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
           active: true,
           createdAt: now, updatedAt: now, lastCutAt: null

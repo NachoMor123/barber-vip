@@ -2,17 +2,25 @@ const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
 const { sendPushToCustomer } = require('../lib/push');
+const { normalizeFixedRewards } = require('../lib/loyalty');
 
 function defaultProgram(barber) {
   const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];
   const selected=programs.find(p=>p.id===barber.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];
   return selected||{id:'program-246',name:'Ciclo clásico',rewards:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}]};
 }
-function programForCustomer(customer,barber){const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
-function normalizeRewards(program){
-  const raw=Array.isArray(program.rewards)?program.rewards:[];
-  const normalized=raw.map(r=>({cut:Number(r.cut),discount:Math.min(100,Math.max(1,Number(r.discount)||1)),label:`${Math.min(100,Math.max(1,Number(r.discount)||1))}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50).sort((a,b)=>a.cut-b.cut);
-  return normalized.length?normalized:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
+function programForCustomer(customer, barber) {
+  if (customer?.loyaltyOverride?.mode === 'custom' && Array.isArray(customer.loyaltyOverride.rewards)) {
+    return { id: 'customer-override', name: 'Programa personalizado', rewards: normalizeFixedRewards(customer.loyaltyOverride.rewards) };
+  }
+  const programs = Array.isArray(barber.loyaltyPrograms) ? barber.loyaltyPrograms : [];
+  const selected = programs.find(p => p.id === customer.loyaltyProgramId)
+    || programs.find(p => p.audience === 'all')
+    || programs[0];
+  return selected || { id: 'program-246', name: 'Ciclo clásico', rewards: normalizeFixedRewards([]) };
+}
+function normalizeRewards(program) {
+  return normalizeFixedRewards(program?.rewards);
 }
 function activeReward(customer,rewards){
   const current=Array.isArray(customer.availableRewards)?customer.availableRewards:[];
@@ -131,7 +139,7 @@ module.exports = async function handler(req, res) {
         : outcome.appliedReward
           ? 'Alcanzaste el hito '+outcome.cycleCut+'. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita.'
           : 'Tu ciclo va '+outcome.cycleCut+' de '+outcome.cycleMax+' visitas.';
-      await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId+'-'+String(resultCustomer.totalCuts||Date.now()),url:'/'});
+      await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId+'-'+String(resultCustomer.totalCuts||Date.now()),url:'/',pushNotificationsEnabled:resultCustomer.pushNotificationsEnabled});
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 

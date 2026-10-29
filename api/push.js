@@ -29,7 +29,7 @@ async function customerContext(req, res) {
     send(res, 403, { ok: false, error: 'La cuenta de cliente no está activa.' });
     return null;
   }
-  return { database, uid: decoded.uid, barberUid };
+  return { database, uid: decoded.uid, barberUid, customerRef, pushNotificationsEnabled: customerSnap.data().pushNotificationsEnabled };
 }
 
 module.exports = async function handler(req, res) {
@@ -72,6 +72,9 @@ module.exports = async function handler(req, res) {
         enabled: true,
         updatedAt: now
       }, { merge: true });
+      if (context.pushNotificationsEnabled !== true) {
+        await context.customerRef.update({ pushNotificationsEnabled: true, updatedAt: now });
+      }
       return send(res, 200, { ok: true, enabled: true });
     }
 

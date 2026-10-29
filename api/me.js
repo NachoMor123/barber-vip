@@ -1,6 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method } = require('../lib/http');
 const { requireUser, subscription } = require('../lib/security');
+const { normalizeFixedRewards, FIXED_MILESTONES } = require('../lib/loyalty');
 function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
 
 
@@ -9,15 +10,7 @@ function cleanProgramId(value, fallback='program-general') {
   return id || fallback;
 }
 function safeProgramRewards(input) {
-  if (!Array.isArray(input)) return [];
-  const out = input.map(item => ({ cut: Number(item.cut), discount: Number(item.discount) })).sort((a,b)=>a.cut-b.cut);
-  if (!out.length || out.length > 10) return [];
-  let previous=0;
-  for (const item of out) {
-    if (!Number.isInteger(item.cut)||item.cut<1||item.cut>50||item.cut<=previous||!Number.isInteger(item.discount)||item.discount<1||item.discount>100) return [];
-    item.label=`${item.discount}% OFF`; previous=item.cut;
-  }
-  return out;
+  return normalizeFixedRewards(input);
 }
 function publicBarberProfile(source) {
   const dateIso = value => {
@@ -74,19 +67,19 @@ async function sanitizeBarberLoyalty(database, barberRef, source) {
   const chosen = oldPrograms.find(p => p && p.id === source.defaultLoyaltyProgramId)
     || oldPrograms.find(p => p && p.audience === 'all') || oldPrograms.find(Boolean) || {};
   const chosenRewards = safeProgramRewards(chosen.rewards);
-  const fallbackRewards = [{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
   const program = {
     id: cleanProgramId(chosen.id),
     name: String(chosen.name || 'Programa de premios').slice(0,60),
     audience: 'all', customerIds: [],
-    rewards: (chosenRewards.length ? chosenRewards : fallbackRewards).map(item => {
-      const discount = Math.max(1, Math.min(100, Number(item.discount) || 1));
-      return {cut:Number(item.cut),discount,label:`${discount}% OFF`};
-    })
+    rewards: chosenRewards
   };
+  const oldRewards = Array.isArray(oldPrograms[0]?.rewards) ? oldPrograms[0].rewards : [];
+  const fixedRewardsAreStored = oldRewards.length === 3
+    && FIXED_MILESTONES.every(cut => oldRewards.some(row => Number(row?.cut) === cut))
+    && program.rewards.every(reward => Number(oldRewards.find(row => Number(row?.cut) === reward.cut)?.discount) === reward.discount);
   const needsMigration = oldPrograms.length !== 1 || oldPrograms[0]?.id !== program.id
     || oldPrograms[0]?.audience !== 'all' || (oldPrograms[0]?.customerIds || []).length > 0
-    || source.defaultLoyaltyProgramId !== program.id;
+    || source.defaultLoyaltyProgramId !== program.id || !fixedRewardsAreStored;
   if (!needsMigration) return { ...source, loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id };
 
   // Collapse old variants into one global program while keeping all earned rewards.

@@ -78,17 +78,7 @@ module.exports = async function handler(req, res) {
         const cyclePausedAtMax = false;
         const rewardReady = false;
         const now = admin().firestore.FieldValue.serverTimestamp();
-        const previousAppliedReward = !appliedReward && !shouldRestart
-          && customer.lastRewardAppliedOnFinalMilestone !== true
-          && String(customer.lastRewardAppliedLabel || '').trim()
-          && Number(customer.lastRewardAppliedCut || 0) > 0
-          ? {
-              label: text(customer.lastRewardAppliedLabel, 50),
-              cut: Number(customer.lastRewardAppliedCut),
-              at: customer.lastRewardAppliedAt || null,
-              finalMilestone: false
-            }
-          : null;
+        // The applied-discount badge belongs only to the visit that reaches its milestone.
         const storedReward = appliedReward
           ? {
               label: text(appliedReward.label || `${Number(appliedReward.discount)||0}% OFF`, 50),
@@ -96,7 +86,7 @@ module.exports = async function handler(req, res) {
               at: now,
               finalMilestone: appliedOnFinalMilestone
             }
-          : previousAppliedReward;
+          : null;
         const updates = {
           totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2, cyclePausedAtMax,
           availableRewards, rewardReady,
@@ -121,7 +111,7 @@ module.exports = async function handler(req, res) {
           rewardReady,
           lastCutAt: new Date().toISOString(),
           lastRewardAppliedLabel: storedReward ? storedReward.label : null,
-          lastRewardAppliedAt: appliedReward ? new Date().toISOString() : (previousAppliedReward ? (previousAppliedReward.at && typeof previousAppliedReward.at.toDate === 'function' ? previousAppliedReward.at.toDate().toISOString() : previousAppliedReward.at || null) : null),
+          lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null,
           lastRewardAppliedCut: storedReward ? storedReward.cut : null,
           lastRewardAppliedOnFinalMilestone: storedReward ? Boolean(storedReward.finalMilestone) : null
         };

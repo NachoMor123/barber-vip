@@ -74,7 +74,7 @@ module.exports = async function handler(req, res) {
         uid, barberUid: ctx.uid, fullName, usernameNormalized, loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: text(data.cutStyle, 100), conversationPreference: ['conversar','tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '',
         loyaltyOverride,
-        totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
+        totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2, cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true, pushEnabled: false,
         createdAt: now, updatedAt: now, lastCutAt: null
       };
       try {
@@ -98,7 +98,7 @@ module.exports = async function handler(req, res) {
     if (!customerSnap.exists) return send(res, 404, { ok: false, error: 'No se encontró ese cliente.' });
 
     if (req.method === 'DELETE') {
-      await customerRef.update({ active: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: admin().firestore.FieldValue.serverTimestamp() });
+      await customerRef.update({ active: false, pushEnabled: false, disabledAt: admin().firestore.FieldValue.serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: admin().firestore.FieldValue.serverTimestamp() });
       await database.collection('userProfiles').doc(customerId).set({ disabled: true, updatedAt: admin().firestore.FieldValue.serverTimestamp() }, { merge: true });
       await auth().updateUser(customerId, { disabled: true }).catch((error) => {
         if (error.code !== 'auth/user-not-found') throw error;
@@ -180,6 +180,7 @@ module.exports = async function handler(req, res) {
       const currentActive = current.active !== false;
       if (nextActive !== currentActive) {
         updates.active = nextActive;
+        if (!nextActive) updates.pushEnabled = false;
         activeChanged = true;
       }
     }

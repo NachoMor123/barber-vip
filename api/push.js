@@ -137,7 +137,27 @@ module.exports = async function handler(req, res) {
     if (!endpoint) return send(res, 400, { ok: false, error: 'Falta identificar este dispositivo.' });
     const ref = pushRef.doc(subscriptionId(endpoint));
     const snapshot = await ref.get();
-    if (!snapshot.exists) return send(res, 200, { ok: true, enabled: false, unchanged: true });
+    if (!snapshot.exists) {
+      // A previously removed endpoint can still leave a stale customer flag from older versions.
+      // Only in this uncommon case, resolve the customer mapping and clear the flag if no device remains.
+      const profileSnap = await db().collection('userProfiles').doc(String(decoded.uid)).get();
+      const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
+      const barberUid = profile.role === 'customer' ? String(profile.barberUid || '') : '';
+      if (barberUid) {
+        const remaining = await pushRef
+          .where('customerId', '==', String(decoded.uid))
+          .where('barberUid', '==', barberUid)
+          .where('enabled', '==', true)
+          .limit(1)
+          .get();
+        if (remaining.empty) {
+          await db().collection('barbers').doc(barberUid).collection('customers').doc(String(decoded.uid))
+            .update({ pushEnabled: false })
+            .catch(() => {});
+        }
+      }
+      return send(res, 200, { ok: true, enabled: false, unchanged: true });
+    }
     const current = snapshot.data() || {};
     if (String(current.customerId || '') !== String(decoded.uid)) {
       return send(res, 403, { ok: false, error: 'No podés modificar las notificaciones de otra cuenta.' });

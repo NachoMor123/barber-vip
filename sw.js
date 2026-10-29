@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v51-push-click-reliability';
+const CACHE_NAME = 'barber-vip-shell-v50-web-push';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
@@ -43,44 +43,15 @@ self.addEventListener('notificationclick', event => {
     const parsed = new URL(event.notification.data?.url || '/', self.location.origin);
     if (parsed.origin === self.location.origin) targetUrl = parsed.href;
   } catch (_) {}
-
   event.waitUntil((async () => {
-    // Reuse an existing Barber VIP window when possible. If navigating/focusing it fails,
-    // fall back to openWindow so tapping the notification still opens the app.
-    let windows = [];
-    try {
-      windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    } catch (_) {}
-
-    const sameOrigin = windows.filter(client => {
-      try { return new URL(client.url).origin === self.location.origin; }
-      catch (_) { return false; }
-    });
-    // Prefer the focused client; otherwise matchAll returns the most recently focused clients first.
-    const client = sameOrigin.find(item => item.focused) || sameOrigin[0];
-    if (client) {
-      try {
-        if ('navigate' in client && client.url !== targetUrl) {
-          const navigatedClient = await client.navigate(targetUrl);
-          if (navigatedClient && 'focus' in navigatedClient) {
-            await navigatedClient.focus();
-            return;
-          }
-        } else if ('focus' in client) {
-          await client.focus();
-          return;
-        }
-      } catch (_) {
-        // A stale/closed window must not prevent opening Barber VIP below.
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+        if ('navigate' in client && client.url !== targetUrl) await client.navigate(targetUrl);
+        return client.focus();
       }
     }
-
-    try {
-      const openedClient = await self.clients.openWindow(targetUrl);
-      if (openedClient && 'focus' in openedClient) await openedClient.focus();
-    } catch (error) {
-      console.warn('[Barber VIP] Could not open the app from a notification click.');
-    }
+    return self.clients.openWindow(targetUrl);
   })());
 });
 

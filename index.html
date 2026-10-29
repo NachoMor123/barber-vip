@@ -2423,9 +2423,19 @@
           }
         });
       };
-      navigator.serviceWorker.register('/sw.js').then(registration=>{
+      const hadServiceWorkerController=Boolean(navigator.serviceWorker.controller);
+      if(hadServiceWorkerController){
+        navigator.serviceWorker.addEventListener('controllerchange',()=>{
+          // Once a new worker controls an already-running app, reload the shell so
+          // the installed PWA stops rendering old milestone/share/notification UI.
+          window.location.reload();
+        },{once:true});
+      }
+      navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(registration=>{
         watchServiceWorker(registration.installing);
         registration.addEventListener('updatefound',()=>watchServiceWorker(registration.installing));
+        // Ask for the newest worker on every app launch instead of relying only on the browser's cache timer.
+        void registration.update().catch(()=>{});
       }).catch(error=>notifyErrorOnce('service-worker-register','No se pudo preparar la instalación sin conexión. Barber VIP puede seguir funcionando con internet; revisá la conexión y recargá.',error));
     }
     if(firebaseReady) renderLoading(); else renderLanding();

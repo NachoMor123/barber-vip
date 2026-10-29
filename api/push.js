@@ -13,6 +13,17 @@ const ALLOWED_PUSH_HOST = host =>
   host === 'notify.windows.com' ||
   host.endsWith('.notify.windows.com');
 
+function cleanEndpoint(value) {
+  const endpoint = String(value || '').slice(0, 2048);
+  try {
+    const parsed = new URL(endpoint);
+    if (parsed.protocol !== 'https:' || !ALLOWED_PUSH_HOST(parsed.hostname.toLowerCase())) return '';
+    return endpoint;
+  } catch (_) {
+    return '';
+  }
+}
+
 async function customerContext(req, res) {
   const decoded = await requireUser(req, res);
   if (!decoded) return null;
@@ -29,63 +40,123 @@ async function customerContext(req, res) {
     send(res, 403, { ok: false, error: 'La cuenta de cliente no está activa.' });
     return null;
   }
-  return { database, uid: decoded.uid, barberUid };
+  return {
+    database,
+    uid: decoded.uid,
+    barberUid,
+    customerRef,
+    customer: customerSnap.data()
+  };
 }
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST', 'DELETE'])) return;
   try {
-    // The public VAPID key is safe to expose. GET does not read Firestore.
-    if (req.method === 'GET') {
-      const configured = pushConfigured();
-      return send(res, 200, { ok: true, enabled: configured, publicKey: configured ? String(process.env.VAPID_PUBLIC_KEY).trim() : '' });
-    }
-    if (!pushConfigured()) return send(res, 503, { ok: false, error: 'El servicio de notificaciones todavía no está configurado en el servidor.' });
+    const configured = pushConfigured();
+    const publicKey = configured ? String(process.env.VAPID_PUBLIC_KEY).trim() : '';
 
-    const context = await customerContext(req, res);
-    if (!context) return;
-    const { database, uid, barberUid } = context;
-    const pushRef = database.collection('pushSubscriptions');
+    if (req.method === 'GET') {
+      // Fetching the public VAPID key costs no Firestore reads.
+      const endpointParam = new URL(req.url || '/', 'https://barber-vip.internal').searchParams.get('endpoint') || '';
+      if (!endpointParam || !configured) {
+        return send(res, 200, { ok: true, enabled: configured, publicKey, registered: false, active: false });
+      }
+      const endpoint = cleanEndpoint(endpointParam);
+      if (!endpoint) return send(res, 400, { ok: false, error: 'El dispositivo no devolvió un endpoint de notificaciones válido.' });
+      const decoded = await requireUser(req, res);
+      if (!decoded) return;
+      const subscriptionSnap = await db().collection('pushSubscriptions').doc(subscriptionId(endpoint)).get();
+      const record = subscriptionSnap.exists ? (subscriptionSnap.data() || {}) : null;
+      const owned = Boolean(record && String(record.customerId || '') === String(decoded.uid));
+      return send(res, 200, {
+        ok: true,
+        enabled: configured,
+        publicKey,
+        registered: owned,
+        active: owned && record.enabled === true
+      });
+    }
+
+    if (!configured) {
+      return send(res, 503, { ok: false, error: 'El servicio de notificaciones todavía no está configurado en el servidor.' });
+    }
+
+    const pushRef = db().collection('pushSubscriptions');
 
     if (req.method === 'POST') {
+      const context = await customerContext(req, res);
+      if (!context) return;
+      const { database, uid, barberUid, customerRef, customer } = context;
       const subscription = body(req).subscription;
-      const endpoint = String(subscription?.endpoint || '').slice(0, 2048);
+      const endpoint = cleanEndpoint(subscription?.endpoint);
       const keys = subscription && subscription.keys;
-      let parsedEndpoint;
-      try { parsedEndpoint = new URL(endpoint); } catch (_) {
+      if (!endpoint) {
         return send(res, 400, { ok: false, error: 'El navegador no devolvió una suscripción de notificaciones válida.' });
-      }
-      if (parsedEndpoint.protocol !== 'https:' || !ALLOWED_PUSH_HOST(parsedEndpoint.hostname.toLowerCase())) {
-        return send(res, 400, { ok: false, error: 'El proveedor de notificaciones del navegador no es compatible.' });
       }
       if (!keys || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string' ||
           keys.p256dh.length > 512 || keys.auth.length > 256) {
         return send(res, 400, { ok: false, error: 'Faltan las claves de la suscripción de notificaciones.' });
       }
-      const id = subscriptionId(endpoint);
-      const now = admin().firestore.FieldValue.serverTimestamp();
-      await pushRef.doc(id).set({
-        endpoint,
-        keys: { p256dh: keys.p256dh, auth: keys.auth },
-        barberUid,
-        customerId: uid,
-        enabled: true,
-        updatedAt: now
-      }, { merge: true });
-      return send(res, 200, { ok: true, enabled: true });
+
+      const ref = pushRef.doc(subscriptionId(endpoint));
+      const existingSnap = await ref.get();
+      const existing = existingSnap.exists ? (existingSnap.data() || {}) : null;
+      if (existing && String(existing.customerId || '') !== String(uid)) {
+        return send(res, 403, { ok: false, error: 'Este dispositivo ya está vinculado a otra cuenta de cliente.' });
+      }
+
+      const alreadyCurrent = Boolean(existing
+        && String(existing.barberUid || '') === String(barberUid)
+        && existing.enabled === true
+        && String(existing.keys?.p256dh || '') === keys.p256dh
+        && String(existing.keys?.auth || '') === keys.auth);
+      if (!alreadyCurrent) {
+        await ref.set({
+          endpoint,
+          keys: { p256dh: keys.p256dh, auth: keys.auth },
+          barberUid,
+          customerId: uid,
+          enabled: true,
+          updatedAt: admin().firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      // The customer document lets visit registration skip a billed, empty push query
+      // for customers who have never enabled notifications or have logged out on all devices.
+      if (customer.pushEnabled !== true) {
+        await customerRef.update({ pushEnabled: true });
+      }
+      return send(res, 200, { ok: true, enabled: true, unchanged: alreadyCurrent && customer.pushEnabled === true });
     }
 
-    const endpoint = String(body(req).endpoint || '').slice(0, 2048);
+    // Logout removes only this device's endpoint. It does not require reading the user profile
+    // or customer document: ownership is checked against the authenticated UID in the endpoint record.
+    const decoded = await requireUser(req, res);
+    if (!decoded) return;
+    const endpoint = cleanEndpoint(body(req).endpoint);
     if (!endpoint) return send(res, 400, { ok: false, error: 'Falta identificar este dispositivo.' });
-    const id = subscriptionId(endpoint);
-    const ref = pushRef.doc(id);
+    const ref = pushRef.doc(subscriptionId(endpoint));
     const snapshot = await ref.get();
-    if (snapshot.exists) {
-      const current = snapshot.data() || {};
-      if (current.customerId !== uid || current.barberUid !== barberUid) {
-        return send(res, 403, { ok: false, error: 'No podés modificar las notificaciones de otra cuenta.' });
+    if (!snapshot.exists) return send(res, 200, { ok: true, enabled: false, unchanged: true });
+    const current = snapshot.data() || {};
+    if (String(current.customerId || '') !== String(decoded.uid)) {
+      return send(res, 403, { ok: false, error: 'No podés modificar las notificaciones de otra cuenta.' });
+    }
+    const barberUid = String(current.barberUid || '');
+    await ref.delete();
+
+    if (barberUid) {
+      const remaining = await pushRef
+        .where('customerId', '==', String(decoded.uid))
+        .where('barberUid', '==', barberUid)
+        .where('enabled', '==', true)
+        .limit(1)
+        .get();
+      if (remaining.empty) {
+        await db().collection('barbers').doc(barberUid).collection('customers').doc(decoded.uid)
+          .update({ pushEnabled: false })
+          .catch(() => {});
       }
-      await ref.delete();
     }
     return send(res, 200, { ok: true, enabled: false });
   } catch (error) {

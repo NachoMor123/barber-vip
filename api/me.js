@@ -12,7 +12,6 @@ function cleanProgramId(value, fallback='program-general') {
 function safeProgramRewards(input) {
   return normalizeFixedRewards(input);
 }
-function publicBarberProfile}
 function publicBarberProfile(source) {
   const dateIso = value => {
     if (!value) return null;

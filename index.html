@@ -1997,7 +1997,21 @@
       const fd=new FormData(form);const payload={displayName:String(fd.get('displayName')||'').trim(),barberName:String(fd.get('barberName')||'').trim(),activityType:$('#settingActivityType',modalRoot)?.value||'barberia',whatsapp:whatsappNumber(String(fd.get('whatsapp')||'').trim()),instagramUsername:String(fd.get('instagramUsername')||'').trim(),mapsUrl:String(fd.get('mapsUrl')||'').trim(),schedule:collectSchedule(modalRoot),services:collectServices(modalRoot),showServices:$('#settingShowServices',modalRoot)?.checked===true,theme:{accent:BRAND_ACCENT,density:document.body.dataset.density==='compact'?'compact':'comfortable'}};
       if(payload.displayName.length<2){toast('Ingresá tu nombre.','error');return;}
       if(!validWhatsapp(payload.whatsapp)){toast('Ingresá un WhatsApp argentino válido y completo.','error');return;}
-      
+      const existing=state.barber||{};
+      const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.keys(value).sort().reduce((out,key)=>(out[key]=canonical(value[key]),out),{}):value;
+      const submittedInstagram=String(payload.instagramUsername||'').replace(/^@/,'').trim();
+      const normalizedInstagram=submittedInstagram?'https://www.instagram.com/'+submittedInstagram+'/':'';
+      const sameProfile=String(existing.displayName||'')===payload.displayName
+        && String(existing.barberName||'')===payload.barberName
+        && String(existing.activityType||'barberia')===payload.activityType
+        && String(existing.whatsapp||'')===payload.whatsapp
+        && String(existing.instagramUrl||'')===normalizedInstagram
+        && String(existing.mapsUrl||'')===payload.mapsUrl
+        && canonical(existing.schedule||{}) && JSON.stringify(canonical(existing.schedule||{}))===JSON.stringify(canonical(payload.schedule))
+        && JSON.stringify(canonical(Array.isArray(existing.services)?existing.services:[]))===JSON.stringify(canonical(payload.services))
+        && (existing.showServices===true)===payload.showServices
+        && String(existing.theme?.density||'comfortable')===payload.theme.density;
+      if(sameProfile){modalRoot.innerHTML='';toast('No hay cambios para guardar.','success');return;}
       const btn=$('button[type="submit"]',form);if(btn){btn.disabled=true;btn.textContent='Guardando…';}
       try{const data=await api('/api/profile',{method:'PUT',body:JSON.stringify(payload)});state.barber={...state.barber,...data.profile,theme:{...(data.profile.theme||{}),accent:BRAND_ACCENT}};modalRoot.innerHTML='';applyTheme(state.barber.theme);renderApp();toast('Datos profesionales guardados.','success');}
       catch(error){toast(userFacingError(error,'No se pudieron guardar los datos profesionales. Revisá la conexión e intentá nuevamente.'),'error');if(btn){btn.disabled=false;btn.textContent='Guardar datos profesionales';}}

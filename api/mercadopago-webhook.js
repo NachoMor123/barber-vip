@@ -26,16 +26,21 @@ function configuredPrice() {
   if(!Number.isFinite(value)||value<1)throw new Error('SUBSCRIPTION_PRICE_ARS debe ser un importe válido en pesos.');
   return value;
 }
-async function processApprovedRecurringPayment({payment,preapprovalId,eventBillingAction}) {
+async function processApprovedRecurringPayment({payment,preapprovalId,eventBillingAction,token}) {
   if(String(payment.status||'')!=='approved')return {ignored:true,reason:'not-approved'};
   const price=configuredPrice();
   if(Number(payment.transaction_amount)!==price||payment.currency_id!=='ARS') {
     console.warn('[Mercado Pago] Recurring payment amount/currency did not match configured subscription.');
     return {ignored:true,reason:'amount-mismatch'};
   }
-  const barberUid=String(payment.external_reference||'');
+  let barberUid=String(payment.external_reference||'');
   const paymentId=String(payment.id||'');
-  if(!barberUid||!paymentId||!preapprovalId)throw new Error('El pago recurrente no contiene referencias válidas.');
+  if(!paymentId||!preapprovalId)throw new Error('El pago recurrente no contiene referencias válidas.');
+  if(!barberUid&&token){
+    const contract=await mercadoPagoGet(`/preapproval/${encodeURIComponent(preapprovalId)}`,token);
+    barberUid=String(contract.external_reference||'');
+  }
+  if(!barberUid)throw new Error('El pago recurrente no identifica la cuenta de Barber VIP.');
   const barberRef=db().collection('barbers').doc(barberUid);
   const paymentRef=barberRef.collection('payments').doc(paymentId);
   const recurringRef=barberRef.collection('recurringSubscriptions').doc(String(preapprovalId));
@@ -145,10 +150,10 @@ module.exports=async function handler(req,res) {
       const payment=await mercadoPagoGet(`/v1/payments/${encodeURIComponent(paymentId)}`,token);
       if(!payment.preapproval_id)payment.preapproval_id=preapprovalId;
       if(!payment.external_reference&&invoice.external_reference)payment.external_reference=String(invoice.external_reference);
-      return send(res,200,{ok:true,...await processApprovedRecurringPayment({payment,preapprovalId,eventBillingAction:invoice.metadata&&invoice.metadata.billing_action})});
+      return send(res,200,{ok:true,...await processApprovedRecurringPayment({payment,preapprovalId,eventBillingAction:invoice.metadata&&invoice.metadata.billing_action,token})});
     }
     const payment=await mercadoPagoGet(`/v1/payments/${encodeURIComponent(notificationId)}`,token);
-    if(payment.preapproval_id)return send(res,200,{ok:true,...await processApprovedRecurringPayment({payment,preapprovalId:String(payment.preapproval_id),eventBillingAction:payment.metadata&&payment.metadata.billing_action})});
+    if(payment.preapproval_id)return send(res,200,{ok:true,...await processApprovedRecurringPayment({payment,preapprovalId:String(payment.preapproval_id),eventBillingAction:payment.metadata&&payment.metadata.billing_action,token})});
     return send(res,200,{ok:true,...await processOneTimePayment(payment)});
   } catch(error) {
     console.error('Mercado Pago webhook error',error.message||error);

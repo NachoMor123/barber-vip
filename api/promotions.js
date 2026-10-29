@@ -118,6 +118,7 @@ module.exports = async function handler(req, res) {
     if (startsAt && !String(data.startsAt).includes('T')) startsAt.setHours(0,0,0,0);
     if (endsAt && !String(data.endsAt).includes('T')) endsAt.setHours(23,59,59,999);
     if (title.length < 3) return send(res, 400, {ok:false,error:'El título debe tener al menos 3 caracteres.'});
+    if (/\[[^\]]{1,100}\]/.test(title+' '+description+' '+conditions)) return send(res, 400, {ok:false,error:'Reemplazá los textos entre corchetes por el beneficio y las condiciones reales antes de guardar la promoción.'});
     if (startsAt && endsAt && endsAt < startsAt) return send(res, 400, {ok:false,error:'La fecha de fin no puede ser anterior a la fecha de inicio.'});
     if (audience === 'selected' && !customerIds.length) return send(res, 400, {ok:false,error:'Seleccioná al menos un cliente para esta promoción.'});
     const now = admin().firestore.FieldValue.serverTimestamp();
@@ -133,7 +134,7 @@ module.exports = async function handler(req, res) {
           barberUid: ctx.uid,
           customerIds: audience === 'selected' ? customerIds : null,
           title: 'Nueva promoción: '+title,
-          body: 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
+          body: description || 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
           tag: 'barber-vip-promo-'+ref.id,
           url: '/'
         });
@@ -144,7 +145,24 @@ module.exports = async function handler(req, res) {
     const promotionRef = collection.doc(id);
     const existingPromotion = await promotionRef.get();
     if (!existingPromotion.exists) return send(res, 404, {ok:false,error:'No se encontró esa promoción.'});
-    const wasActive = existingPromotion.data().active !== false;
+    const existingData = existingPromotion.data() || {};
+    const millis = value => {
+      if (!value) return null;
+      const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date.getTime();
+    };
+    const sameCustomerIds = JSON.stringify((Array.isArray(existingData.customerIds) ? existingData.customerIds : []).map(String).sort())
+      === JSON.stringify(customerIds.map(String).sort());
+    const unchanged = String(existingData.title || '') === title
+      && String(existingData.description || '') === description
+      && String(existingData.conditions || '') === conditions
+      && String(existingData.audience || 'all') === audience
+      && (existingData.active !== false) === (payload.active !== false)
+      && sameCustomerIds
+      && millis(existingData.startsAt) === (startsAt ? startsAt.getTime() : null)
+      && millis(existingData.endsAt) === (endsAt ? endsAt.getTime() : null);
+    if (unchanged) return send(res, 200, {ok:true,id,unchanged:true});
+    const wasActive = existingData.active !== false;
     await promotionRef.update(payload);
     await touchPromotionRevision(barberRef);
     const nowMs = Date.now();
@@ -154,7 +172,7 @@ module.exports = async function handler(req, res) {
         barberUid: ctx.uid,
         customerIds: audience === 'selected' ? customerIds : null,
         title: 'Nueva promoción: '+title,
-        body: 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
+        body: description || 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
         tag: 'barber-vip-promo-'+id,
         url: '/'
       });

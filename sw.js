@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v53-fixed-loyalty-ui';
+const CACHE_NAME = 'barber-vip-shell-v54-read-optimized-ux';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

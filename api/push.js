@@ -77,7 +77,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!configured) {
+    if (req.method === 'POST' && !configured) {
       return send(res, 503, { ok: false, error: 'El servicio de notificaciones todavía no está configurado en el servidor.' });
     }
 

@@ -1982,7 +1982,7 @@
       try{await api('/api/customers',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,customerId:id}:payload)});modalRoot.innerHTML='';toast(id?'Cliente actualizado.':'Cliente creado correctamente.','success');}
       catch(error){toast(userFacingError(error,'No se pudo guardar el cliente. Revisá la conexión e intentá nuevamente.'),'error');if(submit){submit.disabled=false;submit.textContent=id?'Guardar cambios':'Crear cliente';}}
     }
-    function collectSchedule(root=modalRoot)    function collectSchedule(root=modalRoot){const days=$$('[data-schedule-day]',root).map(row=>({day:row.dataset.scheduleDay,mode:$('[data-day-mode]',row)?.value==='double'?'double':'continuous',enabled:$('[data-schedule-enabled]',row)?.checked||false,start1:$('[data-start1]',row)?.value||'',end1:$('[data-end1]',row)?.value||'',start2:$('[data-start2]',row)?.value||'',end2:$('[data-end2]',row)?.value||''}));return {mode:'mixed',days};}
+    function collectSchedule(root=modalRoot){const days=$$('[data-schedule-day]',root).map(row=>({day:row.dataset.scheduleDay,mode:$('[data-day-mode]',row)?.value==='double'?'double':'continuous',enabled:$('[data-schedule-enabled]',row)?.checked||false,start1:$('[data-start1]',row)?.value||'',end1:$('[data-end1]',row)?.value||'',start2:$('[data-start2]',row)?.value||'',end2:$('[data-end2]',row)?.value||''}));return {mode:'mixed',days};}
 
     function openProfileModal(){
       const b=state.barber||{};const schedule=b.schedule||{mode:'mixed',days:[]};const pct=profileCompletion(b);
@@ -2006,7 +2006,7 @@
       p.rewards=[2,4,6].map((cut,i)=>{const discount=Number(p.rewards[i]?.discount);if(!Number.isInteger(discount)||discount<0||discount>100)throw new Error('Cada descuento debe estar entre 0% y 100%.');return {cut,discount,label:discount===100?'Servicio gratis':`${discount}% OFF`};});
       p.audience='all';p.customerIds=[];
     }
-    async function saveLoyaltyForm(form)    async function saveLoyaltyForm(form){
+    async function saveLoyaltyForm(form){
       const programs=collectLoyaltyPrograms();try{validateLoyaltyDraft(programs);}catch(error){toast(error.message,'error');return;}
       const btn=$('button[type="submit"]',form);if(btn){btn.disabled=true;btn.textContent='Guardando…';}
       try{const data=await api('/api/loyalty',{method:'PUT',body:JSON.stringify({programs})});const only=data.programs?.[0]||programs[0];state.barber={...state.barber,loyaltyPrograms:[{...only,audience:'all',customerIds:[]}],defaultLoyaltyProgramId:data.defaultLoyaltyProgramId||only.id};state.customers=state.customers.map(c=>({...c,loyaltyProgramId:state.barber.defaultLoyaltyProgramId}));renderApp();toast('Programa de premios guardado para todos los clientes.','success');}

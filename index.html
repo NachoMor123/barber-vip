@@ -802,7 +802,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false, pushStatusPromise:null, pushSyncSequence:0, pushLogoutInProgress:false };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -888,14 +888,13 @@
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
       if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))return '';
-      let storedPreference=false;try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-      const permission=Notification.permission,active=permission==='granted'&&(state.pushEnabled===true||storedPreference);
+      const permission=Notification.permission,active=permission==='granted'&&state.pushEnabled===true;
       if(active)return '';
       const denied=permission==='denied',iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
       const description=denied?'El navegador bloqueó los avisos. Habilitá las notificaciones desde los permisos de este sitio.'
         :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
         :active?'Activadas en este dispositivo. Te avisamos por visitas, hitos y nuevas promociones.'
-        :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
+        :'Recibí avisos cuando se registre una visita, alcances un hito o se active una promoción, incluso con la app cerrada mientras la sesión siga iniciada.';
       const action=active
         ?'<div class="push-notification-status" role="status" aria-live="polite"><span aria-hidden="true">✓</span> Avisos activados</div>'
         :`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
@@ -918,30 +917,115 @@
       }catch(_){return null;}
     }
     async function refreshPushStatusFromDevice(){
-      if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window))return;
-      try{
-        const registration=await navigator.serviceWorker.ready;
-        let subscription=await registration.pushManager.getSubscription();
-        let previouslyRegistered=false;try{previouslyRegistered=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-        if(subscription&&previouslyRegistered&&Notification.permission==='granted'){
-          // If the server rotated its VAPID key, an old device subscription cannot receive new pushes.
-          // Detect that once at startup and remove it instead of falsely showing an active status.
-          try{
-            const config=await api('/api/push');
-            if(config?.enabled&&config.publicKey&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
-              try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
-              await subscription.unsubscribe().catch(()=>false);
-              subscription=null;
-              previouslyRegistered=false;
-              try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
-              toast('Actualizamos el servicio de avisos. Tocá “Activar notificaciones” para registrar de nuevo este dispositivo.','success');
-            }
-          }catch(error){console.warn('[Barber VIP] No se pudo verificar la clave de la suscripción push.',error?.message||error);}
+      if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window)||state.pushLogoutInProgress)return;
+      if(state.pushStatusPromise)return state.pushStatusPromise;
+      const userId=String(state.user.uid||'');
+      const preferenceKey='barberVipPushEnabled:'+userId;
+      const sequence=(Number(state.pushSyncSequence)||0)+1;
+      state.pushSyncSequence=sequence;
+      const isCurrent=()=>state.pushSyncSequence===sequence&&!state.pushLogoutInProgress&&state.role==='customer'&&String(state.user?.uid||'')===userId;
+      const task=Promise.resolve().then(async()=>{
+        let previouslyRegistered=false;
+        try{previouslyRegistered=localStorage.getItem(preferenceKey)==='true';}catch(_){}
+        if(!previouslyRegistered||Notification.permission!=='granted'){
+          state.pushEnabled=false;
+          if(Notification.permission!=='granted'){try{localStorage.removeItem(preferenceKey);}catch(_){}}
+          if(isCurrent())renderApp();
+          return;
         }
-        state.pushEnabled=Boolean(subscription&&previouslyRegistered&&Notification.permission==='granted');
-        if(!state.pushEnabled){try{localStorage.removeItem(pushPreferenceKey());}catch(_){}}
-        if(state.role==='customer'&&state.user)renderApp();
-      }catch(error){console.warn('[Barber VIP] No se pudo consultar el estado local de notificaciones.',error?.message||error);}
+        try{
+          const registration=await navigator.serviceWorker.ready;
+          if(!isCurrent())return;
+          const subscription=await registration.pushManager.getSubscription();
+          if(!subscription){
+            state.pushEnabled=false;
+            try{localStorage.removeItem(preferenceKey);}catch(_){}
+            if(isCurrent())renderApp();
+            return;
+          }
+          const config=await api('/api/push?endpoint='+encodeURIComponent(subscription.endpoint));
+          if(!isCurrent())return;
+          if(!config?.enabled||!config.publicKey){
+            state.pushEnabled=false;
+            if(isCurrent())renderApp();
+            return;
+          }
+          if(pushSubscriptionUsesKey(subscription,config.publicKey)===false){
+            if(config.registered)await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})}).catch(()=>{});
+            await subscription.unsubscribe().catch(()=>false);
+            try{localStorage.removeItem(preferenceKey);}catch(_){}
+            state.pushEnabled=false;
+            if(isCurrent())toast('Actualizamos el servicio de avisos. Tocá “Activar notificaciones” para registrar de nuevo este dispositivo.','success');
+            if(isCurrent())renderApp();
+            return;
+          }
+          const serverActive=config.registered===true&&config.active===true;
+          // This status check reads only the device's subscription document. Re-register only after logout
+          // or once to migrate an older customer whose subscription lacks the pushEnabled marker.
+          if(!serverActive||state.customer?.pushEnabled!==true){
+            const saved=await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
+            if(!isCurrent())return;
+            state.pushEnabled=saved.enabled===true;
+          }else{
+            state.pushEnabled=true;
+          }
+        }catch(error){
+          console.warn('[Barber VIP] No se pudo verificar la suscripción push.',error?.message||error);
+          if(isCurrent())state.pushEnabled=false;
+        }
+        if(isCurrent())renderApp();
+      });
+      state.pushStatusPromise=task;
+      try{await task;}
+      finally{if(state.pushStatusPromise===task)state.pushStatusPromise=null;}
+    }
+
+    async function unsubscribeCustomerPushLocally(userId){
+      const uid=String(userId||'');
+      if(!uid)return;
+      const key='barberVipPushEnabled:'+uid;
+      try{
+        const registration=await navigator.serviceWorker?.getRegistration('/');
+        const subscription=await registration?.pushManager?.getSubscription();
+        if(subscription)await subscription.unsubscribe().catch(()=>false);
+      }catch(error){console.warn('[Barber VIP] No se pudo cancelar la suscripción local de avisos.',error?.message||error);}
+      try{localStorage.removeItem(key);}catch(_){}
+      if(String(state.user?.uid||'')===uid)state.pushEnabled=false;
+    }
+
+    async function disableCustomerPushOnLogout(){
+      if(state.role!=='customer'||!state.user)return;
+      const userId=String(state.user.uid||'');
+      const key='barberVipPushEnabled:'+userId;
+      state.pushLogoutInProgress=true;
+      state.pushSyncSequence=(Number(state.pushSyncSequence)||0)+1;
+      try{if(state.pushStatusPromise)await state.pushStatusPromise.catch(()=>{});}catch(_){}
+      try{
+        const registration=await navigator.serviceWorker?.getRegistration('/');
+        const subscription=await registration?.pushManager?.getSubscription();
+        if(!subscription){
+          state.pushEnabled=false;
+          try{localStorage.removeItem(key);}catch(_){}
+          return;
+        }
+        try{
+          // Remove the server record before signing out, so later visits and promotions cannot target this device.
+          await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});
+          state.pushEnabled=false;
+          // Keep the opt-in and browser subscription. The next login re-registers it automatically.
+        }catch(error){
+          // If the server cannot be reached, unsubscribe locally as a fail-safe.
+          console.warn('[Barber VIP] No se pudo desactivar la suscripción del servidor al cerrar sesión.',error?.message||error);
+          await subscription.unsubscribe().catch(()=>false);
+          try{localStorage.removeItem(key);}catch(_){}
+          state.pushEnabled=false;
+        }
+      }catch(error){
+        console.warn('[Barber VIP] No se pudo comprobar la suscripción al cerrar sesión.',error?.message||error);
+        await unsubscribeCustomerPushLocally(userId);
+      }finally{
+        state.pushLogoutInProgress=false;
+      }
     }
     async function enableCustomerPush(button){
       const original=button?.textContent||'Activar notificaciones';
@@ -1292,7 +1376,7 @@
       return data;
     };
     const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;try{state.promotionMetaUnsubscribe?.();}catch(_){}state.promotionMetaUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
-    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1; state.pushEnabled=false; if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Abriendo Barber VIP</strong><p>Estamos recuperando tu sesión…</p></section></main>`; }
     function renderSessionError(message){
@@ -1766,7 +1850,7 @@
       startPromoCountdowns();
             if(state.customerSection==='barber'){
         const schedule=scheduleMarkup(b.schedule);const hasInsta=safeExternalUrl(b.instagramUrl,['instagram.com']),hasMaps=safeExternalUrl(b.mapsUrl,['google.com','maps.app.goo.gl','goo.gl']),hasWhats=validWhatsapp(b.whatsapp);
-        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">VINCULACIÓN CON TU BARBERO</div><h1>Datos de tu barbero</h1><p>Tu tarjeta y tus beneficios quedan vinculados a tu barbero.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p></div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Vinculados a tu barbero</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">VINCULACIÓN CON TU BARBER</div><h1>Datos de tu Barber</h1><p>Tu tarjeta y tus beneficios quedan vinculados a tu Barber.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p></div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Vinculados a tu Barber</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
         return;
       }
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Descuento aplicado':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
@@ -1924,7 +2008,7 @@
       }
     }
 
-    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function signOutAndReturn() { if(state.manualLogin)return; state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{if(state.role==='customer')await disableCustomerPushOnLogout();await signOut(state.auth);}finally{cleanupContext();state.pushEnabled=false;state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;
@@ -2060,7 +2144,7 @@
       ['card','✨ Tu tarjeta','Visitas y progreso, en un mismo lugar.'],
       ['loyalty','🎁 Tus premios','Mirá qué hito sigue y qué beneficio corresponde.'],
       ['promos','🔥 Promociones','Ofertas vigentes y tiempo restante.'],
-      ['barber','📍 Datos de tu barbero','Horarios y formas de contacto.'],
+      ['barber','📍 Datos de tu Barber','Horarios y formas de contacto.'],
       ['turn','📲 Coordinar una visita','Hablá directamente por WhatsApp.']
     ];
     const PIP_ANSWERS = {
@@ -2260,7 +2344,7 @@
         else if(action==='open-cut-modal'){const wasLoaded=state.customersLoaded;const pending=wasLoaded?Promise.resolve():ensureAdminCustomersLoaded();openCutModal();if(!wasLoaded){await pending;if($('#cutSearch',modalRoot))openCutModal();}}
         else if(action==='add-cut'){await addCut(button.dataset.id,button);}
         else if(action==='edit-profile'){openProfileModal();}
-        else if(action==='apply-promo-template'){const templates={week:{title:'⚡ Tu beneficio de esta semana',description:'Vení antes del domingo y aprovechá [beneficio concreto]. Mostrá esta promoción al llegar.',conditions:'Válida hasta [fecha real]. Aplica a [servicio].'},return:{title:'💈 Una razón más para volver',description:'Tu próxima visita puede tener un detalle especial: [beneficio concreto]. Aprovechalo antes del [fecha].',conditions:'Válida hasta [fecha real]. Consultá las condiciones antes del servicio.'},loyalty:{title:'🎁 Sigamos sumando visitas',description:'Tu progreso en Barber VIP sigue creciendo. Esta semana, además, podés aprovechar [beneficio concreto].',conditions:'Válida hasta [fecha real]. Consultá con tu barbero los detalles.'}};const template=templates[button.dataset.template||''];if(template){$('#promotionTitle',modalRoot).value=template.title;$('#promotionDescription',modalRoot).value=template.description;$('#promotionConditions',modalRoot).value=template.conditions;toast('Plantilla cargada. Reemplazá los textos entre corchetes antes de guardar.');}}
+        else if(action==='apply-promo-template'){const templates={week:{title:'⚡ Tu beneficio de esta semana',description:'Vení antes del domingo y aprovechá [beneficio concreto]. Mostrá esta promoción al llegar.',conditions:'Válida hasta [fecha real]. Aplica a [servicio].'},return:{title:'💈 Una razón más para volver',description:'Tu próxima visita puede tener un detalle especial: [beneficio concreto]. Aprovechalo antes del [fecha].',conditions:'Válida hasta [fecha real]. Consultá las condiciones antes del servicio.'},loyalty:{title:'🎁 Sigamos sumando visitas',description:'Tu progreso en Barber VIP sigue creciendo. Esta semana, además, podés aprovechar [beneficio concreto].',conditions:'Válida hasta [fecha real]. Consultá con tu Barber los detalles.'}};const template=templates[button.dataset.template||''];if(template){$('#promotionTitle',modalRoot).value=template.title;$('#promotionDescription',modalRoot).value=template.description;$('#promotionConditions',modalRoot).value=template.conditions;toast('Plantilla cargada. Reemplazá los textos entre corchetes antes de guardar.');}}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
         else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription(false);}
@@ -2407,7 +2491,7 @@
     if(firebaseConfigured()) {
       try {
         const fbApp=initializeApp(firebaseConfig);state.auth=getAuth(fbApp);state.db=getFirestore(fbApp);firebaseReady=true;
-        const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{const signedOutCustomerUid=state.role==='customer'?state.user?.uid:null;if(signedOutCustomerUid){state.pushSyncSequence=(Number(state.pushSyncSequence)||0)+1;void unsubscribeCustomerPushLocally(signedOutCustomerUid);}clearListeners();if(state.user)cleanupContext();renderLanding();}});
         // Prefer browser-local auth persistence so the installed app restores the session on reopen.
         void setPersistence(state.auth,browserLocalPersistence).catch(error=>console.warn('No se pudo confirmar la persistencia local de sesión:',error?.message||error)).finally(restoreAuthObserver);
       } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}

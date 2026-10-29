@@ -1,6 +1,7 @@
 const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
+const { FIXED_MILESTONES, normalizeFixedRewards } = require('../lib/loyalty');
 
 const DEFAULT_PROGRAM = {
   id: 'program-general',
@@ -26,7 +27,7 @@ function cleanRewards(input) {
   let previous = 0;
   for (const reward of rewards) {
     if (!Number.isInteger(reward.cut) || reward.cut < 1 || reward.cut > 50 || reward.cut <= previous) return [];
-    if (!Number.isInteger(reward.discount) || reward.discount < 1 || reward.discount > 100) return [];
+    if (!Number.isInteger(reward.discount) || reward.discount < 0 || reward.discount > 100) return [];
     reward.label = `${reward.discount}% OFF`;
     previous = reward.cut;
   }
@@ -44,21 +45,22 @@ function chooseGeneralProgram(barber) {
     name: text(chosen.name, 60) || 'Programa de premios',
     audience: 'all',
     customerIds: [],
-    rewards: (rewards.length ? rewards : DEFAULT_PROGRAM.rewards).map(r => ({
-      cut: Number(r.cut),
-      discount: Math.min(100, Math.max(1, Number(r.discount))),
-      label: `${Math.min(100, Math.max(1, Number(r.discount)))}% OFF`
-    }))
+    rewards: normalizeFixedRewards(rewards.length ? rewards : DEFAULT_PROGRAM.rewards)
   };
 }
 async function migrateToSingleProgram(database, barberRef, source) {
   const oldPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
   const program = chooseGeneralProgram(source);
+  const oldRewards = Array.isArray(oldPrograms[0]?.rewards) ? oldPrograms[0].rewards : [];
+  const fixedRewardsAreStored = oldRewards.length === 3
+    && FIXED_MILESTONES.every(cut => oldRewards.some(row => Number(row?.cut) === cut))
+    && program.rewards.every(reward => Number(oldRewards.find(row => Number(row?.cut) === reward.cut)?.discount) === reward.discount);
   const needsMigration = oldPrograms.length !== 1
     || oldPrograms[0]?.id !== program.id
     || oldPrograms[0]?.audience !== 'all'
     || (oldPrograms[0]?.customerIds || []).length > 0
-    || source.defaultLoyaltyProgramId !== program.id;
+    || source.defaultLoyaltyProgramId !== program.id
+    || !fixedRewardsAreStored;
   if (!needsMigration) return { ...source, loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id };
 
   const customersRef = barberRef.collection('customers');
@@ -95,15 +97,23 @@ async function migrateToSingleProgram(database, barberRef, source) {
 function normalizeSubmitted(raw) {
   const id = cleanId(raw.id, 'program-general');
   const name = text(raw.name, 60) || 'Programa de premios';
-  if (!Array.isArray(raw.rewards) || raw.rewards.length < 1 || raw.rewards.length > 10) {
-    throw new Error('Configurá entre 1 y 10 hitos para el ciclo de fidelización.');
+  if (!Array.isArray(raw.rewards) || raw.rewards.length !== 3) {
+    throw new Error('Los hitos son fijos: 2, 4 y 6 visitas. Solo podés modificar sus descuentos.');
   }
-  const rewards = cleanRewards(raw.rewards);
-  if (!rewards.length || rewards.length !== raw.rewards.length) {
-    throw new Error('Revisá los hitos: deben ser únicos, estar entre 1 y 50 visitas y tener descuentos entre 1% y 100%.');
+  const sorted = [...raw.rewards].sort((a, b) => Number(a?.cut) - Number(b?.cut));
+  if (!FIXED_MILESTONES.every((cut, index) => Number(sorted[index]?.cut) === cut)) {
+    throw new Error('Los hitos son fijos: 2, 4 y 6 visitas. Solo podés modificar sus descuentos.');
   }
-  return { id, name, audience: 'all', customerIds: [], rewards };
+  for (const reward of sorted) {
+    const discount = Number(reward?.discount);
+    if (!Number.isInteger(discount) || discount < 0 || discount > 100) {
+      throw new Error('Los descuentos de las visitas 2, 4 y 6 deben estar entre 0% y 100%.');
+    }
+  }
+  return { id, name, audience: 'all', customerIds: [], rewards: normalizeFixedRewards(sorted) };
 }
+
+module.exports = async function handler}
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'PUT'])) return;
@@ -169,7 +179,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error('loyalty error', error);
     const message = String(error?.message || '');
-    const invalidInput = /^(Configurá entre 1 y 10 hitos|Revisá los hitos:)/i.test(message);
+    const invalidInput = /^(Los hitos son fijos|Los descuentos de las visitas|Revisá los hitos:)/i.test(message);
     return send(res, invalidInput ? 400 : 500, { ok: false, error: invalidInput ? message : 'No se pudo guardar el programa de premios por un problema temporal. Revisá tu conexión e intentá nuevamente.' });
   }
 };

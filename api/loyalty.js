@@ -56,11 +56,18 @@ function chooseGeneralProgram(barber) {
 async function migrateToSingleProgram(database, barberRef, source) {
   const oldPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
   const program = chooseGeneralProgram(source);
+  const oldRewards = Array.isArray(oldPrograms[0]?.rewards) ? oldPrograms[0].rewards : [];
+  const rewardConfigNeedsMigration = oldRewards.length !== program.rewards.length
+    || program.rewards.some((reward,index) =>
+      Number(oldRewards[index]?.cut) !== Number(reward.cut)
+      || Number(oldRewards[index]?.discount) !== Number(reward.discount)
+    );
   const needsMigration = oldPrograms.length !== 1
     || oldPrograms[0]?.id !== program.id
     || oldPrograms[0]?.audience !== 'all'
     || (oldPrograms[0]?.customerIds || []).length > 0
-    || source.defaultLoyaltyProgramId !== program.id;
+    || source.defaultLoyaltyProgramId !== program.id
+    || rewardConfigNeedsMigration;
   if (!needsMigration) return { ...source, loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id };
 
   const customersRef = barberRef.collection('customers');

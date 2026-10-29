@@ -2294,7 +2294,7 @@
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='instructions';renderInstallGate();}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}
-        else if(action==='copy-app-link'){await copyText(customerSignupUrl(state.barber?.barberCode));toast('Enlace a Barber VIP copiado. El cliente elige Cliente e ingresa tu código.','success');}
+        else if(action==='copy-app-link'){await copyText(customerSignupUrl());toast('Enlace a Barber VIP copiado. El cliente elige Cliente e ingresa tu código.','success');}
         else if(action==='download-barber-poster'){await downloadBarberPosterPdf();}
         else if(action==='book-turn'){contactBarber(false);}
         else if(action==='contact-barber'){contactBarber(false);}

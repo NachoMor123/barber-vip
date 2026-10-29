@@ -989,7 +989,7 @@
         if(button?.isConnected){button.disabled=false;button.textContent=original;}
       }
     }
-    const subscriptionPrice = ()    const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
+    const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
     function greetingForNow(){const h=new Date().getHours();return h>=5&&h<12?'Buen día':h>=12&&h<20?'Buenas tardes':'Buenas noches';}
     const nameInitials = name => String(name||'BV').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'BV';
     const toast = (message,type='') => { const root=$('#toasts');if(!root)return;const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=String(message||'');root.appendChild(el);setTimeout(()=>el.remove(),4500); };

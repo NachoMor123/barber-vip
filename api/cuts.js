@@ -8,15 +8,21 @@ function defaultProgram(barber) {
   const selected=programs.find(p=>p.id===barber.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];
   return selected||{id:'program-246',name:'Ciclo clásico',rewards:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}]};
 }
-function programForCustomer(customer,barber){const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
+function programForCustomer(customer,barber){if(customer?.loyaltyOverride?.mode==='custom'&&Array.isArray(customer.loyaltyOverride.rewards)&&customer.loyaltyOverride.rewards.length)return {id:'customer-override',name:'Programa personalizado',rewards:customer.loyaltyOverride.rewards};const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
 function normalizeRewards(program){
   const raw=Array.isArray(program.rewards)?program.rewards:[];
-  const normalized=raw.map(r=>({cut:Number(r.cut),discount:Math.min(100,Math.max(1,Number(r.discount)||1)),label:`${Math.min(100,Math.max(1,Number(r.discount)||1))}% OFF`})).filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50).sort((a,b)=>a.cut-b.cut);
-  return normalized.length?normalized:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}];
+  const normalized=raw.map(r=>({cut:Number(r.cut),discount:Number(r.discount)}))
+    .filter(r=>Number.isInteger(r.cut)&&r.cut>=1&&r.cut<=50&&Number.isInteger(r.discount)&&r.discount>=0&&r.discount<=100)
+    .sort((a,b)=>a.cut-b.cut).slice(0,3);
+  const defaults=[{cut:2,discount:10},{cut:4,discount:20},{cut:6,discount:30}];
+  return [2,4,6].map((cut,index)=>{
+    const discount=normalized[index]?.discount??defaults[index].discount;
+    return {cut,discount,label:discount===100?'Servicio gratis':`${discount}% OFF`};
+  });
 }
 function activeReward(customer,rewards){
   const current=Array.isArray(customer.availableRewards)?customer.availableRewards:[];
-  if(current.length)return current.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0];
+  if(current.length){const saved=current.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0];const discount=Math.min(100,Math.max(0,Number(saved.discount)||0));const cut=Number(saved.cut)<=2?2:Number(saved.cut)<=4?4:6;return {cut,discount,label:discount===100?'Servicio gratis':`${discount}% OFF`};}
   if(customer.rewardReady){const n=Number(customer.cycleCuts||0);return [...rewards].filter(r=>Number(r.cut)<=n).pop()||rewards[0];}
   return null;
 }

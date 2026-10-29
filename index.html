@@ -2023,18 +2023,49 @@
       catch(error){toast(userFacingError(error,'No se pudo guardar el programa de premios. Revisá la conexión e intentá nuevamente.'),'error');if(btn){btn.disabled=false;btn.textContent='Guardar programa de premios';}}
     }
     function openPlanInfo(){
-      const s=subStatus();
-      if(s.status==='active'||s.isTrial){
-        const trial=s.isTrial;
-        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, podés activar el plan pago ahora y empezar tu período de 30 días desde la aprobación. La renovación se inicia manualmente desde la app.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+s.daysRemaining+' día'+(s.daysRemaining===1?'':'s'):'Plan de 30 días'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. No se realizan débitos automáticos mensuales.':' El pago se extiende cuando corresponda renovar. No se realizan débitos automáticos mensuales.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Pagar ahora · activar 30 días ↗</button>':''}</div></section></div>`;
+      const current=subStatus();
+      const renewalOn=state.barber?.autoRenewalEnabled===true&&state.barber?.mpSubscriptionStatus==='authorized';
+      const renewalPending=state.barber?.autoRenewalPending===true;
+      const price=money(subscriptionPrice());
+      const expires=current.expiresAt?escapeHtml(dateLabel(current.expiresAt)):'';
+      const active=current.status==='active'||current.isTrial;
+      if(active){
+        const trial=current.isTrial;
+        let bodyText;
+        if(renewalOn)bodyText='La renovación automática está activada. Mercado Pago realizará el próximo cobro mensual según la suscripción que autorizaste. Podés cancelarla desde acá; los días ya pagados se mantienen.';
+        else if(renewalPending)bodyText='La suscripción todavía necesita que completes la autorización en Mercado Pago. Hasta que figure autorizada, no se considera activa.';
+        else bodyText=trial?'Podés dejar autorizada la renovación ahora y el primer cobro se programa para cuando termine tu prueba gratuita. También podés pagar ahora y empezar tus 30 días pagos inmediatamente.':'Tu cuenta está activa. Podés autorizar un cobro mensual automático al vencimiento del período vigente, sin pagar por adelantado.';
+        const mainAction=renewalOn
+          ? '<button class="btn btn-danger" data-action="cancel-auto-renewal">Cancelar renovación automática</button>'
+          : renewalPending
+            ? '<button class="btn btn-primary" data-action="continue-auto-renewal">Continuar autorización ↗</button>'
+            : '<button class="btn btn-primary" data-action="enable-auto-renewal">Activar renovación automática ↗</button>';
+        const trialAction=trial&&!renewalOn
+          ? '<button class="btn btn-ghost" data-action="start-trial-payment">Pagar ahora y activar renovación ↗</button>'
+          : '';
+        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Tu prueba gratuita':renewalOn?'Renovación automática activada':'Tu cuenta está activa'}</h2><p>Suscripción mensual · ${price}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+current.daysRemaining+' día'+(current.daysRemaining===1?'':'s'):current.label}</strong><p>${bodyText}${expires?' Período actual hasta el '+expires+'.':''}</p></div><div class="modal-footer">${mainAction}${trialAction}<button class="btn btn-ghost" data-action="close-modal">Cerrar</button></div></section></div>`;
         return;
       }
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${s.status==='grace'?'Estás en período de gracia':'Tu cuenta está vencida'}</h2><p>Cada pago aprobado suma 30 días de servicio. La renovación se inicia manualmente desde la app a través de Mercado Pago.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · ${money(subscriptionPrice())}</strong><p>${s.status==='grace'?`Te quedan ${Math.max(0,s.daysRemaining)} día(s) de servicio.`:'Para volver a registrar visitas y crear promociones, renová tu cuenta.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Pagar ${money(subscriptionPrice())} ↗</button></div></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${current.status==='grace'?'Estás en período de gracia':'Tu cuenta está vencida'}</h2><p>Suscripción mensual automática · ${price}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Renová y autorizá el débito mensual</strong><p>${current.status==='grace'?'Te quedan '+Math.max(0,current.daysRemaining)+' día(s) de servicio.':'Tu período ya venció. La suscripción se activa después de que autorices el pago en Mercado Pago.'} Los cargos futuros se realizan mensualmente mientras la suscripción esté autorizada. Podés cancelarla cuando quieras.</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Renovar · activar débito mensual ↗</button></div></section></div>`;
     }
-    async function paySubscription(skipTrial=false) {
-      if(subStatus().status==='active'&&!skipTrial){openPlanInfo();return;}
-      try {const data=await api('/api/create-preference',{method:'POST',body:JSON.stringify(skipTrial?{action:'skip-trial'}:{})});location.href=data.url;}
-      catch(error){toast(userFacingError(error,'No se pudo iniciar el pago. Revisá tu conexión e intentá nuevamente.'),'error');}
+    async function paySubscription(action='renew') {
+      try {
+        const data=await api('/api/create-preference',{method:'POST',body:JSON.stringify({action})});
+        if(data.url){location.href=data.url;return;}
+        throw new Error('Mercado Pago no devolvió el enlace de autorización.');
+      } catch(error) {
+        toast(userFacingError(error,'No se pudo iniciar la suscripción. Revisá tu conexión e intentá nuevamente.'),'error');
+      }
+    }
+    async function cancelAutoRenewal() {
+      try {
+        const result=await api('/api/cancel-subscription',{method:'POST',body:JSON.stringify({})});
+        state.barber={...state.barber,autoRenewalEnabled:false,autoRenewalPending:false,mpSubscriptionStatus:result.status||'canceled'};
+        openPlanInfo();
+        toast('Renovación automática cancelada. Conservás el período ya pagado.','success');
+      } catch(error) {
+        toast(userFacingError(error,'No se pudo cancelar la renovación automática. Intentá de nuevo.'),'error');
+      }
     }
 
 
@@ -2259,8 +2290,11 @@
         else if(action==='edit-profile'){openProfileModal();}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
-        else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription(false);}
-        else if(action==='start-trial-payment'){modalRoot.innerHTML='';await paySubscription(true);}
+        else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription('renew');}
+        else if(action==='start-trial-payment'){modalRoot.innerHTML='';await paySubscription('skip-trial');}
+        else if(action==='enable-auto-renewal'){modalRoot.innerHTML='';await paySubscription('auto-renew');}
+        else if(action==='continue-auto-renewal'){modalRoot.innerHTML='';await paySubscription('auto-renew');}
+        else if(action==='cancel-auto-renewal'){await cancelAutoRenewal();}
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='instructions';renderInstallGate();}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}

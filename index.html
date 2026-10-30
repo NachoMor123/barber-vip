@@ -2249,6 +2249,7 @@
         if(installHelpExpanded){
           const instructions=isIOS?'En iPhone o iPad: abrí este enlace en Safari, tocá Compartir y elegí «Añadir a pantalla de inicio». Después abrí el ícono nuevo.':isAndroid?'En Android: abrí el menú ⋮ de Chrome y elegí «Instalar aplicación» o «Añadir a pantalla de inicio». Cuando termine, abrí el ícono nuevo.':isChromium?'En Chrome o Edge: abrí el menú del navegador y elegí «Instalar Barber VIP» o «Instalar aplicación». Después abrila desde el ícono creado.':'Este navegador no ofrece instalación directa. Probá con Chrome/Edge en escritorio o Android; en iPhone/iPad, usá Safari y «Añadir a pantalla de inicio».';
           content+=`<div class="install-help-copy">${instructions}</div>`;
+          content+=`<button class="btn btn-soft btn-block" data-action="install-verify">Comprobar si ya se instaló</button>`;
         }
         content+=`<p class="tiny muted">La app se habilita cuando la abrís desde el ícono instalado. El navegador tiene que autorizar la instalación.</p>`;
       }
@@ -2300,7 +2301,7 @@
         await installEvent.prompt();
         const result=await Promise.race([choicePromise,new Promise((_,reject)=>window.setTimeout(()=>reject(new Error('Chrome tardó demasiado en responder a la solicitud de instalación.')),45000))]);
         if(result?.outcome==='accepted'){
-          if(installPhase!=='instructions')installPhase='waiting';
+          if(!['instructions','installed'].includes(installPhase))installPhase='waiting';
           if(installVerificationTimer)window.clearTimeout(installVerificationTimer);installVerificationTimer=window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();notifyErrorOnce('install-not-confirmed','Chrome no confirmó que Barber VIP se haya instalado. No marques la instalación como terminada: comprobá si apareció el ícono o seguí los pasos manuales.');}},25000);
         }else{
           installPhase='prompt';installHelpExpanded=true;
@@ -2381,7 +2382,7 @@
         else if(action==='start-trial-payment'){openPaymentConfirmation(true);}
         else if(action==='confirm-mp-payment'){await paySubscription(button.dataset.skipTrial==='true');}
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='prompt';renderInstallGate();}
-        else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
+        else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installedPwaDetectionPromise=null;const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}
         else if(action==='copy-app-link'){await copyText(customerSignupUrl());toast('Enlace de Barber VIP copiado. El cliente ingresa tu código al crear su cuenta.','success');}

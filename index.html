@@ -828,6 +828,7 @@
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
     let installPhase = 'prompt'; // prompt | waiting | installed
+    let installVerificationTimer = null;
     const BRAND_ACCENT = '#3478ff';
 
     const logo = `<span class="brand-icon"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 1.5C17.2 8.8 23.2 14.8 30.5 16C23.2 17.2 17.2 23.2 16 30.5C14.8 23.2 8.8 17.2 1.5 16C8.8 14.8 14.8 8.8 16 1.5Z" fill="#238bff" stroke="#8fd9ff" stroke-width=".7"/><path d="M16 5.2C17 10.5 21.5 15 26.8 16C21.5 17 17 21.5 16 26.8C15 21.5 10.5 17 5.2 16C10.5 15 15 10.5 16 5.2Z" fill="#b8eaff" fill-opacity=".3"/><path d="M22.1 8.2 27.9 4.2 24.8 11Z" fill="#54baff"/><path d="m9.9 23.8-5.8 4 3.1-6.8Z" fill="#126cf2"/></svg></span>`;
@@ -2224,7 +2225,7 @@
         content=`<div class="install-help-copy"><strong>📲 Para abrirla como aplicación:</strong><br>1. Volvé a la pantalla de inicio del teléfono.<br>2. Tocá el ícono Barber VIP que ya instalaste.<br>3. Vas a entrar directamente, sin esta pantalla de instalación.</div><p class="tiny muted">Si el navegador ya abrió Barber VIP como aplicación, esta pantalla no aparecerá.</p><button class="btn btn-primary btn-block" data-action="continue-installed-browser">Continuar en esta pestaña</button>`;
       } else if(installPhase==='waiting'){
         kicker='INSTALACIÓN EN CURSO';title='Esperando instalación…';copy='Estamos preparando el acceso como aplicación. Cuando termine, abrí Barber VIP desde el ícono que aparece en tu pantalla de inicio.';
-        content=`<div class="install-waiting"><span class="install-spinner"></span><strong>Esperando instalación</strong></div><p class="install-help-copy">Esta pestaña no puede abrir por la fuerza la aplicación instalada. Si ya aceptaste la instalación, podés ver cómo abrir el ícono nuevo.</p><button class="btn btn-soft btn-block" data-action="install-manual-check">Ver instrucciones de apertura</button>`;
+        content=`<div class="install-waiting"><span class="install-spinner"></span><strong>Esperando confirmación de Chrome</strong></div><p class="install-help-copy">Aceptar la ventana no garantiza que el ícono ya esté creado. Si no aparece, te mostramos cómo terminar la instalación manualmente.</p><button class="btn btn-primary btn-block" data-action="install-verify">Comprobar instalación</button><button class="btn btn-soft btn-block" data-action="install-manual-check">Ver instrucciones manuales</button>`;
       } else if(installPhase==='installed'||installPhase==='instructions'){
         kicker='INSTALACIÓN COMPLETADA';title='Abrí Barber VIP desde su ícono';copy='La instalación ya terminó. Abrí el ícono de Barber VIP en la pantalla de inicio para entrar en el modo aplicación.';
         content=`<div class="install-help-copy"><strong>📲 Para entrar:</strong><br>1. Cerrá esta pestaña del navegador.<br>2. Buscá el ícono de Barber VIP en la pantalla de inicio o en el menú de aplicaciones.<br>3. Tocá ese ícono. La app reconocerá que se abrió en modo instalado y te dejará continuar.</div><p class="tiny muted">Si todavía no aparece el ícono, terminá la instalación desde el menú del navegador y volvé a intentar.</p><button class="btn btn-soft btn-block" data-action="install-retry">No encuentro el ícono · ver instalación</button>`;
@@ -2286,7 +2287,7 @@
         const result=await choicePromise;
         if(result?.outcome==='accepted'){
           if(installPhase!=='instructions')installPhase='waiting';
-          window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='instructions';renderInstallGate();}},25000);
+          if(installVerificationTimer)window.clearTimeout(installVerificationTimer);installVerificationTimer=window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();notifyErrorOnce('install-not-confirmed','Chrome no confirmó que Barber VIP se haya instalado. No marques la instalación como terminada: comprobá si apareció el ícono o seguí los pasos manuales.');}},25000);
         }else{
           installPhase='prompt';installHelpExpanded=true;
         }
@@ -2364,7 +2365,8 @@
         else if(action==='pay'){openPlanInfo();}
         else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription(false);}
         else if(action==='start-trial-payment'){modalRoot.innerHTML='';await paySubscription(true);}
-        else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='instructions';renderInstallGate();}
+        else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='prompt';renderInstallGate();}
+        else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}
         else if(action==='copy-code'){await copyText(state.barber?.barberCode||'');toast('Código de acceso copiado.','success');}
         else if(action==='copy-app-link'){await copyText(customerSignupUrl());toast('Enlace de Barber VIP copiado. El cliente ingresa tu código al crear su cuenta.','success');}
@@ -2512,7 +2514,7 @@
       } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
-    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='instructions';renderInstallGate();});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='instructions';if(installVerificationTimer)window.clearTimeout(installVerificationTimer);renderInstallGate();});
     if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       const watchServiceWorker=worker=>{
         if(!worker)return;

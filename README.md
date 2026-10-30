@@ -1,6 +1,6 @@
 # Barber VIP — fidelización para barberías
 
-Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel profesional, visitas, ciclos de beneficios configurables, promociones, recordatorios, perfil profesional y suscripción mensual.
+Aplicación web instalable (PWA) para barber y sus clientes. Incluye panel profesional, visitas, ciclos de beneficios configurables, promociones, recordatorios, perfil profesional y suscripción mensual.
 
 ## Enlaces actuales
 
@@ -10,8 +10,8 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 
 ## Funciones principales
 
-- Perfil de cada barbero con horarios, WhatsApp, Instagram y ubicación.
-- Clientes con cuenta individual, datos de contacto, frecuencia aproximada de visita, historial y seguimiento.
+- Perfil de cada barber con horarios, WhatsApp, Instagram y ubicación.
+- Clientes con cuenta individual, datos de contacto, visitas totales acumuladas, ciclo de beneficios y fecha de última visita.
 - Registro de visitas desde el panel profesional y acceso separado para cada cliente.
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.

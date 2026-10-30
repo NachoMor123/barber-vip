@@ -899,7 +899,7 @@
       return `<section class="client-info-card service-list-card"><span class="eyebrow">SERVICIOS PARA VOS</span><h3>Servicios y precios</h3><div class="customer-services-list">${services.map(service=>`<div class="service-line"><strong>${escapeHtml(service.name)}</strong><span>${service.price===null?'Consultar precio':money(service.price)}</span></div>`).join('')}</div></section>`;
     }
 
-        const SUBSCRIPTION_PRICE_ARS = 2500; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
+        const SUBSCRIPTION_PRICE_ARS = 5000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
     const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}

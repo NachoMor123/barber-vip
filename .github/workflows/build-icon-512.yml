@@ -57,7 +57,7 @@ jobs:
           cache = sw.read_text()
           import re
           updated_cache, replacements = re.subn(
-              r"(barber-vip-shell-v)(\\d+)(-[a-z0-9-]+)",
+              r"(barber-vip-shell-v)(\d+)(-[a-z0-9-]+)",
               lambda match: f"{match.group(1)}{int(match.group(2)) + 1}{match.group(3)}",
               cache,
               count=1,

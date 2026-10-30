@@ -1,4 +1,4 @@
-name: Build Barber VIP app icons
+name: Build Barber VIP app icons from SVG master
 
 on:
   push:

@@ -33,8 +33,8 @@
       <feGaussianBlur stdDeviation="5"/>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#night)"/>
-  <rect width="512" height="512" rx="112" fill="url(#blueAura)"/>
+  <rect width="512" height="512" fill="url(#night)"/>
+  <rect width="512" height="512" fill="url(#blueAura)"/>
   <path d="M256 137C271 209 303 241 375 256C303 271 271 303 256 375C241 303 209 271 137 256C209 241 241 209 256 137Z"
         fill="#0874ff" opacity=".42" filter="url(#blueGlow)"/>
   <rect x="116" y="116" width="280" height="280" rx="66"

@@ -1766,32 +1766,50 @@
       return ready;
     }
     let firestoreBackgroundPause=false;
+    let firestoreNetworkTransition=Promise.resolve();
+    function syncFirestoreNetworkWithVisibility(){
+      if(!state.db)return firestoreNetworkTransition;
+      // Serialize transitions so a quick hide/show cannot leave Firestore paused.
+      firestoreNetworkTransition=firestoreNetworkTransition.catch(()=>{}).then(async()=>{
+        if(!state.db)return;
+        if(document.visibilityState==='hidden'){
+          if(!firestoreBackgroundPause){
+            await disableNetwork(state.db);
+            firestoreBackgroundPause=true;
+          }
+          return;
+        }
+        if(firestoreBackgroundPause){
+          await enableNetwork(state.db);
+          firestoreBackgroundPause=false;
+        }
+        // Visibility can change while enableNetwork is pending.
+        if(document.visibilityState==='hidden'){
+          await disableNetwork(state.db);
+          firestoreBackgroundPause=true;
+          return;
+        }
+        if(state.role==='customer'&&state.customerSection==='home'){
+          await ensureCustomerPromotionListener();
+          if(state.role==='customer'&&state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty)){
+            await loadPromotions({renderCustomer:true});
+          }
+        }
+      });
+      return firestoreNetworkTransition;
+    }
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
-      if(document.visibilityState==='hidden'){
-        // Suspend Firestore's network while the PWA is in the background.
-        if(!firestoreBackgroundPause){
-          firestoreBackgroundPause=true;
-          void disableNetwork(state.db).catch(error=>{
-            firestoreBackgroundPause=false;
-            console.warn('[Barber VIP] No se pudo pausar Firestore en segundo plano.',error?.message||error);
-          });
+      if(document.visibilityState==='hidden'&&state.role==='customer')stopCustomerPromotionListener();
+      void syncFirestoreNetworkWithVisibility().catch(error=>{
+        if(document.visibilityState==='hidden'){
+          firestoreBackgroundPause=false;
+          console.warn('[Barber VIP] No se pudo pausar Firestore en segundo plano.',error?.message||error);
+          return;
         }
-        if(state.role==='customer')stopCustomerPromotionListener();
-        return;
-      }
-      if(firestoreBackgroundPause){
-        firestoreBackgroundPause=false;
-        void enableNetwork(state.db).catch(error=>{
-          console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
-          notifyErrorOnce('firestore-resume','No se pudo reanudar la sincronización. Revisá tu conexión y recargá Barber VIP.',error);
-        });
-      }
-      if(state.role==='customer'&&state.customerSection==='home'){
-        void ensureCustomerPromotionListener().then(()=>{
-          if(state.role==='customer'&&state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty))return loadPromotions({renderCustomer:true});
-        }).catch(error=>notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron actualizar las promociones.'),error));
-      }
+        console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
+        notifyErrorOnce('firestore-resume','No se pudo reanudar la sincronización. Revisá tu conexión y recargá Barber VIP.',error);
+      });
     });
 
 

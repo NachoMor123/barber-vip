@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
     if (skipTrial && alreadyPaid) return send(res, 409, {ok:false,error:'Tu cuenta ya tiene un pago registrado. No podés usar la opción de activar la prueba antes de tiempo.'});
     const token = process.env.MP_ACCESS_TOKEN;
     const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
-    const price = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '2500', 10);
+    const price = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '5000', 10);
     if (!Number.isFinite(price) || price < 1) return send(res, 503, { ok: false, error: 'SUBSCRIPTION_PRICE_ARS debe ser un importe válido en pesos.' });
     if (!token) return send(res, 503, { ok: false, error: 'Falta configurar MP_ACCESS_TOKEN en Vercel.' });
     if (!appUrl.startsWith('https://')) return send(res, 503, { ok: false, error: 'Falta configurar APP_URL con la URL HTTPS real de Vercel.' });

@@ -1,7 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method } = require('../lib/http');
 const { requireUser, subscription } = require('../lib/security');
-function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
+function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'5000',10);return Number.isFinite(n)&&n>0?n:2500;}
 
 
 function cleanProgramId(value, fallback='program-general') {
@@ -9,15 +9,17 @@ function cleanProgramId(value, fallback='program-general') {
   return id || fallback;
 }
 function safeProgramRewards(input) {
-  if (!Array.isArray(input)) return [];
-  const out = input.map(item => ({ cut: Number(item.cut), discount: Number(item.discount) })).sort((a,b)=>a.cut-b.cut);
-  if (!out.length || out.length > 10) return [];
-  let previous=0;
-  for (const item of out) {
-    if (!Number.isInteger(item.cut)||item.cut<1||item.cut>50||item.cut<=previous||!Number.isInteger(item.discount)||item.discount<1||item.discount>100) return [];
-    item.label=`${item.discount}% OFF`; previous=item.cut;
-  }
-  return out;
+  if (!Array.isArray(input) || input.length !== 3) return [];
+  const ordered = input.slice().sort((a,b)=>Number(a.cut)-Number(b.cut));
+  const milestones = [2,4,6];
+  return milestones.map((cut,index) => {
+    const discount = Number(ordered[index]?.discount);
+    if (!Number.isInteger(discount) || discount < 0 || discount > 100) return null;
+    return { cut, discount, label: discount === 100 ? 'Servicio gratis' : `${discount}% OFF` };
+  }).every(Boolean) ? milestones.map((cut,index) => {
+    const discount = Number(ordered[index].discount);
+    return { cut, discount, label: discount === 100 ? 'Servicio gratis' : `${discount}% OFF` };
+  }) : [];
 }
 function publicBarberProfile(source) {
   const dateIso = value => {

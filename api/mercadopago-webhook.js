@@ -33,7 +33,7 @@ module.exports = async function handler(req, res) {
     const payment = await paymentResponse.json().catch(() => ({}));
     if (!paymentResponse.ok) return send(res, 502, { ok: false, error: 'No se pudo consultar el pago en Mercado Pago.' });
     if (payment.status !== 'approved') return send(res, 200, { ok: true, ignored: true, status: payment.status || 'unknown' });
-    const configuredPrice = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '2500', 10);
+    const configuredPrice = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '5000', 10);
     if (!Number.isFinite(configuredPrice) || configuredPrice < 1) return send(res, 503, { ok: false, error: 'SUBSCRIPTION_PRICE_ARS debe ser un importe válido en pesos.' });
     if (Number(payment.transaction_amount) !== configuredPrice || payment.currency_id !== 'ARS') return send(res, 400, { ok: false, error: 'El importe o la moneda del pago no coinciden con el precio configurado.' });
 

@@ -804,7 +804,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, deleteUser, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-    import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+    import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit, disableNetwork, enableNetwork } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
     // Firebase: reemplazá estos valores por los de Configuración del proyecto > Tus apps > SDK web.
     const firebaseConfig = {
@@ -933,29 +933,35 @@
     }
     async function refreshPushStatusFromDevice(){
       if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window))return;
+      let storedPreference=false;
+      try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
+      if(!storedPreference||Notification.permission!=='granted'){
+        state.pushEnabled=false;
+        if(state.role==='customer'&&state.user)renderApp();
+        return;
+      }
       try{
         const registration=await navigator.serviceWorker.ready;
         let subscription=await registration.pushManager.getSubscription();
-        let previouslyRegistered=false;try{previouslyRegistered=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-        if(subscription&&previouslyRegistered&&Notification.permission==='granted'){
-          // If the server rotated its VAPID key, an old device subscription cannot receive new pushes.
-          // Detect that once at startup and remove it instead of falsely showing an active status.
-          try{
-            const config=await api('/api/push');
-            if(config?.enabled&&config.publicKey&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
-              try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
-              await subscription.unsubscribe().catch(()=>false);
-              subscription=null;
-              previouslyRegistered=false;
-              try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
-              toast('Actualizamos el servicio de avisos. Tocá “Activar notificaciones” para registrar de nuevo este dispositivo.','success');
-            }
-          }catch(error){console.warn('[Barber VIP] No se pudo verificar la clave de la suscripción push.',error?.message||error);}
+        const config=await api('/api/push');
+        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora.');
+        if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
+          try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
+          await subscription.unsubscribe().catch(()=>false);
+          subscription=null;
         }
-        state.pushEnabled=Boolean(subscription&&previouslyRegistered&&Notification.permission==='granted');
-        if(!state.pushEnabled){try{localStorage.removeItem(pushPreferenceKey());}catch(_){}}
+        // Logout removes the server target and browser subscription, but keeps this
+        // device's explicit opt-in. Restore it silently after the next authenticated login.
+        if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
+        await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
+        state.pushEnabled=true;
         if(state.role==='customer'&&state.user)renderApp();
-      }catch(error){console.warn('[Barber VIP] No se pudo consultar el estado local de notificaciones.',error?.message||error);}
+      }catch(error){
+        state.pushEnabled=false;
+        // Keep the local opt-in: a temporary failure must not ask for permission again.
+        console.warn('[Barber VIP] No se pudo restaurar la suscripción push.',error?.message||error);
+        if(state.role==='customer'&&state.user)renderApp();
+      }
     }
     async function enableCustomerPush(button){
       const original=button?.textContent||'Activar notificaciones';
@@ -1759,13 +1765,33 @@
       });
       return ready;
     }
+    let firestoreBackgroundPause=false;
     document.addEventListener('visibilitychange',()=>{
-      if(state.role!=='customer')return;
-      if(document.visibilityState==='visible'&&state.customerSection==='home'){
+      if(!state.db)return;
+      if(document.visibilityState==='hidden'){
+        // Suspend Firestore's network while the PWA is in the background.
+        if(!firestoreBackgroundPause){
+          firestoreBackgroundPause=true;
+          void disableNetwork(state.db).catch(error=>{
+            firestoreBackgroundPause=false;
+            console.warn('[Barber VIP] No se pudo pausar Firestore en segundo plano.',error?.message||error);
+          });
+        }
+        if(state.role==='customer')stopCustomerPromotionListener();
+        return;
+      }
+      if(firestoreBackgroundPause){
+        firestoreBackgroundPause=false;
+        void enableNetwork(state.db).catch(error=>{
+          console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
+          notifyErrorOnce('firestore-resume','No se pudo reanudar la sincronización. Revisá tu conexión y recargá Barber VIP.',error);
+        });
+      }
+      if(state.role==='customer'&&state.customerSection==='home'){
         void ensureCustomerPromotionListener().then(()=>{
           if(state.role==='customer'&&state.customerSection==='home'&&(!state.promotionsLoaded||state.promotionsDirty))return loadPromotions({renderCustomer:true});
-        });
-      }else stopCustomerPromotionListener();
+        }).catch(error=>notifyErrorOnce('promotion-load',userFacingError(error,'No se pudieron actualizar las promociones.'),error));
+      }
     });
 
 
@@ -1956,7 +1982,7 @@
       } catch (error) {
         console.warn('[Barber VIP] No se pudo desvincular el dispositivo de notificaciones al cerrar sesión.', error?.message || error);
       } finally {
-        try { localStorage.removeItem(pushPreferenceKey()); } catch (_) {}
+        // Preserve the explicit opt-in; next login can silently recreate this device subscription.
         state.pushEnabled = false;
       }
     }

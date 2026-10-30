@@ -827,7 +827,7 @@
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
-    let installPhase = 'prompt'; // prompt | waiting | installed
+    let installPhase = 'prompt'; // prompt | waiting | installed | manual fallback
     let installVerificationTimer = null;
     const BRAND_ACCENT = '#3478ff';
 
@@ -2302,7 +2302,7 @@
         const result=await Promise.race([choicePromise,new Promise((_,reject)=>window.setTimeout(()=>reject(new Error('Chrome tardó demasiado en responder a la solicitud de instalación.')),45000))]);
         if(result?.outcome==='accepted'){
           if(!['instructions','installed'].includes(installPhase))installPhase='waiting';
-          if(installVerificationTimer)window.clearTimeout(installVerificationTimer);installVerificationTimer=window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();notifyErrorOnce('install-not-confirmed','Chrome no confirmó que Barber VIP se haya instalado. No marques la instalación como terminada: comprobá si apareció el ícono o seguí los pasos manuales.');}},25000);
+          if(installVerificationTimer)window.clearTimeout(installVerificationTimer);installVerificationTimer=window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();notifyErrorOnce('install-not-confirmed','Chrome no confirmó que Barber VIP se haya instalado. No marques la instalación como terminada: comprobá si apareció el ícono o seguí los pasos manuales.');}},60000);
         }else{
           installPhase='prompt';installHelpExpanded=true;
         }

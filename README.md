@@ -1,6 +1,6 @@
 # Barber VIP — fidelización para barberías
 
-Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel profesional, visitas, ciclos de beneficios configurables, promociones, recordatorios, perfil profesional y suscripción mensual.
+Aplicación web instalable (PWA) para barber y sus clientes. Incluye panel profesional, visitas, ciclos de beneficios configurables, promociones, recordatorios, perfil profesional y suscripción mensual.
 
 ## Enlaces actuales
 
@@ -10,17 +10,15 @@ Aplicación web instalable (PWA) para barberos y sus clientes. Incluye panel pro
 
 ## Funciones principales
 
-- Perfil de cada barbero con horarios, WhatsApp, Instagram y ubicación.
-- Clientes con cuenta individual, datos de contacto, frecuencia aproximada de visita, historial y seguimiento.
+- Perfil de cada barber con horarios, WhatsApp, Instagram y ubicación.
+- Clientes con cuenta individual, datos de contacto, visitas totales acumuladas, ciclo de beneficios y fecha de última visita.
 - Registro de visitas desde el panel profesional y acceso separado para cada cliente.
 - Ciclo de fidelización con hitos y beneficios configurables.
 - Promociones con vigencia y destinatarios.
 - Recordatorios de seguimiento: WhatsApp se abre sin texto preescrito; la app muestra una sugerencia opcional y el profesional confirma que intentó contactar manualmente. Esto no verifica la entrega del mensaje.
-- Presencia de bajo consumo: los pulsos del cliente se guardan en `barbers/{barberUid}/presence/{customerUid}`, separados de la lista de clientes para que cada pulso no vuelva a leer el listado completo. El pulso ocurre cada 5 minutos mientras la app está visible; la fecha en la ficha general se copia cada 10 minutos y al salir. La interfaz actualiza el texto relativo localmente cada 15 segundos, sin lecturas de Firestore.
-- El botón circular de refresco junto al contador consulta solo la actividad reciente (ventana de 12 minutos), no toda la colección de clientes. Se mantiene manual, con cuenta regresiva de 10 segundos, para evitar sondeos constantes.
 - La instalación PWA es obligatoria cuando el navegador no detecta una instalación previa: `/?signup=1` conserva la intención de registro durante la instalación; si la cuenta ya tiene sesión, se abre directamente el panel. En navegadores compatibles se consulta `getInstalledRelatedApps()`; en los que no exponen esta API, la detección externa tiene limitaciones.
+- Las visitas se acumulan en la ficha individual de cada cliente (`totalCuts`, `actualCutsRegistered` y `lastCutAt`). No hay un historial de visitas visible ni una política de eliminación por antigüedad: los totales no se reinician ni se borran por tiempo.
 - Suscripción mensual con Mercado Pago y webhook de confirmación.
-- Historial de visitas retenido durante 60 días con limpieza programada. No se carga automáticamente al abrir el panel: el administrador lo trae cuando elige «Ver historial», evitando hasta 100 lecturas en cada inicio. Se eliminó el conteo total de cortes que no se mostraba en la interfaz.
 
 ## Arquitectura
 
@@ -54,7 +52,7 @@ Las notificaciones utilizan Web Push con permiso explícito por dispositivo. Se 
 
 ## Costos, límites y escalabilidad
 
-El nivel gratuito de Firestore Standard ofrece 50.000 lecturas de documentos al día (20.000 corresponde a escrituras) y 20.000 escrituras al día. Barber VIP evita conteos agregados no usados y carga el historial solo cuando se abre. Las promociones del cliente escuchan un documento mínimo de versión, con una comprobación de baja frecuencia solo si las reglas de Firestore aún no permiten esa lectura. Medir Usage en Firebase después de desplegar las reglas; el código no puede atribuir retroactivamente las lecturas que ya figuran en el panel.
+El nivel gratuito de Firestore Standard ofrece 50.000 lecturas de documentos al día (20.000 corresponde a escrituras) y 20.000 escrituras al día. Barber VIP carga la lista de clientes una sola vez por sesión y solo cuando se abre la sección correspondiente. La tarjeta del cliente y los metadatos de perfil/promociones mantienen listeners de documentos puntuales para reflejar cambios sin consultar repetidamente colecciones completas. Medir Usage en Firebase después de desplegar las reglas; el código no puede atribuir retroactivamente las lecturas que ya figuran en el panel.
 
 Vercel Hobby está destinado a usos personales/no comerciales según las condiciones vigentes. Si se vende el servicio, revisar el plan o proveedor de hosting permitido para uso comercial.
 
@@ -62,7 +60,7 @@ Vercel Hobby está destinado a usos personales/no comerciales según las condici
 
 - Publicar en Firebase Console las reglas de `firestore.rules` incluidas en el paquete: los clientes ya no deben poder leer el documento privado del perfil profesional directamente.
 - Confirmar que todas las variables privadas estén configuradas en producción, incluidas las tres VAPID para Web Push.
-- Probar acceso de barbero y cliente, altas/bajas, visitas, hitos, promociones, recordatorios y errores de red.
+- Probar acceso de barber y cliente, altas/bajas, visitas, hitos, promociones, recordatorios y errores de red.
 - Verificar el webhook de Mercado Pago con eventos de prueba y firma configurada.
 - Probar múltiples visitas concurrentes para comprobar la consistencia de premios e historiales.
 - Medir lecturas/escrituras reales durante jornadas de uso.

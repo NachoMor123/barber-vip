@@ -1,7 +1,7 @@
 const { db, admin } = require('../lib/admin');
 const { send, method } = require('../lib/http');
 const { requireUser, subscription } = require('../lib/security');
-function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
+function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'5000',10);return Number.isFinite(n)&&n>0?n:5000;}
 
 
 function cleanProgramId(value, fallback='program-general') {
@@ -9,15 +9,17 @@ function cleanProgramId(value, fallback='program-general') {
   return id || fallback;
 }
 function safeProgramRewards(input) {
-  if (!Array.isArray(input)) return [];
-  const out = input.map(item => ({ cut: Number(item.cut), discount: Number(item.discount) })).sort((a,b)=>a.cut-b.cut);
-  if (!out.length || out.length > 10) return [];
-  let previous=0;
-  for (const item of out) {
-    if (!Number.isInteger(item.cut)||item.cut<1||item.cut>50||item.cut<=previous||!Number.isInteger(item.discount)||item.discount<1||item.discount>100) return [];
-    item.label=`${item.discount}% OFF`; previous=item.cut;
-  }
-  return out;
+  if (!Array.isArray(input) || !input.length || input.length > 10) return [];
+  const ordered = input.slice().sort((a, b) => Number(a.cut) - Number(b.cut)).slice(0, 3);
+  const defaults = [10, 20, 30];
+  return [2, 4, 6].map((cut, index) => {
+    const rawDiscount = ordered[index]?.discount;
+    const discount = rawDiscount === undefined ? defaults[index] : Number(rawDiscount);
+    if (!Number.isInteger(discount) || discount < 0 || discount > 100) {
+      return { cut, discount: defaults[index], label: `${defaults[index]}% OFF` };
+    }
+    return { cut, discount, label: discount === 100 ? 'Servicio gratis' : `${discount}% OFF` };
+  });
 }
 function publicBarberProfile(source) {
   const dateIso = value => {
@@ -80,13 +82,19 @@ async function sanitizeBarberLoyalty(database, barberRef, source) {
     name: String(chosen.name || 'Programa de premios').slice(0,60),
     audience: 'all', customerIds: [],
     rewards: (chosenRewards.length ? chosenRewards : fallbackRewards).map(item => {
-      const discount = Math.max(1, Math.min(100, Number(item.discount) || 1));
-      return {cut:Number(item.cut),discount,label:`${discount}% OFF`};
+      const discount = Math.min(100, Math.max(0, Number(item.discount) || 0));
+      return { cut: Number(item.cut), discount, label: discount === 100 ? 'Servicio gratis' : `${discount}% OFF` };
     })
   };
+  const oldRewards = Array.isArray(oldPrograms[0]?.rewards) ? oldPrograms[0].rewards : [];
+  const rewardsNeedMigration = oldRewards.length !== program.rewards.length
+    || program.rewards.some((reward, index) =>
+      Number(oldRewards[index]?.cut) !== Number(reward.cut)
+      || Number(oldRewards[index]?.discount) !== Number(reward.discount)
+    );
   const needsMigration = oldPrograms.length !== 1 || oldPrograms[0]?.id !== program.id
     || oldPrograms[0]?.audience !== 'all' || (oldPrograms[0]?.customerIds || []).length > 0
-    || source.defaultLoyaltyProgramId !== program.id;
+    || source.defaultLoyaltyProgramId !== program.id || rewardsNeedMigration;
   if (!needsMigration) return { ...source, loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id };
 
   // Collapse old variants into one global program while keeping all earned rewards.

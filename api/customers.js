@@ -22,8 +22,11 @@ function normalizeLoyaltyOverride(mode, input, barber = {}, current = {}) {
   if (mode !== 'custom') return {mode:'standard',rewards:[]};
   const fallback = standardRewards(barber);
   const source = Array.isArray(input) && input.length
-    ? input.map(item => ({cut:Number(item.cut),discount:Number(item.discount)})).sort((a,b) => a.cut-b.cut).slice(0,3)
+    ? input.map(item => ({discount:Number(item.discount)}))
     : [];
+  if (source.length > FIXED_MILESTONES.length) {
+    throw new Error('La configuración individual debe incluir los tres hitos fijos: 2, 4 y 6.');
+  }
   for (const reward of source) {
     if (!Number.isInteger(reward.discount) || reward.discount < 0 || reward.discount > 100) {
       throw new Error('Configurá los descuentos de los hitos 2, 4 y 6 entre 0% y 100%.');

@@ -107,8 +107,12 @@ function normalizeSubmitted(raw) {
   if (!Array.isArray(raw.rewards) || raw.rewards.length !== 3) {
     throw new Error('El programa debe tener exactamente los hitos fijos 2, 4 y 6.');
   }
+  const expectedMilestones = [2, 4, 6];
+  if (raw.rewards.some((reward, index) => Number(reward?.cut) !== expectedMilestones[index])) {
+    throw new Error('Los hitos son fijos: 2, 4 y 6. Solo podés modificar sus porcentajes.');
+  }
   const rewards = cleanRewards(raw.rewards);
-  if (!rewards.length || rewards.length !== raw.rewards.length) {
+  if (!rewards.length || rewards.length !== 3) {
     throw new Error('Revisá los descuentos de los hitos 2, 4 y 6: deben estar entre 0% y 100%.');
   }
   return { id, name, audience: 'all', customerIds: [], rewards };

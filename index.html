@@ -753,6 +753,23 @@
     .promotion-template-panel .field-hint{margin:8px 0 0}
     @media(prefers-reduced-motion:reduce){.brand-star{animation:none!important}}
   </style>
+
+  <style id="barber-vip-typography-polish">
+    h1,h2,h3,.brand,.page-title,.topbar h1,.customer-hero h1,.reward-progress-top h2,.modal-header h2,.setting-section-title,.client-name-line strong {
+      font-family:'Outfit','DM Sans',sans-serif;
+      font-weight:800;
+      letter-spacing:-.045em;
+      text-rendering:optimizeLegibility;
+    }
+    .metric-value,.milestone strong,.reward-value,.customer-name,.client-name-line strong {
+      font-family:'Outfit','DM Sans',sans-serif;
+      font-weight:850;
+      letter-spacing:-.055em;
+      font-variant-numeric:tabular-nums;
+    }
+    .page-title,.customer-hero h1,.topbar h1 { font-weight:850; }
+    .panel-head h2,.setting-section-title { font-weight:800; }
+  </style>
 </head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -879,10 +896,10 @@
       if(barber?.showServices!==true)return '';
       const services=barberServices(barber);
       if(!services.length)return '';
-      return `<section class="client-info-card service-list-card"><span class="eyebrow">SERVICIOS PARA VOS</span><h3>Servicios y precios</h3><div class="customer-services-list">${services.map(service=>`<div class="service-line"><strong>${escapeHtml(service.name)}</strong><span>${service.price===null?'Consultar precio':money(service.price)}</span></div>`).join('')}</div><p class="tiny muted">Los beneficios de fidelización se aplican sobre el precio publicado del servicio que elijas de esta lista. Consultá con tu profesional el importe final.</p></section>`;
+      return `<section class="client-info-card service-list-card"><span class="eyebrow">SERVICIOS PARA VOS</span><h3>Servicios y precios</h3><div class="customer-services-list">${services.map(service=>`<div class="service-line"><strong>${escapeHtml(service.name)}</strong><span>${service.price===null?'Consultar precio':money(service.price)}</span></div>`).join('')}</div></section>`;
     }
 
-        const SUBSCRIPTION_PRICE_ARS = 2500; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
+        const SUBSCRIPTION_PRICE_ARS = 5000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
     const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
@@ -1763,7 +1780,7 @@
       startPromoCountdowns();
             if(state.customerSection==='barber'){
         const schedule=scheduleMarkup(b.schedule);const hasInsta=safeExternalUrl(b.instagramUrl,['instagram.com']),hasMaps=safeExternalUrl(b.mapsUrl,['google.com','maps.app.goo.gl','goo.gl']),hasWhats=validWhatsapp(b.whatsapp);
-        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">VINCULACIÓN CON TU BARBERO</div><h1>Datos de tu barbero</h1><p>Tu tarjeta y tus beneficios quedan vinculados a tu barbero.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p></div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Vinculados a tu barbero</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
+        appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero profile-hero"><div class="customer-greeting">VINCULACIÓN CON TU BARBER</div><h1>Datos de tu barber</h1><p>Tu tarjeta y tus beneficios están vinculados a este espacio profesional.</p></section><section class="barber-profile-hero"><div class="barber-profile-avatar">${escapeHtml(nameInitials(adminName))}</div><div><span class="promo-active-tag">TU PROFESIONAL</span><h2>${escapeHtml(adminName)}</h2><p>${escapeHtml(b.barberName||'Profesional independiente')}</p></div></section><div class="customer-profile-grid"><section class="client-info-card connection-card"><span class="eyebrow">TU PERFIL</span><h3>${escapeHtml(c.fullName||'Cliente VIP')}</h3><div class="connection-detail"><span>Tu código de acceso</span><strong>${escapeHtml(b.barberCode||'Vinculación segura')}</strong></div><div class="connection-detail"><span>Premios</span><strong>Vinculados a tu espacio profesional</strong></div><p class="tiny muted">Tus visitas y beneficios pertenecen a esta conexión profesional.</p></section><section class="client-info-card barber-contact-card"><span class="eyebrow">TU PROFESIONAL · CONTACTO DIRECTO</span><h3>Contactá a ${escapeHtml(adminName)}</h3><div class="barber-link-actions">${hasWhats?`<button class="barber-link-btn whatsapp-link" data-action="contact-barber"><span>◉</span><span><strong>WhatsApp</strong><small>Consultar o coordinar un turno</small></span><b>↗</b></button>`:`<p class="muted tiny">WhatsApp todavía no configurado.</p>`}${hasInsta?`<a class="barber-link-btn instagram-link" href="${escapeHtml(hasInsta)}" target="_blank" rel="noopener noreferrer"><span>◎</span><span><strong>Instagram</strong><small>Ver trabajos y novedades</small></span><b>↗</b></a>`:''}${hasMaps?`<a class="barber-link-btn maps-link" href="${escapeHtml(hasMaps)}" target="_blank" rel="noopener noreferrer"><span>⌖</span><span><strong>Cómo llegar</strong><small>Abrir ubicación en Google Maps</small></span><b>↗</b></a>`:''}</div></section><section class="client-info-card schedule-card"><span class="eyebrow">HORARIOS DE ATENCIÓN</span><h3>Cuándo podés venir</h3><div class="schedule-display">${schedule}</div></section>${customerServicesMarkup(b)}</div><div class="customer-footer">BARBER VIP · Tu tarjeta, tus visitas y tus beneficios.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
         return;
       }
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Descuento aplicado':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
@@ -1921,7 +1938,44 @@
       }
     }
 
-    async function signOutAndReturn() { state.manualLogin=true; clearListeners(); if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} try{await signOut(state.auth);}finally{cleanupContext();state.customerSection='home';modalRoot.innerHTML='';renderLanding();state.manualLogin=false;} }
+    async function removeCustomerPushOnLogout() {
+      if (state.role !== 'customer' || !state.user) return;
+      try {
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          const subscription = registration ? await registration.pushManager.getSubscription() : null;
+          if (subscription) {
+            // Remove the server-side delivery target while the Firebase session is still valid.
+            try {
+              await api('/api/push', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
+            } finally {
+              await subscription.unsubscribe().catch(() => false);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Barber VIP] No se pudo desvincular el dispositivo de notificaciones al cerrar sesión.', error?.message || error);
+      } finally {
+        try { localStorage.removeItem(pushPreferenceKey()); } catch (_) {}
+        state.pushEnabled = false;
+      }
+    }
+
+    async function signOutAndReturn() {
+      state.manualLogin = true;
+      clearListeners();
+      if (state.promoTimer) { clearInterval(state.promoTimer); state.promoTimer = null; }
+      try {
+        await removeCustomerPushOnLogout();
+        await signOut(state.auth);
+      } finally {
+        cleanupContext();
+        state.customerSection = 'home';
+        modalRoot.innerHTML = '';
+        renderLanding();
+        state.manualLogin = false;
+      }
+    }
 
     function openCustomerModal(id='') {
       const c=id?state.customers.find(x=>x.uid===id):null;
@@ -2057,7 +2111,7 @@
       ['card','✨ Tu tarjeta','Visitas y progreso, en un mismo lugar.'],
       ['loyalty','🎁 Tus premios','Mirá qué hito sigue y qué beneficio corresponde.'],
       ['promos','🔥 Promociones','Ofertas vigentes y tiempo restante.'],
-      ['barber','📍 Datos de tu barbero','Horarios y formas de contacto.'],
+      ['barber','📍 Datos de tu barber','Horarios y formas de contacto.'],
       ['turn','📲 Coordinar una visita','Hablá directamente por WhatsApp.']
     ];
     const PIP_ANSWERS = {
@@ -2257,7 +2311,7 @@
         else if(action==='open-cut-modal'){const wasLoaded=state.customersLoaded;const pending=wasLoaded?Promise.resolve():ensureAdminCustomersLoaded();openCutModal();if(!wasLoaded){await pending;if($('#cutSearch',modalRoot))openCutModal();}}
         else if(action==='add-cut'){await addCut(button.dataset.id,button);}
         else if(action==='edit-profile'){openProfileModal();}
-        else if(action==='apply-promo-template'){const templates={week:{title:'⚡ Tu beneficio de esta semana',description:'Vení antes del domingo y aprovechá [beneficio concreto]. Mostrá esta promoción al llegar.',conditions:'Válida hasta [fecha real]. Aplica a [servicio].'},return:{title:'💈 Una razón más para volver',description:'Tu próxima visita puede tener un detalle especial: [beneficio concreto]. Aprovechalo antes del [fecha].',conditions:'Válida hasta [fecha real]. Consultá las condiciones antes del servicio.'},loyalty:{title:'🎁 Sigamos sumando visitas',description:'Tu progreso en Barber VIP sigue creciendo. Esta semana, además, podés aprovechar [beneficio concreto].',conditions:'Válida hasta [fecha real]. Consultá con tu barbero los detalles.'}};const template=templates[button.dataset.template||''];if(template){$('#promotionTitle',modalRoot).value=template.title;$('#promotionDescription',modalRoot).value=template.description;$('#promotionConditions',modalRoot).value=template.conditions;toast('Plantilla cargada. Reemplazá los textos entre corchetes antes de guardar.');}}
+        else if(action==='apply-promo-template'){const templates={week:{title:'⚡ Tu beneficio de esta semana',description:'Vení antes del domingo y aprovechá [beneficio concreto]. Mostrá esta promoción al llegar.',conditions:'Válida hasta [fecha real]. Aplica a [servicio].'},return:{title:'💈 Una razón más para volver',description:'Tu próxima visita puede tener un detalle especial: [beneficio concreto]. Aprovechalo antes del [fecha].',conditions:'Válida hasta [fecha real]. Consultá las condiciones antes del servicio.'},loyalty:{title:'🎁 Sigamos sumando visitas',description:'Tu progreso en Barber VIP sigue creciendo. Esta semana, además, podés aprovechar [beneficio concreto].',conditions:'Válida hasta [fecha real]. Consultá con tu barber los detalles.'}};const template=templates[button.dataset.template||''];if(template){$('#promotionTitle',modalRoot).value=template.title;$('#promotionDescription',modalRoot).value=template.description;$('#promotionConditions',modalRoot).value=template.conditions;toast('Plantilla cargada. Reemplazá los textos entre corchetes antes de guardar.');}}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
         else if(action==='start-subscription-payment'){modalRoot.innerHTML='';await paySubscription(false);}

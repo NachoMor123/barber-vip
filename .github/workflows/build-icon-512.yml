@@ -55,11 +55,16 @@ jobs:
 
           sw = Path("sw.js")
           cache = sw.read_text()
-          old_cache = "barber-vip-shell-v60-blue-star-brand"
-          new_cache = "barber-vip-shell-v61-blue-star-assets"
-          if old_cache not in cache:
-              raise SystemExit("Expected service-worker cache version was not found.")
-          sw.write_text(cache.replace(old_cache, new_cache))
+          import re
+          updated_cache, replacements = re.subn(
+              r"(barber-vip-shell-v)(\\d+)(-[a-z0-9-]+)",
+              lambda match: f"{match.group(1)}{int(match.group(2)) + 1}{match.group(3)}",
+              cache,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit("Could not increment the PWA cache version.")
+          sw.write_text(updated_cache)
           PY
 
       - name: Commit generated icons and refresh installed PWA cache

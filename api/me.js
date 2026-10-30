@@ -9,15 +9,17 @@ function cleanProgramId(value, fallback='program-general') {
   return id || fallback;
 }
 function safeProgramRewards(input) {
-  if (!Array.isArray(input) || input.length !== 3) return [];
-  const ordered = input.slice().sort((a, b) => Number(a.cut) - Number(b.cut));
-  const milestones = [2, 4, 6];
-  const normalized = milestones.map((cut, index) => {
-    const discount = Number(ordered[index]?.discount);
-    if (!Number.isInteger(discount) || discount < 0 || discount > 100) return null;
+  if (!Array.isArray(input) || !input.length || input.length > 10) return [];
+  const ordered = input.slice().sort((a, b) => Number(a.cut) - Number(b.cut)).slice(0, 3);
+  const defaults = [10, 20, 30];
+  return [2, 4, 6].map((cut, index) => {
+    const rawDiscount = ordered[index]?.discount;
+    const discount = rawDiscount === undefined ? defaults[index] : Number(rawDiscount);
+    if (!Number.isInteger(discount) || discount < 0 || discount > 100) {
+      return { cut, discount: defaults[index], label: `${defaults[index]}% OFF` };
+    }
     return { cut, discount, label: discount === 100 ? 'Servicio gratis' : `${discount}% OFF` };
   });
-  return normalized.every(Boolean) ? normalized : [];
 }
 function publicBarberProfile(source) {
   const dateIso = value => {

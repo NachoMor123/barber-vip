@@ -24,7 +24,7 @@ function normalizeLoyaltyOverride(mode, input, barber = {}, current = {}) {
   const source = Array.isArray(input) && input.length
     ? input.map(item => ({discount:Number(item.discount)}))
     : [];
-  if (source.length && source.length !== FIXED_MILESTONES.length) {
+  if (source.length > FIXED_MILESTONES.length) {
     throw new Error('La configuración individual debe incluir los tres hitos fijos: 2, 4 y 6.');
   }
   for (const reward of source) {

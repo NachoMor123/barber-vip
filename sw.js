@@ -1,14 +1,24 @@
-const CACHE_NAME = 'barber-vip-shell-v63-blue-star-assets';
+const CACHE_NAME = 'barber-vip-shell-v64-install-resilient';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await Promise.all(APP_SHELL.map(async path => {
-      const response = await fetch(new Request(new URL(path, self.location.origin), { cache: 'reload' }));
-      if (!response.ok) throw new Error(`Could not refresh app shell: ${path}`);
-      await cache.put(path, response);
-    }));
+    // A temporary icon/cache fetch failure must not prevent the browser from
+    // installing the service worker and offering the PWA installation.
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const results = await Promise.allSettled(APP_SHELL.map(async path => {
+        const response = await fetch(new Request(new URL(path, self.location.origin), { cache: 'reload' }));
+        if (!response.ok) throw new Error(`App shell returned ${response.status}: ${path}`);
+        await cache.put(path, response);
+      }));
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length) {
+        console.warn('[Barber VIP] Some app shell files could not be cached. The app can still be installed online.', failures.length);
+      }
+    } catch (error) {
+      console.warn('[Barber VIP] Offline cache preparation failed; continuing with online installation.', error?.message || error);
+    }
     await self.skipWaiting();
   })());
 });

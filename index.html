@@ -2288,7 +2288,7 @@
       try{
         const choicePromise=installEvent.userChoice;
         await installEvent.prompt();
-        const result=await choicePromise;
+        const result=await Promise.race([choicePromise,new Promise((_,reject)=>window.setTimeout(()=>reject(new Error('Chrome tardó demasiado en responder a la solicitud de instalación.')),45000))]);
         if(result?.outcome==='accepted'){
           if(installPhase!=='instructions')installPhase='waiting';
           if(installVerificationTimer)window.clearTimeout(installVerificationTimer);installVerificationTimer=window.setTimeout(()=>{if(installPhase==='waiting'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();notifyErrorOnce('install-not-confirmed','Chrome no confirmó que Barber VIP se haya instalado. No marques la instalación como terminada: comprobá si apareció el ícono o seguí los pasos manuales.');}},25000);
@@ -2519,7 +2519,7 @@
       } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
-    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='instructions';if(installVerificationTimer)window.clearTimeout(installVerificationTimer);renderInstallGate();});
+    window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='installed';if(installVerificationTimer)window.clearTimeout(installVerificationTimer);renderInstallGate();});
     if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       const watchServiceWorker=worker=>{
         if(!worker)return;

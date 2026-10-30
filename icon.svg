@@ -1,15 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="28" y1="12" x2="484" y2="500" gradientUnits="userSpaceOnUse"><stop stop-color="#071a3b"/><stop offset="1" stop-color="#020817"/></linearGradient>
-    <linearGradient id="frame" x1="48" y1="48" x2="464" y2="464" gradientUnits="userSpaceOnUse"><stop stop-color="#58a4ff"/><stop offset="1" stop-color="#1265ed"/></linearGradient>
-    <linearGradient id="star" x1="170" y1="112" x2="347" y2="397" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#c8e5ff"/></linearGradient>
-    <radialGradient id="aura"><stop stop-color="#167aff" stop-opacity=".32"/><stop offset="1" stop-color="#167aff" stop-opacity="0"/></radialGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="15"/></filter>
+    <linearGradient id="night" x1="36" y1="16" x2="478" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#071a3b"/>
+      <stop offset=".56" stop-color="#030d24"/>
+      <stop offset="1" stop-color="#010611"/>
+    </linearGradient>
+    <radialGradient id="blueAura" cx="0" cy="0" r="1" gradientTransform="matrix(0 188 -188 0 256 256)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#075dff" stop-opacity=".55"/>
+      <stop offset=".58" stop-color="#0647c8" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#00102f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="silverFrame" x1="116" y1="116" x2="396" y2="396" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f3f5fb"/>
+      <stop offset=".48" stop-color="#aeb8ca"/>
+      <stop offset="1" stop-color="#e7edf7"/>
+    </linearGradient>
+    <linearGradient id="blueStar" x1="168" y1="142" x2="347" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#80d7ff"/>
+      <stop offset=".38" stop-color="#268bff"/>
+      <stop offset=".75" stop-color="#1260f4"/>
+      <stop offset="1" stop-color="#073dc5"/>
+    </linearGradient>
+    <linearGradient id="facet" x1="256" y1="145" x2="256" y2="367" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d8f4ff" stop-opacity=".8"/>
+      <stop offset=".5" stop-color="#6bbcff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#003da9" stop-opacity=".14"/>
+    </linearGradient>
+    <filter id="blueGlow" x="48" y="48" width="416" height="416" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="frameGlow" x="82" y="82" width="348" height="348" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <circle cx="256" cy="256" r="190" fill="url(#aura)" filter="url(#glow)"/>
-  <rect x="49" y="49" width="414" height="414" rx="94" fill="#071634" fill-opacity=".42" stroke="url(#frame)" stroke-width="5"/>
-  <path d="M256 105 C272 194 318 240 407 256 C318 272 272 318 256 407 C240 318 194 272 105 256 C194 240 240 194 256 105Z" fill="url(#star)" stroke="#e5f3ff" stroke-width="2"/>
-  <path d="M294 209 351 169 321 231Z" fill="#d8edff"/>
-  <path d="m218 303-57 50 30-62Z" fill="#d8edff"/>
+  <rect width="512" height="512" rx="112" fill="url(#night)"/>
+  <rect width="512" height="512" rx="112" fill="url(#blueAura)"/>
+  <path d="M256 137C271 209 303 241 375 256C303 271 271 303 256 375C241 303 209 271 137 256C209 241 241 209 256 137Z"
+        fill="#0874ff" opacity=".42" filter="url(#blueGlow)"/>
+  <rect x="116" y="116" width="280" height="280" rx="66"
+        fill="#061630" fill-opacity=".58" stroke="#e8eef8" stroke-opacity=".32" stroke-width="12" filter="url(#frameGlow)"/>
+  <rect x="116" y="116" width="280" height="280" rx="66"
+        fill="#061630" fill-opacity=".42" stroke="url(#silverFrame)" stroke-width="5.5"/>
+  <rect x="125" y="125" width="262" height="262" rx="57"
+        fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="1.5"/>
+  <path d="M256 137C271 209 303 241 375 256C303 271 271 303 256 375C241 303 209 271 137 256C209 241 241 209 256 137Z"
+        fill="url(#blueStar)" stroke="#90d8ff" stroke-opacity=".8" stroke-width="2"/>
+  <path d="M256 165C264 219 293 248 347 256C293 264 264 293 256 347C248 293 219 264 165 256C219 248 248 219 256 165Z"
+        fill="url(#facet)"/>
+  <path d="M292 209L349 174L317 231Z" fill="#4baaff" stroke="#bdeaff" stroke-opacity=".75" stroke-width="1.5"/>
+  <path d="M220 303L163 338L195 281Z" fill="#1478fa" stroke="#a6dcff" stroke-opacity=".78" stroke-width="1.5"/>
+  <path d="M256 137C241 209 209 241 137 256" fill="none" stroke="#d8f5ff" stroke-opacity=".42" stroke-width="2"/>
 </svg>

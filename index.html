@@ -1785,7 +1785,8 @@
         }
         // Visibility can change while enableNetwork is pending.
         if(document.visibilityState==='hidden'){
-          await syncFirestoreNetworkWithVisibility();
+          await disableNetwork(state.db);
+          firestoreBackgroundPause=true;
           return;
         }
         if(state.role==='customer'&&state.customerSection==='home'){

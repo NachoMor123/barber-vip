@@ -134,7 +134,7 @@ module.exports = async function handler(req, res) {
           barberUid: ctx.uid,
           customerIds: audience === 'selected' ? customerIds : null,
           title: 'Nueva promoción: '+title,
-          body: description || 'Ya podés ver esta promoción en tu tarjeta. Abrí Barber VIP para consultar los detalles y la vigencia.',
+          body: 'Hay una nueva promoción disponible. Abrí Barber VIP para verla.',
           tag: 'barber-vip-promo-'+ref.id,
           url: '/'
         });
@@ -172,7 +172,7 @@ module.exports = async function handler(req, res) {
         barberUid: ctx.uid,
         customerIds: audience === 'selected' ? customerIds : null,
         title: 'Nueva promoción: '+title,
-        body: description || 'Se activó una promoción para vos. Abrí Barber VIP para consultar los detalles y la vigencia.',
+        body: 'Se activó una promoción para vos. Abrí Barber VIP para verla.',
         tag: 'barber-vip-promo-'+id,
         url: '/'
       });

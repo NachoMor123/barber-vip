@@ -166,7 +166,11 @@ try {
   await assertSucceeds(billingBatch.commit());
   const payment = await assertSucceeds(getDoc(doc(adminDb, 'barbers', barberUid, 'payments', 'manual-payment-001')));
   if (!payment.exists() || payment.data().amount !== 8000) throw new Error('Manual payment record missing');
-  console.log('PASS: platform admin records an ARS 8000 payment and extends the subscription atomically');
+  await assertFails(setDoc(doc(adminDb, 'barbers', barberUid, 'payments', 'manual-payment-001'), {
+    amount: 8000, currency: 'ARS', status: 'approved', method: 'mercadopago-link-manual',
+    receiptReference: 'MP-RECEIPT-001', paidAt: paymentTime, newExpiry: paymentExpiry, createdAt: serverTimestamp()
+  }));
+  console.log('PASS: platform admin records an ARS 8000 payment atomically; duplicate payment records cannot be overwritten');
 
   await env.withSecurityRulesDisabled(async context => {
     await updateDoc(doc(context.firestore(), 'barbers', barberUid), {

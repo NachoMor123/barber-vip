@@ -24,7 +24,7 @@ jobs:
       - name: Check Worker syntax
         working-directory: worker
         run: node --check src/index.js
-      - name: Check Firebase Spark app and Worker client integration syntax
+      - name: Check Firebase Spark app and Worker client-side syntax
         working-directory: .
         run: |
           node --input-type=module --check < spark-api.js

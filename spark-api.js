@@ -186,7 +186,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberSnap = await getDoc(barberRef);
     if (!barberSnap.exists() || barberSnap.data().sparkLoginIndexMigratedAt) return;
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 200) {
+    for (let offset = 0; offset < active.length; offset += 400) {
       const batch = writeBatch(db());
       const group = active.slice(offset, offset + 350);
       for (const c of group) {
@@ -330,10 +330,6 @@ export function createSparkApi({ firebaseConfig, state }) {
     const loginRef = doc(db(), 'customerLoginLookup', loginId);
     const loginSnap = await getDoc(loginRef);
     if (loginSnap.exists() && loginSnap.data().active !== false) throw fail('Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional.');
-    const phoneId = barberUid + '_' + await hashHex(whatsapp);
-    const phoneRef = doc(db(), 'customerPhoneLookup', phoneId);
-    const phoneSnap = await getDoc(phoneRef);
-    if (phoneSnap.exists() && phoneSnap.data().active !== false) throw fail('Ya existe una cuenta activa con ese WhatsApp en este espacio profesional.');
     const loginEmail = 'cliente-' + crypto.randomUUID() + '@accounts.barbervip.app';
     let credential = null;
     try {
@@ -345,7 +341,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'barbers', barberUid, 'customers', uid), customer);
       batch.set(doc(db(), 'userProfiles', uid), { uid, role: 'customer', barberUid, createdAt: serverTimestamp() });
       batch.set(loginRef, { uid, barberUid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      batch.set(phoneRef, { uid, barberUid, active: true, updatedAt: serverTimestamp() });
       await batch.commit();
       invalidate();
       return { ok: true, email: loginEmail, barberCode };
@@ -379,19 +374,13 @@ export function createSparkApi({ firebaseConfig, state }) {
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
     for (let offset = 0; offset < active.length; offset += 200) {
       const batch = writeBatch(db());
-      for (const c of active.slice(offset, offset + 200)) {
+      for (const c of active.slice(offset, offset + 400)) {
         const normalized = cleanText(c.usernameNormalized || normalizeName(c.fullName), 100);
         if (!normalized) continue;
         const id = await loginLookupId(uid, normalized);
         batch.set(doc(db(), 'customerLoginLookup', id), {
           uid: c.uid, barberUid: uid, email: c.loginEmail, active: true, updatedAt: serverTimestamp()
         }, { merge: true });
-        if (c.whatsapp) {
-          const phoneId = uid + '_' + await hashHex(normalizePhone(c.whatsapp));
-          batch.set(doc(db(), 'customerPhoneLookup', phoneId), {
-            uid: c.uid, barberUid: uid, active: true, updatedAt: serverTimestamp()
-          }, { merge: true });
-        }
       }
       await batch.commit();
     }
@@ -413,11 +402,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
     const lookupId = await loginLookupId(uid, normalized);
     const lookupRef = doc(db(), 'customerLoginLookup', lookupId);
-    const phoneId = uid + '_' + await hashHex(whatsapp);
-    const phoneRef = doc(db(), 'customerPhoneLookup', phoneId);
-    const [nameIndex, phoneIndex] = await Promise.all([getDoc(lookupRef), getDoc(phoneRef)]);
+    const nameIndex = await getDoc(lookupRef);
     const duplicate = state.customers?.some(c => c.active !== false && (c.usernameNormalized === normalized || c.whatsapp === whatsapp));
-    if (duplicate || (nameIndex.exists() && nameIndex.data().active !== false) || (phoneIndex.exists() && phoneIndex.data().active !== false)) {
+    if (duplicate || (nameIndex.exists() && nameIndex.data().active !== false)) {
       throw fail('Ya existe un cliente activo con ese nombre o WhatsApp en este espacio profesional.');
     }
     const override = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, barber);
@@ -438,7 +425,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'barbers', uid, 'customers', credential.user.uid), customer);
       batch.set(doc(db(), 'userProfiles', credential.user.uid), { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
       batch.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      batch.set(phoneRef, { uid: credential.user.uid, barberUid: uid, active: true, updatedAt: serverTimestamp() });
       await batch.commit();
       return { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } };
     } catch (error) {
@@ -490,19 +476,6 @@ export function createSparkApi({ firebaseConfig, state }) {
         uid: id, barberUid: uid, email: existing.loginEmail, active: existing.active !== false, updatedAt: serverTimestamp()
       });
     }
-    const oldPhone = existing.whatsapp ? normalizePhone(existing.whatsapp) : '';
-    const newPhone = updates.whatsapp || oldPhone;
-    if (newPhone && newPhone !== oldPhone) {
-      const newPhoneId = uid + '_' + await hashHex(newPhone);
-      const newPhoneIndex = await getDoc(doc(db(), 'customerPhoneLookup', newPhoneId));
-      if (newPhoneIndex.exists() && newPhoneIndex.data().active !== false && newPhoneIndex.data().uid !== id) {
-        throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
-      }
-      if (oldPhone) batch.delete(doc(db(), 'customerPhoneLookup', uid + '_' + await hashHex(oldPhone)));
-      batch.set(doc(db(), 'customerPhoneLookup', newPhoneId), {
-        uid: id, barberUid: uid, active: existing.active !== false, updatedAt: serverTimestamp()
-      });
-    }
     await batch.commit();
     return { ok: true, customer: { ...existing, ...updates, updatedAt: new Date().toISOString() } };
   }
@@ -522,10 +495,6 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (normalized) {
       const loginId = await loginLookupId(uid, normalized);
       batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
-    }
-    if (existing?.whatsapp) {
-      const phoneId = uid + '_' + await hashHex(normalizePhone(existing.whatsapp));
-      batch.set(doc(db(), 'customerPhoneLookup', phoneId), { uid: id, barberUid: uid, active: false, updatedAt: serverTimestamp() }, { merge: true });
     }
     await batch.commit();
     return { ok: true };

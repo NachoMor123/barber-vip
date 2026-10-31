@@ -259,29 +259,6 @@ service cloud.firestore {
         && isOwner(resource.data.barberUid);
     }
 
-    match /customerPhoneLookup/{lookupId} {
-      allow get: if true;
-      allow list: if false;
-      allow create, update: if signedIn()
-        && request.resource.data.uid is string
-        && request.resource.data.barberUid is string
-        && request.resource.data.active is bool
-        && (
-          (
-            isOwner(request.resource.data.barberUid)
-            && barberCanOperate(request.resource.data.barberUid)
-            && existsAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid))
-          )
-          || (
-            request.auth.uid == request.resource.data.uid
-            && existsAfter(customerPath(request.resource.data.barberUid, request.auth.uid))
-          )
-        );
-      allow delete: if signedIn()
-        && resource.data.barberUid is string
-        && isOwner(resource.data.barberUid)
-        && barberCanOperate(resource.data.barberUid);
-    }
 
     match /trialClaims/{claimId} {
       allow create: if signedIn()

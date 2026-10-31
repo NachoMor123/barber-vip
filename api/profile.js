@@ -13,7 +13,7 @@ function sha256(value) { return crypto.createHash('sha256').update(String(value)
 function millis(value) { return value && typeof value.toMillis === 'function' ? value.toMillis() : (value ? new Date(value).getTime() : 0); }
 
 function defaultCode(uid) { return String(uid).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase(); }
-function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'2500',10);return Number.isFinite(n)&&n>0?n:2500;}
+function getSubscriptionPrice(){const n=Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS||'5000',10);return Number.isFinite(n)&&n>0?n:5000;}
 function safeHttpsUrl(value, allowedHosts = []) {
   const raw = text(value, 500);
   if (!raw) return '';
@@ -119,7 +119,8 @@ module.exports = async function handler(req, res) {
             return;
           }
           const claim = claimSnap.exists ? claimSnap.data() : null;
-          if (claim && claim.uid && claim.uid !== decoded.uid) throw new Error('TRIAL_ALREADY_USED');
+          // If this email already claimed a trial on a previous account, reuse its original
+          // expiry date below. Never delete the newly created Auth account or grant a fresh trial.
           const now = Timestamp.now();
           const requestedName = text(data.displayName || decoded.name || String(decoded.email || '').split('@')[0] || 'Profesional VIP', 80);
           const displayName = requestedName.length >= 2 ? requestedName : 'Profesional VIP';
@@ -169,7 +170,6 @@ module.exports = async function handler(req, res) {
           createdProfile = null;
         });
       } catch (error) {
-        if (error.message === 'TRIAL_ALREADY_USED') return send(res, 409, {ok:false,error:'Este correo ya utilizó una prueba gratuita. Iniciá sesión con la cuenta existente.'});
         if (error.message === 'CUSTOMER_ACCOUNT') return send(res, 403, {ok:false,error:'Esta cuenta pertenece a un cliente, no a un administrador.'});
         throw error;
       }

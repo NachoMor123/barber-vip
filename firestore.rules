@@ -119,11 +119,11 @@ service cloud.firestore {
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
           'sparkLoginIndexMigratedAt', 'updatedAt'
         ])
-        && request.resource.data.subscriptionExpiresAt == resource.data.subscriptionExpiresAt
-        && request.resource.data.hasPaidSubscription == resource.data.hasPaidSubscription
-        && request.resource.data.trialStartedAt == resource.data.trialStartedAt
-        && request.resource.data.barberCode == resource.data.barberCode
-        && request.resource.data.trialClaimId == resource.data.trialClaimId;
+        && request.resource.data.get('subscriptionExpiresAt', null) == resource.data.get('subscriptionExpiresAt', null)
+        && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)
+        && request.resource.data.get('trialStartedAt', null) == resource.data.get('trialStartedAt', null)
+        && request.resource.data.get('barberCode', null) == resource.data.get('barberCode', null)
+        && request.resource.data.get('trialClaimId', null) == resource.data.get('trialClaimId', null);
       allow delete: if false;
 
       match /customers/{customerId} {
@@ -183,9 +183,14 @@ service cloud.firestore {
         allow get: if metaId in ['professional', 'promotions']
           && (isOwner(barberId) || activeCustomerOf(barberId));
         allow list: if false;
-        allow create, update: if isOwner(barberId)
-          && barberCanOperate(barberId)
-          && metaId in ['professional', 'promotions'];
+        allow create: if isOwner(barberId)
+        && metaId in ['professional', 'promotions']
+        && existsAfter(barberPath(barberId))
+        && getAfter(barberPath(barberId)).data.subscriptionExpiresAt is timestamp
+        && getAfter(barberPath(barberId)).data.subscriptionExpiresAt > request.time;
+      allow update: if isOwner(barberId)
+        && barberCanOperate(barberId)
+        && metaId in ['professional', 'promotions'];
         allow delete: if false;
       }
 

@@ -186,7 +186,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberSnap = await getDoc(barberRef);
     if (!barberSnap.exists() || barberSnap.data().sparkLoginIndexMigratedAt) return;
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 350) {
+    for (let offset = 0; offset < active.length; offset += 200) {
       const batch = writeBatch(db());
       const group = active.slice(offset, offset + 350);
       for (const c of group) {
@@ -272,6 +272,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (userSnap.exists() && barberSnap.exists()) return { ok: true, profile: { ...barberSnap.data(), uid, subscription: subscription(barberSnap.data()) }, subscriptionPrice: SUBSCRIPTION_PRICE_ARS };
 
     const displayName = cleanText(data.displayName || auth().currentUser.displayName || auth().currentUser.email?.split('@')[0] || 'Profesional', 80);
+    const email = cleanText(auth().currentUser.email, 254).toLowerCase();
+    if (!email) throw fail('La cuenta necesita un correo electrónico válido para iniciar la prueba.', 400);
+    const trialClaimId = await hashHex(email);
     const barberCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
     const now = Date.now();
     const trialExpiry = Timestamp.fromDate(new Date(now + TRIAL_DAYS * DAY_MS));
@@ -282,10 +285,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       services: [], showServices: false, theme: { accent: '#3478ff', density: 'comfortable' },
       loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id, rewards: DEFAULT_REWARDS,
       subscriptionExpiresAt: trialExpiry, hasPaidSubscription: false,
-      trialStartedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      trialClaimId, trialStartedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     };
     const batch = writeBatch(dbRef);
     batch.set(barberRef, barber);
+    batch.set(doc(dbRef, 'trialClaims', trialClaimId), { uid, emailHash: trialClaimId, claimedAt: serverTimestamp(), trialStartedAt: serverTimestamp(), trialExpiresAt: trialExpiry });
     batch.set(userRef, { uid, role: 'barber', createdAt: serverTimestamp() });
     batch.set(doc(dbRef, 'publicBarberCodes', barberCode), { barberUid: uid, barberCode, createdAt: serverTimestamp() });
     batch.set(doc(dbRef, 'barbers', uid, 'publicMeta', 'professional'), cleanProfileForCustomer(barber));
@@ -308,6 +312,10 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!barberCodeSnap.exists()) throw fail('No encontramos ese código. Pedile a tu profesional que ingrese una vez a Barber VIP y volvé a intentar.', 404);
     const barberUid = String(barberCodeSnap.data().barberUid || '');
     if (!barberUid) throw fail('El código de tu profesional no es válido.', 404);
+    const barberSnap = await getDoc(doc(db(), 'barbers', barberUid));
+    if (!barberSnap.exists() || subscription(barberSnap.data()).status === 'suspended') {
+      throw fail('El acceso para nuevas cuentas está pausado porque el plan del profesional está vencido. Consultá con el profesional.', 402);
+    }
     const loginId = await loginLookupId(barberUid, normalized);
     const loginRef = doc(db(), 'customerLoginLookup', loginId);
     const loginSnap = await getDoc(loginRef);
@@ -361,7 +369,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
     for (let offset = 0; offset < active.length; offset += 350) {
       const batch = writeBatch(db());
-      for (const c of active.slice(offset, offset + 350)) {
+      for (const c of active.slice(offset, offset + 200)) {
         const normalized = cleanText(c.usernameNormalized || normalizeName(c.fullName), 100);
         if (!normalized) continue;
         const id = await loginLookupId(uid, normalized);
@@ -395,8 +403,13 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
     const lookupId = await loginLookupId(uid, normalized);
     const lookupRef = doc(db(), 'customerLoginLookup', lookupId);
+    const phoneId = uid + '_' + await hashHex(whatsapp);
+    const phoneRef = doc(db(), 'customerPhoneLookup', phoneId);
+    const [nameIndex, phoneIndex] = await Promise.all([getDoc(lookupRef), getDoc(phoneRef)]);
     const duplicate = state.customers?.some(c => c.active !== false && (c.usernameNormalized === normalized || c.whatsapp === whatsapp));
-    if (duplicate) throw fail('Ya existe un cliente activo con ese nombre o WhatsApp en este espacio profesional.');
+    if (duplicate || (nameIndex.exists() && nameIndex.data().active !== false) || (phoneIndex.exists() && phoneIndex.data().active !== false)) {
+      throw fail('Ya existe un cliente activo con ese nombre o WhatsApp en este espacio profesional.');
+    }
     const override = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, barber);
     const loginEmail = 'cliente-' + crypto.randomUUID() + '@accounts.barbervip.app';
     const secondaryApp = initializeApp(firebaseConfig, 'BarberVIP-Customer-' + crypto.randomUUID());
@@ -415,8 +428,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'barbers', uid, 'customers', credential.user.uid), customer);
       batch.set(doc(db(), 'userProfiles', credential.user.uid), { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
       batch.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      const phoneId = uid + '_' + await hashHex(whatsapp);
-      batch.set(doc(db(), 'customerPhoneLookup', phoneId), { uid: credential.user.uid, barberUid: uid, active: true, updatedAt: serverTimestamp() });
+      batch.set(phoneRef, { uid: credential.user.uid, barberUid: uid, active: true, updatedAt: serverTimestamp() });
       await batch.commit();
       return { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } };
     } catch (error) {
@@ -459,6 +471,10 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (newNormalized !== (existing.usernameNormalized || normalizeName(existing.fullName))) {
       const oldId = await loginLookupId(uid, existing.usernameNormalized || normalizeName(existing.fullName));
       const newId = await loginLookupId(uid, newNormalized);
+      const newNameIndex = await getDoc(doc(db(), 'customerLoginLookup', newId));
+      if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
+        throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
+      }
       batch.delete(doc(db(), 'customerLoginLookup', oldId));
       batch.set(doc(db(), 'customerLoginLookup', newId), {
         uid: id, barberUid: uid, email: existing.loginEmail, active: existing.active !== false, updatedAt: serverTimestamp()
@@ -467,8 +483,13 @@ export function createSparkApi({ firebaseConfig, state }) {
     const oldPhone = existing.whatsapp ? normalizePhone(existing.whatsapp) : '';
     const newPhone = updates.whatsapp || oldPhone;
     if (newPhone && newPhone !== oldPhone) {
+      const newPhoneId = uid + '_' + await hashHex(newPhone);
+      const newPhoneIndex = await getDoc(doc(db(), 'customerPhoneLookup', newPhoneId));
+      if (newPhoneIndex.exists() && newPhoneIndex.data().active !== false && newPhoneIndex.data().uid !== id) {
+        throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
+      }
       if (oldPhone) batch.delete(doc(db(), 'customerPhoneLookup', uid + '_' + await hashHex(oldPhone)));
-      batch.set(doc(db(), 'customerPhoneLookup', uid + '_' + await hashHex(newPhone)), {
+      batch.set(doc(db(), 'customerPhoneLookup', newPhoneId), {
         uid: id, barberUid: uid, active: existing.active !== false, updatedAt: serverTimestamp()
       });
     }

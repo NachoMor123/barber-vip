@@ -1,0 +1,10 @@
+{
+  "projects": { "default": "barbervip-309dc" },
+  "targets": {
+    "barbervip-309dc": {
+      "hosting": {
+        "app": ["barbervip-309dc"]
+      }
+    }
+  }
+}

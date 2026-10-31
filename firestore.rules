@@ -5,36 +5,201 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isBarber(barberId) {
+    function isOwner(barberId) {
       return signedIn() && request.auth.uid == barberId;
     }
 
-    // The server API owns profile and role mapping writes.
+    function barberPath(barberId) {
+      return /databases/$(database)/documents/barbers/$(barberId);
+    }
+
+    function customerPath(barberId, customerId) {
+      return /databases/$(database)/documents/barbers/$(barberId)/customers/$(customerId);
+    }
+
+    function publicCodePath(code) {
+      return /databases/$(database)/documents/publicBarberCodes/$(code);
+    }
+
+    function userProfilePath(uid) {
+      return /databases/$(database)/documents/userProfiles/$(uid);
+    }
+
+    function trialClaimPath(claimId) {
+      return /databases/$(database)/documents/trialClaims/$(claimId);
+    }
+
+    function barberCanOperate(barberId) {
+      let barber = get(barberPath(barberId)).data;
+      return isOwner(barberId)
+        && barber.subscriptionExpiresAt is timestamp
+        && (
+          barber.subscriptionExpiresAt > request.time
+          || (
+            barber.hasPaidSubscription == true
+            && request.time < barber.subscriptionExpiresAt + duration.value(5, 'd')
+          )
+        );
+    }
+
+    function activeCustomerOf(barberId) {
+      let path = customerPath(barberId, request.auth.uid);
+      return signedIn()
+        && exists(path)
+        && get(path).data.active == true
+        && get(path).data.barberUid == barberId;
+    }
+
+    function customerExistsAfter(barberId, customerId) {
+      let path = customerPath(barberId, customerId);
+      return existsAfter(path)
+        && getAfter(path).data.uid == customerId
+        && getAfter(path).data.barberUid == barberId;
+    }
+
+    function validNewBarber(barberId) {
+      let data = request.resource.data;
+      let claimId = data.trialClaimId;
+      let claimPath = trialClaimPath(claimId);
+      return isOwner(barberId)
+        && data.hasPaidSubscription == false
+        && data.trialStartedAt == request.time
+        && data.subscriptionExpiresAt is timestamp
+        && data.subscriptionExpiresAt >= request.time + duration.value(6, 'd')
+        && data.subscriptionExpiresAt <= request.time + duration.value(8, 'd')
+        && claimId is string
+        && existsAfter(claimPath)
+        && getAfter(claimPath).data.uid == barberId
+        && existsAfter(userProfilePath(barberId))
+        && getAfter(userProfilePath(barberId)).data.role == 'barber';
+    }
+
     match /userProfiles/{uid} {
-      allow read, write: if false;
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.uid == uid
+        && (
+          (
+            request.auth.uid == uid
+            && request.resource.data.role == 'barber'
+            && existsAfter(barberPath(uid))
+            && getAfter(barberPath(uid)).data.trialClaimId is string
+          )
+          ||
+          (
+            request.resource.data.role == 'customer'
+            && request.resource.data.barberUid is string
+            && customerExistsAfter(request.resource.data.barberUid, uid)
+            && (
+              request.auth.uid == uid
+              || barberCanOperate(request.resource.data.barberUid)
+            )
+          )
+        );
+
+      allow update: if signedIn()
+        && resource.data.role == 'customer'
+        && resource.data.barberUid is string
+        && barberCanOperate(resource.data.barberUid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled', 'updatedAt'])
+        && request.resource.data.disabled == true;
+      allow delete: if false;
     }
 
     match /barbers/{barberId} {
-      // The parent profile contains private professional data; owner only.
-      allow get: if isBarber(barberId);
-      allow list, create, update, delete: if false;
+      allow get: if isOwner(barberId);
+      allow list: if false;
+      allow create: if validNewBarber(barberId);
+      allow update: if barberCanOperate(barberId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
+          'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
+          'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
+          'sparkLoginIndexMigratedAt', 'updatedAt'
+        ])
+        && request.resource.data.subscriptionExpiresAt == resource.data.subscriptionExpiresAt
+        && request.resource.data.hasPaidSubscription == resource.data.hasPaidSubscription
+        && request.resource.data.trialStartedAt == resource.data.trialStartedAt
+        && request.resource.data.barberCode == resource.data.barberCode
+        && request.resource.data.trialClaimId == resource.data.trialClaimId;
+      allow delete: if false;
 
       match /customers/{customerId} {
-        // Admin can view the barber's customer list; each customer can view only their own active card.
-        allow get: if isBarber(barberId)
-          || (signedIn() && request.auth.uid == customerId && resource.data.active == true);
-        allow list: if isBarber(barberId);
-        allow create, update, delete: if false;
+        allow get: if isOwner(barberId)
+          || (
+            signedIn()
+            && request.auth.uid == customerId
+            && resource.data.active == true
+            && resource.data.barberUid == barberId
+          );
+        allow list: if isOwner(barberId);
+
+        allow create: if (
+            barberCanOperate(barberId)
+            && request.resource.data.uid == customerId
+            && request.resource.data.barberUid == barberId
+            && request.resource.data.active == true
+            && request.resource.data.totalCuts == 0
+            && request.resource.data.actualCutsRegistered == 0
+            && request.resource.data.cycleCuts == 0
+          )
+          || (
+            signedIn()
+            && request.auth.uid == customerId
+            && request.resource.data.uid == customerId
+            && request.resource.data.barberUid == barberId
+            && request.resource.data.active == true
+            && request.resource.data.totalCuts == 0
+            && request.resource.data.actualCutsRegistered == 0
+            && request.resource.data.cycleCuts == 0
+            && get(barberPath(barberId)).data.subscriptionExpiresAt is timestamp
+            && (
+              get(barberPath(barberId)).data.subscriptionExpiresAt > request.time
+              || (
+                get(barberPath(barberId)).data.hasPaidSubscription == true
+                && request.time < get(barberPath(barberId)).data.subscriptionExpiresAt + duration.value(5, 'd')
+              )
+            )
+          );
+
+        allow update: if barberCanOperate(barberId)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.barberUid == barberId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fullName', 'usernameNormalized', 'whatsapp', 'cutStyle',
+            'conversationPreference', 'loyaltyOverride',
+            'totalCuts', 'actualCutsRegistered', 'cycleCuts', 'cycleVersion',
+            'cyclePausedAtMax', 'availableRewards', 'rewardReady',
+            'lastCutAt', 'lastRewardAppliedLabel', 'lastRewardAppliedAt',
+            'lastRewardAppliedCut', 'lastRewardAppliedOnFinalMilestone',
+            'active', 'disabledAt', 'updatedAt'
+          ]);
+        allow delete: if false;
       }
 
       match /publicMeta/{metaId} {
-        // The promotion marker contains only an opaque revision ID and timestamp.
-        // No get()/exists() lookups means no extra rule-document reads for each notification.
-        allow get: if signedIn() && metaId in ['promotions', 'professional'];
-        allow list, create, update, delete: if false;
+        allow get: if metaId in ['professional', 'promotions']
+          && (isOwner(barberId) || activeCustomerOf(barberId));
+        allow list: if false;
+        allow create, update: if isOwner(barberId)
+          && barberCanOperate(barberId)
+          && metaId in ['professional', 'promotions'];
+        allow delete: if false;
       }
 
-      // History is disabled: the app no longer reads or writes visit audit documents.
+      match /promotions/{promotionId} {
+        allow get, list: if (
+            isOwner(barberId)
+            || (
+              activeCustomerOf(barberId)
+              && resource.data.active == true
+            )
+          );
+        allow create, update, delete: if barberCanOperate(barberId);
+      }
+
       match /cuts/{cutId} {
         allow read, write: if false;
       }
@@ -46,6 +211,80 @@ service cloud.firestore {
       match /payments/{paymentId} {
         allow read, write: if false;
       }
+
+      match /paymentPreferences/{preferenceId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /publicBarberCodes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.barberUid == request.auth.uid
+        && request.resource.data.barberCode == code
+        && existsAfter(barberPath(request.auth.uid))
+        && getAfter(barberPath(request.auth.uid)).data.barberCode == code;
+      allow delete: if false;
+    }
+
+    match /customerLoginLookup/{lookupId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.uid is string
+        && request.resource.data.barberUid is string
+        && request.resource.data.email is string
+        && request.resource.data.active is bool
+        && (
+          (
+            isOwner(request.resource.data.barberUid)
+            && barberCanOperate(request.resource.data.barberUid)
+            && existsAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid))
+            && getAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid)).data.uid == request.resource.data.uid
+          )
+          || (
+            request.auth.uid == request.resource.data.uid
+            && request.resource.data.barberUid is string
+            && existsAfter(customerPath(request.resource.data.barberUid, request.auth.uid))
+          )
+        );
+      allow delete: if signedIn()
+        && resource.data.barberUid is string
+        && isOwner(resource.data.barberUid)
+        && barberCanOperate(resource.data.barberUid);
+    }
+
+    match /customerPhoneLookup/{lookupId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.uid is string
+        && request.resource.data.barberUid is string
+        && request.resource.data.active is bool
+        && (
+          (
+            isOwner(request.resource.data.barberUid)
+            && barberCanOperate(request.resource.data.barberUid)
+            && existsAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid))
+          )
+          || (
+            request.auth.uid == request.resource.data.uid
+            && existsAfter(customerPath(request.resource.data.barberUid, request.auth.uid))
+          )
+        );
+      allow delete: if signedIn()
+        && resource.data.barberUid is string
+        && isOwner(resource.data.barberUid)
+        && barberCanOperate(resource.data.barberUid);
+    }
+
+    match /trialClaims/{claimId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.emailHash == claimId
+        && !exists(/databases/$(database)/documents/trialClaims/$(claimId));
+      allow get, list, update, delete: if false;
     }
 
     match /{document=**} {

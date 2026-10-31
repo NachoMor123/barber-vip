@@ -1680,7 +1680,7 @@
     }
     function updatePromotionAudienceSummary(root=modalRoot){
       const audience=$('#promotionAudience',root)?.value||'all';
-      const count=$('input[name="customerIds"]:checked',root).length;
+      const count=$$('input[name="customerIds"]:checked',root).length;
       const summary=$('#promotionAudienceSummary',root);
       if(summary){
         const label=audience==='except'?'excluidos':audience==='selected'?'incluidos':'clientes';

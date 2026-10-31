@@ -79,6 +79,36 @@ Campos:
 
 La consola de Firebase administra esos campos directamente; las reglas de la app impiden que el propio barbero extienda su vencimiento. No registrar pagos pendientes como acreditados.
 
+## Tu acceso de administrador y cobro de los barberos
+
+El panel de activación de pagos está en:
+
+`https://barbervip-309dc.web.app/billing-admin.html`
+
+Antes de usarlo, autorizá tu cuenta una sola vez desde Firebase Console:
+
+1. Abrí **Authentication → Users** en el proyecto `barbervip-309dc`.
+2. Buscá tu propia cuenta de barbero por correo y copiá su **UID**.
+3. Abrí **Firestore Database → Data → userProfiles**.
+4. Entrá al documento cuyo ID coincide exactamente con tu UID.
+5. Agregá un campo nuevo: nombre `platformAdmin`, tipo **boolean**, valor **true**.
+
+Ese permiso no se puede activar desde la aplicación. Sólo alguien con acceso de propietario al proyecto Firebase puede asignarlo desde la consola. No se lo asignes a ningún barbero cliente.
+
+### Flujo de renovación por ARS 8.000
+
+1. En Mercado Pago, creá un **Link de Pago** de un solo pago por ARS 8.000. No configures una suscripción ni débito automático.
+2. Compartí ese enlace con el barbero que necesita renovar.
+3. Esperá a que el pago figure como **acreditado/aprobado** en tu cuenta de Mercado Pago. Un comprobante enviado por el cliente no alcanza por sí solo.
+4. Abrí el panel de administración, buscá al barbero y pulsá **Registrar pago**.
+5. Pegá el ID de la operación o una referencia del pago y confirmá.
+
+El panel registra la operación, guarda el pago en `barbers/{UID}/payments` y habilita 30 días. Si la cuenta ya tenía un período pago vigente, suma los 30 días desde su vencimiento actual; si estaba en prueba, vencida o en gracia, comienza desde la fecha en que registrás el pago.
+
+La referencia del comprobante se utiliza como identificador único para evitar que se registre dos veces el mismo pago para el mismo barbero. Si te equivocás o el pago fue revertido, no edites la base para simular un cobro; revisá el caso antes de hacer otra activación.
+
+**Importante:** Mercado Pago no envía una confirmación automática a Firebase en Spark. Vos verificás la acreditación y la activación se hace manualmente desde ese panel. No se guarda el Access Token ni ninguna clave privada de Mercado Pago en el navegador.
+
 ## Cuotas gratuitas de Firestore
 
 La cuota gratuita actual de Firestore Standard es 50.000 lecturas de documentos por día, 20.000 escrituras por día, 20.000 eliminaciones por día, 1 GiB almacenado y 10 GiB de transferencia saliente mensual. Las cuotas diarias se reinician aproximadamente a medianoche del Pacífico. Si se supera la cuota de un producto en Spark, ese producto puede quedar bloqueado hasta que se restablezca la cuota o se cambie a Blaze.

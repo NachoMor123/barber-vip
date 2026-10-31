@@ -5,7 +5,7 @@
   "description": "Barber VIP — fidelización digital sobre Firebase Spark",
   "scripts": {
     "test": "node --test",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-barber-vip \"node tests/spark-rules.test.mjs\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-barber-vip \"node tests/spark-rules-check.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",

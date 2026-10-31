@@ -1,4 +1,5 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+import { WORKER_API_BASE } from './worker-config.js';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -170,6 +171,66 @@ export function createSparkApi({ firebaseConfig, state }) {
   };
   const currentUid = () => auth().currentUser.uid;
   const invalidate = () => { cachedMe = null; cachedUid = ''; };
+
+  async function workerRequest(path, options = {}) {
+    const base = String(WORKER_API_BASE || '').trim().replace(/\\/+$/, '');
+    if (!base || base.includes('<COMPLETAR')) {
+      throw fail('El servidor auxiliar de Barber VIP todavía no está conectado. Falta terminar la configuración de Cloudflare.', 503);
+    }
+    const current = state.auth?.currentUser;
+    if (!current) throw fail('Tu sesión venció. Volvé a ingresar.', 401);
+    const token = await current.getIdToken();
+    const method = String(options.method || 'GET').toUpperCase();
+    const headers = { authorization: 'Bearer ' + token, ...(options.headers || {}) };
+    let body = options.body;
+    if (body !== undefined && body !== null && typeof body !== 'string') {
+      headers['content-type'] = 'application/json';
+      body = JSON.stringify(body);
+    }
+    let response;
+    try {
+      response = await fetch(base + path, { method, headers, body, cache: 'no-store', credentials: 'omit' });
+    } catch (error) {
+      throw Object.assign(fail('No se pudo conectar con el servidor seguro de Barber VIP. Revisá tu conexión e intentá nuevamente.', 503), { retryable: true, cause: error });
+    }
+    const result = await response.json().catch(() => null);
+    if (!result || !response.ok || result.ok === false) {
+      const message = result?.error || 'El servidor seguro no pudo completar la operación.';
+      throw fail(message, response.status || 502);
+    }
+    return result;
+  }
+
+  async function notifyVisit(customerId, appliedReward) {
+    try {
+      const body = appliedReward
+        ? 'Tu visita quedó registrada y se aplicó ' + (appliedReward.label || labelReward(appliedReward.discount)) + '.'
+        : 'Tu tarjeta de Barber VIP ya tiene una visita nueva.';
+      await workerRequest('/api/push/send', {
+        method: 'POST',
+        body: { customerId, title: 'Visita registrada', body, tag: 'visit-' + customerId + '-' + Date.now() }
+      });
+    } catch (error) {
+      console.warn('[Barber VIP] No se pudo enviar la notificación de visita.', error?.message || error);
+    }
+  }
+
+  async function notifyPromotion(promotion) {
+    if (!promotion || promotion.active === false) return;
+    try {
+      let offset = 0;
+      for (let pages = 0; pages < 40; pages++) {
+        const result = await workerRequest('/api/push/promotion', {
+          method: 'POST', body: { promotion, offset }
+        });
+        if (result.nextOffset === null || result.nextOffset === undefined) break;
+        if (Number(result.nextOffset) <= offset) break;
+        offset = Number(result.nextOffset);
+      }
+    } catch (error) {
+      console.warn('[Barber VIP] No se pudieron enviar todos los avisos de promoción.', error?.message || error);
+    }
+  }
 
   async function writePublicBarberCode(barber) {
     const code = cleanCode(barber.barberCode);
@@ -443,7 +504,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
     const existing = state.customers?.find(c => c.uid === id) || (await getDoc(customerRef)).data();
     if (!existing) throw fail('No se encontró ese cliente.', 404);
-    if (data.password) throw fail('En el plan gratuito no se puede cambiar la contraseña de otra cuenta desde el panel. El cliente debe iniciar sesión y cambiarla desde su acceso.');
+    if (data.password) {
+      await workerRequest('/api/customers/reset-password', { method: 'POST', body: { customerId: id, password: String(data.password) } });
+    }
     const updates = { updatedAt: serverTimestamp() };
     let newNormalized = existing.usernameNormalized || normalizeName(existing.fullName);
     if (data.fullName !== undefined) {
@@ -572,6 +635,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.appliedReward) message = 'Visita registrada. ' + (outcome.appliedReward.label || labelReward(outcome.appliedReward.discount)) + ' se aplicó en esta visita.';
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
+    await notifyVisit(id, outcome.appliedReward);
     return { ok: true, customer: resultCustomer, message };
   }
 
@@ -596,6 +660,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const payload = cleanPromotion(data, true);
       await setDoc(doc(ref, id), { ...payload, createdAt: now, updatedAt: now });
       await touchPromotionRevision(barberUid);
+      await notifyPromotion({ ...payload, id });
       return { ok: true, id };
     }
     const id = cleanText(data.id, 100);
@@ -609,6 +674,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const payload = cleanPromotion(data, false);
       await updateDoc(doc(ref, id), { ...payload, updatedAt: serverTimestamp() });
       await touchPromotionRevision(barberUid);
+      await notifyPromotion({ ...payload, id });
       return { ok: true, id };
     }
     throw fail('Método no permitido.', 405);
@@ -654,10 +720,10 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/customers' && method === 'DELETE') return await disableCustomer(data);
       if (path === '/api/cuts' && method === 'POST') return await addCut(data);
       if (path === '/api/promotions') return await promotions(parsed.href, method, data);
-      if (path === '/api/push' && method === 'GET') return { ok: true, enabled: false, publicKey: '' };
-      if (path === '/api/push' && method === 'DELETE') return { ok: true, enabled: false };
-      if (path === '/api/push' && method === 'POST') throw fail('Las notificaciones Push en segundo plano requieren un servidor. En el plan gratuito, las novedades aparecen dentro de la app mientras está abierta.', 503);
-      if (path === '/api/create-preference' && method === 'POST') throw fail('En Firebase Spark la renovación se realiza manualmente. El importe es $8.000 por 30 días: solicitá el enlace de pago de Mercado Pago al equipo de Barber VIP. Una vez verificado el pago, tu acceso se habilita manualmente. No hay débitos automáticos ni confirmación instantánea.', 503);
+      if (path === '/api/push' && method === 'GET') return await workerRequest('/api/push');
+      if (path === '/api/push' && method === 'DELETE') return await workerRequest('/api/push', { method: 'DELETE', body: data });
+      if (path === '/api/push' && method === 'POST') return await workerRequest('/api/push', { method: 'POST', body: data });
+      if (path === '/api/create-preference' && method === 'POST') return await workerRequest('/api/create-preference', { method: 'POST', body: data });
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);
     } catch (error) {
       if (error?.code === 'permission-denied') {

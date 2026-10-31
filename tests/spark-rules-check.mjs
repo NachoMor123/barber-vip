@@ -151,17 +151,17 @@ try {
   const allBarbers = await assertSucceeds(getDocs(collection(adminDb, 'barbers')));
   if (allBarbers.size !== 1) throw new Error('Platform admin should see all barber accounts');
   const paymentTime = Timestamp.fromMillis(Date.now());
-  const expiry = Timestamp.fromMillis(paymentTime.toMillis() + 30 * 86400000);
+  const paymentExpiry = Timestamp.fromMillis(paymentTime.toMillis() + 30 * 86400000);
   const billingBatch = writeBatch(adminDb);
   billingBatch.update(doc(adminDb, 'barbers', barberUid), {
     hasPaidSubscription: true,
-    subscriptionExpiresAt: expiry,
+    subscriptionExpiresAt: paymentExpiry,
     lastPaymentAt: paymentTime,
     updatedAt: serverTimestamp()
   });
   billingBatch.set(doc(collection(adminDb, 'barbers', barberUid, 'payments'), 'manual-payment-001'), {
     amount: 8000, currency: 'ARS', status: 'approved', method: 'mercadopago-link-manual',
-    receiptReference: 'MP-RECEIPT-001', paidAt: paymentTime, newExpiry: expiry, createdAt: serverTimestamp()
+    receiptReference: 'MP-RECEIPT-001', paidAt: paymentTime, newExpiry: paymentExpiry, createdAt: serverTimestamp()
   });
   await assertSucceeds(billingBatch.commit());
   const payment = await assertSucceeds(getDoc(doc(adminDb, 'barbers', barberUid, 'payments', 'manual-payment-001')));

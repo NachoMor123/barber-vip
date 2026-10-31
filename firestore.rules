@@ -112,7 +112,7 @@ service cloud.firestore {
       allow get: if isOwner(barberId);
       allow list: if false;
       allow create: if validNewBarber(barberId);
-      allow update: if barberCanOperate(barberId)
+      allow update: if isOwner(barberId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
@@ -123,7 +123,13 @@ service cloud.firestore {
         && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)
         && request.resource.data.get('trialStartedAt', null) == resource.data.get('trialStartedAt', null)
         && request.resource.data.get('barberCode', null) == resource.data.get('barberCode', null)
-        && request.resource.data.get('trialClaimId', null) == resource.data.get('trialClaimId', null);
+        && request.resource.data.get('trialClaimId', null) == resource.data.get('trialClaimId', null)
+        && (
+          barberCanOperate(barberId)
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'sparkLoginIndexMigratedAt', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
+          ])
+        );
       allow delete: if false;
 
       match /customers/{customerId} {

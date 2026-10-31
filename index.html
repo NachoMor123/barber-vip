@@ -1680,7 +1680,7 @@
     }
     function sortPromotionCustomerRows(root=modalRoot){
       const list=$('#promotionCustomerList',root);if(!list)return;
-      const rows=$(':scope > .bulk-row',list);
+      const rows=Array.from($(':scope > .bulk-row',list));
       rows.sort((a,b)=>{
         const selectedA=$('input[name="customerIds"]',a)?.checked?1:0;
         const selectedB=$('input[name="customerIds"]',b)?.checked?1:0;

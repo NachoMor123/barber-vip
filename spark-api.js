@@ -234,8 +234,17 @@ export function createSparkApi({ firebaseConfig, state }) {
           console.warn('[Barber VIP] No se pudo preparar el acceso de clientes para Spark.', error?.message || error);
         }
       }
-      await writePublicBarberCode(barber);
-      await publicMetaForBarber(uid, barber);
+      if (!barber.sparkPublicCodeReadyAt || !barber.sparkPublicMetaReadyAt) {
+        if (!barber.sparkPublicCodeReadyAt) await writePublicBarberCode(barber);
+        if (!barber.sparkPublicMetaReadyAt) await publicMetaForBarber(uid, barber);
+        await updateDoc(barberRef, {
+          sparkPublicCodeReadyAt: barber.sparkPublicCodeReadyAt || serverTimestamp(),
+          sparkPublicMetaReadyAt: barber.sparkPublicMetaReadyAt || serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        barber.sparkPublicCodeReadyAt = true;
+        barber.sparkPublicMetaReadyAt = true;
+      }
       const result = {
         ok: true, role: 'barber', uid, barberUid: uid, subscriptionPrice: SUBSCRIPTION_PRICE_ARS,
         profile: { ...barber, subscription: subscription(barber) }
@@ -285,7 +294,8 @@ export function createSparkApi({ firebaseConfig, state }) {
       services: [], showServices: false, theme: { accent: '#3478ff', density: 'comfortable' },
       loyaltyPrograms: [program], defaultLoyaltyProgramId: program.id, rewards: DEFAULT_REWARDS,
       subscriptionExpiresAt: trialExpiry, hasPaidSubscription: false,
-      trialClaimId, trialStartedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      trialClaimId, trialStartedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      sparkLoginIndexMigratedAt: serverTimestamp(), sparkPublicCodeReadyAt: serverTimestamp(), sparkPublicMetaReadyAt: serverTimestamp()
     };
     const batch = writeBatch(dbRef);
     batch.set(barberRef, barber);
@@ -367,7 +377,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberRef = doc(db(), 'barbers', uid);
     if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false };
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 350) {
+    for (let offset = 0; offset < active.length; offset += 200) {
       const batch = writeBatch(db());
       for (const c of active.slice(offset, offset + 200)) {
         const normalized = cleanText(c.usernameNormalized || normalizeName(c.fullName), 100);

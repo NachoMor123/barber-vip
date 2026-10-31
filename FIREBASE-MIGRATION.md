@@ -13,7 +13,7 @@ Estos cambios están aislados en la rama `firebase-migration`. No se modifica `m
 ## Pasos en Firebase Console
 
 1. Abrir el proyecto existente `barbervip-309dc`. No crear un proyecto nuevo.
-2. En Firestore Database, revisar la ubicación de la base de datos. La función está provisionalmente en `us-central1`; antes del despliegue hay que confirmar la ubicación y cambiar región en `functions/index.js` y en `firebase.json` si corresponde.
+2. La función y el rewrite de Hosting están configurados en `us-central1`, tal como se decidió para esta migración. Esta elección no confirma que Firestore esté en la misma región: si la base estuviera en otra ubicación, podría existir latencia y tráfico entre regiones. Se mantiene `us-central1` por instrucción del propietario del proyecto.
 3. Abrir Hosting y habilitar Firebase Hosting. El sitio principal usa el sitio predeterminado del proyecto: `barbervip-309dc.web.app`.
 4. En Hosting, agregar un segundo sitio con el ID exacto `barber-vip-comercial-309dc`. Su URL será `https://barber-vip-comercial-309dc.web.app`.
 5. Cloud Functions necesita el plan Blaze y una cuenta de facturación vinculada. Se requiere un medio de pago. Configurar alertas de presupuesto y revisar el consumo; las alertas no son un tope duro de gasto.

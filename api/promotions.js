@@ -17,7 +17,8 @@ function customerPromotions(snapshot, customerId) {
   const now = Date.now();
   const eligible = snapshot.docs.map(view).filter(promo => {
     return promo.audience === 'all'
-      || (Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId));
+      || (promo.audience === 'except' && !(Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId)))
+      || (promo.audience === 'selected' && Array.isArray(promo.customerIds) && promo.customerIds.includes(customerId));
   });
   // Return the next eligible scheduled start without exposing other customers' targeted promotions.
   // This lets clients expire their local cache at the right time without polling Firestore.
@@ -111,8 +112,9 @@ module.exports = async function handler(req, res) {
       return send(res, 200, {ok:true});
     }
     const title = text(data.title, 80), description = text(data.description, 500), conditions = text(data.conditions, 300);
-    const audience = data.audience === 'selected' ? 'selected' : 'all';
-    const customerIds = audience === 'selected' && Array.isArray(data.customerIds) ? [...new Set(data.customerIds.map(v=>text(v,100)).filter(Boolean))].slice(0,500) : [];
+    const audience = ['selected','except'].includes(data.audience) ? data.audience : 'all';
+    // selected stores included IDs; except stores excluded IDs.
+    const customerIds = audience !== 'all' && Array.isArray(data.customerIds) ? [...new Set(data.customerIds.map(v=>text(v,100)).filter(Boolean))].slice(0,500) : [];
     const startsAt = cleanDate(data.startsAt), endsAt = cleanDate(data.endsAt);
     // date-only values keep whole-day semantics; datetime-local values arrive as ISO timestamps and retain their exact time.
     if (startsAt && !String(data.startsAt).includes('T')) startsAt.setHours(0,0,0,0);
@@ -120,7 +122,7 @@ module.exports = async function handler(req, res) {
     if (title.length < 3) return send(res, 400, {ok:false,error:'El título debe tener al menos 3 caracteres.'});
     if (/\[[^\]]{1,100}\]/.test(title+' '+description+' '+conditions)) return send(res, 400, {ok:false,error:'Reemplazá los textos entre corchetes por el beneficio y las condiciones reales antes de guardar la promoción.'});
     if (startsAt && endsAt && endsAt < startsAt) return send(res, 400, {ok:false,error:'La fecha de fin no puede ser anterior a la fecha de inicio.'});
-    if (audience === 'selected' && !customerIds.length) return send(res, 400, {ok:false,error:'Seleccioná al menos un cliente para esta promoción.'});
+    if (audience !== 'all' && !customerIds.length) return send(res, 400, {ok:false,error:audience==='except'?'Seleccioná al menos un cliente para excluir.':'Seleccioná al menos un cliente para esta promoción.'});
     const now = admin().firestore.FieldValue.serverTimestamp();
     const payload = { title, description, conditions, audience, customerIds, startsAt: startsAt ? admin().firestore.Timestamp.fromDate(startsAt) : null, endsAt: endsAt ? admin().firestore.Timestamp.fromDate(endsAt) : null, active: data.active !== false, updatedAt: now };
     if (req.method === 'POST') {
@@ -133,6 +135,7 @@ module.exports = async function handler(req, res) {
         await sendPushToBarberCustomers({
           barberUid: ctx.uid,
           customerIds: audience === 'selected' ? customerIds : null,
+          excludedCustomerIds: audience === 'except' ? customerIds : null,
           title: 'Nueva promoción: '+title,
           body: 'Hay una nueva promoción disponible. Abrí Barber VIP para verla.',
           tag: 'barber-vip-promo-'+ref.id,

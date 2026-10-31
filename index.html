@@ -868,7 +868,18 @@
     const relativeTime = value => { const d=asDate(value); if(!d)return 'Sin actividad registrada'; const ms=Date.now()-d.getTime(); if(ms<60000)return 'Hace menos de 1 min'; if(ms<3600000)return `Hace ${Math.floor(ms/60000)} min`; if(ms<86400000)return `Hace ${Math.floor(ms/3600000)} h`; const days=Math.floor(ms/86400000); return days===1?'Hace 1 día':`Hace ${days} días`; };
     function dateIso(value){const d=asDate(value);return d?d.toISOString():'';}
     function refreshRelativeTimes(){
-      $$('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});
+      $('.last-cut-relative').forEach(el=>{el.textContent=relativeTime(el.dataset.lastCutAt||'');});
+      // Recalculate subscription boundaries locally once per minute; never poll Firestore for time.
+      if(state.role==='barber'&&state.barber){
+        const subscriptionNow=subStatus();
+        const subscriptionKey=[subscriptionNow.status,subscriptionNow.isTrial,subscriptionNow.trialEnded,subscriptionNow.daysRemaining].join('|');
+        if(state.subscriptionStatusKey!==undefined&&state.subscriptionStatusKey!==subscriptionKey){
+          state.subscriptionStatusKey=subscriptionKey;
+          renderApp();
+          return;
+        }
+        state.subscriptionStatusKey=subscriptionKey;
+      }
       const attendance=$('#customer-attendance-live');
       if(attendance&&state.customerSection==='home')attendance.innerHTML=attendanceMarkup(state.barber?.schedule);
       const nextStart=state.promoNextScheduledAt?new Date(state.promoNextScheduledAt).getTime():0;

@@ -35,7 +35,7 @@ async function googleAccessToken(env) {
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
   const claims = b64url(enc.encode(JSON.stringify({
-    iss: account.client_email, sub: account.client_email,
+    iss: account.client_email,
     aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600,
     scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit"
   })));
@@ -498,6 +498,13 @@ async function sendPromotionPush(request, env) {
   const data = await parseBody(request);
   const promotion = data.promotion || {};
   if (!promotion.active) return { ok: true, sent: 0, nextOffset: null };
+  const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
+  const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
+  const now = Date.now();
+  if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
+    throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
+  }
+  if (startsAt > now || endsAt < now) return { ok: true, sent: 0, nextOffset: null };
   const audience = ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all";
   const ids = new Set(Array.isArray(promotion.customerIds) ? promotion.customerIds.map(String) : []);
   const offset = Math.max(0, Number(data.offset) || 0);

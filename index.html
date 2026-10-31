@@ -946,20 +946,7 @@
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
-      return '<div class="push-notification-card"><div class="push-notification-main"><span class="push-notification-icon">✦</span><div><strong>Novedades de tu tarjeta</strong><p>Las visitas y promociones se actualizan mientras Barber VIP está abierta. Los avisos Push en segundo plano no están disponibles en el plan gratuito.</p></div></div></div>';
-      if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))return '';
-      let storedPreference=false;try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-      const permission=Notification.permission,active=permission==='granted'&&(state.pushEnabled===true||storedPreference);
-      if(active)return '';
-      const denied=permission==='denied',iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
-      const description=denied?'El navegador bloqueó los avisos. Habilitá las notificaciones desde los permisos de este sitio.'
-        :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
-        :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
-      const action=`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
-      return `<section class="push-notification-card ${active?'enabled':''}" aria-label="Notificaciones">
-        <div class="push-notification-main"><span class="push-notification-icon" aria-hidden="true">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>${description}</p>${denied?'<small class="push-notification-note">Después de cambiar el permiso en el navegador, volvé a esta pantalla.</small>':''}</div></div>
-        ${action}
-      </section>`;
+      return '<div class="push-notification-card"><div class="push-notification-main"><span class="push-notification-icon">✦</span><div><strong>Novedades de tu tarjeta</strong><p>Las visitas y promociones se actualizan mientras Barber VIP está abierta. Los avisos Push cuando la app está cerrada no están disponibles en Firebase Spark.</p></div></div></div>';
     }
     function base64UrlToUint8Array(value){
       const normalized=String(value||'').replace(/-/g,'+').replace(/_/g,'/');

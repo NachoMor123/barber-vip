@@ -24,6 +24,9 @@ jobs:
       - name: Check Worker syntax
         working-directory: worker
         run: node --check src/index.js
+      - name: Build Worker without deploying
+        working-directory: worker
+        run: npx wrangler deploy --dry-run
       - name: Check Firebase Spark app and Worker client-side syntax
         working-directory: .
         run: |

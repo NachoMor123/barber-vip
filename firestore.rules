@@ -117,7 +117,7 @@ service cloud.firestore {
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
-          'sparkLoginIndexMigratedAt', 'updatedAt'
+          'sparkLoginIndexMigratedAt', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
         ])
         && request.resource.data.get('subscriptionExpiresAt', null) == resource.data.get('subscriptionExpiresAt', null)
         && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)
@@ -183,13 +183,8 @@ service cloud.firestore {
         allow get: if metaId in ['professional', 'promotions']
           && (isOwner(barberId) || activeCustomerOf(barberId));
         allow list: if false;
-        allow create: if isOwner(barberId)
-        && metaId in ['professional', 'promotions']
-        && existsAfter(barberPath(barberId))
-        && getAfter(barberPath(barberId)).data.subscriptionExpiresAt is timestamp
-        && getAfter(barberPath(barberId)).data.subscriptionExpiresAt > request.time;
-      allow update: if isOwner(barberId)
-        && barberCanOperate(barberId)
+        allow create, update: if isOwner(barberId)
+        && exists(barberPath(barberId))
         && metaId in ['professional', 'promotions'];
         allow delete: if false;
       }
@@ -244,7 +239,6 @@ service cloud.firestore {
         && (
           (
             isOwner(request.resource.data.barberUid)
-            && barberCanOperate(request.resource.data.barberUid)
             && existsAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid))
             && getAfter(customerPath(request.resource.data.barberUid, request.resource.data.uid)).data.uid == request.resource.data.uid
           )
@@ -256,8 +250,7 @@ service cloud.firestore {
         );
       allow delete: if signedIn()
         && resource.data.barberUid is string
-        && isOwner(resource.data.barberUid)
-        && barberCanOperate(resource.data.barberUid);
+        && isOwner(resource.data.barberUid);
     }
 
     match /customerPhoneLookup/{lookupId} {

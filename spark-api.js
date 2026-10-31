@@ -688,7 +688,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/push' && method === 'GET') return { ok: true, enabled: false, publicKey: '' };
       if (path === '/api/push' && method === 'DELETE') return { ok: true, enabled: false };
       if (path === '/api/push' && method === 'POST') throw fail('Las notificaciones Push en segundo plano requieren un servidor. En el plan gratuito, las novedades aparecen dentro de la app mientras está abierta.', 503);
-      if (path === '/api/create-preference' && method === 'POST') throw fail('El cobro automático no está disponible en el plan gratuito. Podés recibir pagos por un enlace de Mercado Pago y habilitar el plan manualmente después de verificar el pago.', 503);
+      if (path === '/api/create-preference' && method === 'POST') throw fail('En Firebase Spark la renovación se realiza manualmente. El importe es $8.000 por 30 días: solicitá el enlace de pago de Mercado Pago al equipo de Barber VIP. Una vez verificado el pago, tu acceso se habilita manualmente. No hay débitos automáticos ni confirmación instantánea.', 503);
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);
     } catch (error) {
       if (error?.code === 'permission-denied') {

@@ -1,4 +1,3 @@
-import webpush from "web-push";
 
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
@@ -457,6 +456,8 @@ function cleanPushPayload(data, origin) {
 }
 async function deliverPush(env, docs, payload) {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) throw Object.assign(new Error("Las notificaciones no están configuradas."), { status: 503 });
+  const webPushModule = await import("web-push");
+  const webpush = webPushModule.default || webPushModule;
   webpush.setVapidDetails(String(env.VAPID_SUBJECT || "mailto:soporte@barbervip.app"), env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   let sent = 0;
   for (let offset = 0; offset < docs.length; offset += 15) {

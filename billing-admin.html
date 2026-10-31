@@ -200,7 +200,8 @@ el('confirm-payment').addEventListener('click',async()=>{
     const base=selectedBarber.hasPaidSubscription===true&&currentExpiry&&currentExpiry.getTime()>now.getTime()?currentExpiry:now;
     const expiry=new Date(base.getTime()+DAYS*86400000);
     const barberRef=doc(db,'barbers',selectedBarber.uid);
-    const paymentId=await paymentDocId(reference);\n    const paymentRef=doc(db,'barbers',selectedBarber.uid,'payments',paymentId);
+    const paymentId=await paymentDocId(reference);
+    const paymentRef=doc(db,'barbers',selectedBarber.uid,'payments',paymentId);
     const batch=writeBatch(db);
     batch.update(barberRef,{
       hasPaidSubscription:true,

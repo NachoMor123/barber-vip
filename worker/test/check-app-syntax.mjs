@@ -6,9 +6,22 @@ import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const html = await readFile(join(root, "index.html"), "utf8");
-const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)]
-  .filter((match) => /\\btype\\s*=\\s*["']module["']/i.test(match[1]))
-  .map((match) => match[2]);
+const scripts = [];
+let cursor = 0;
+
+while (true) {
+  const start = html.indexOf("<script", cursor);
+  if (start < 0) break;
+  const openingEnd = html.indexOf(">", start);
+  if (openingEnd < 0) break;
+  const closingStart = html.indexOf("</script>", openingEnd + 1);
+  if (closingStart < 0) break;
+  const attributes = html.slice(start + 7, openingEnd).toLowerCase();
+  if (attributes.includes('type="module"') || attributes.includes("type='module'")) {
+    scripts.push(html.slice(openingEnd + 1, closingStart));
+  }
+  cursor = closingStart + 9;
+}
 
 if (!scripts.length) throw new Error("No se encontró ningún script type=module en index.html.");
 

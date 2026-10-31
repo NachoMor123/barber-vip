@@ -1,127 +1,110 @@
-# Barber VIP — edición Firebase Spark
+# Puesta en marcha — Barber VIP híbrido (Firebase Spark + Cloudflare Workers)
 
-Esta rama prepara una edición de Barber VIP que funciona con Firebase Spark (sin facturación ni Cloud Functions).
+Esta guía describe el orden seguro de configuración. La versión preparada en GitHub todavía no está publicada. No desactivar Vercel ni reemplazar enlaces hasta completar todas las pruebas.
 
-## Proyecto que se conserva
+## 1. Conservar el proyecto actual
 
-- Firebase: `barbervip-309dc`
-- Firebase Authentication: se conservan las cuentas actuales.
-- Cloud Firestore: se conservan todos los perfiles, clientes, visitas y promociones.
-- Sitio de aplicación: `https://barbervip-309dc.web.app`
-- Web comercial: sitio separado `barber-vip-comercial-309dc` dentro del mismo proyecto.
+- Firebase project: `barbervip-309dc`.
+- Mantener Firebase Authentication y Firestore existentes.
+- No crear otra base de datos ni importar usuarios a otro proyecto.
+- No activar Blaze ni desplegar Cloud Functions.
 
-**No crear otro proyecto ni otra base de datos.** El cambio de dominio requiere que cada usuario abra el nuevo enlace, inicie sesión nuevamente y vuelva a instalar la PWA en el nuevo dominio.
+Dirección prevista de la app: `https://barbervip-309dc.web.app`. Sólo estará activa después de crear/confirmar el sitio de Hosting y publicar el código.
 
-## Qué funciona en Spark
+## 2. Preparar Cloudflare Worker
 
-- Alta e inicio de sesión de barberos y clientes con Firebase Authentication.
-- Clientes creados por el barbero o autorregistro por código.
-- Tarjetas de cliente y datos del profesional.
-- Registro de visitas y premios en hitos 2, 4 y 6.
-- Promociones y sincronización mientras la app está abierta.
-- PWA y Hosting estático.
-- Precio de referencia del servicio: ARS 8.000 por mes.
+Seguir los pasos detallados en [worker/README.md](worker/README.md).
 
-La lista de clientes se carga una vez al abrir Clientes. Al primer ingreso de cada barbero se hace una migración única de sus índices de acceso para conservar el login de clientes por código y nombre. Esa primera carga consume lecturas y escrituras proporcionales a sus clientes; después no se repite gracias a una marca guardada en el perfil.
+El Worker necesita:
+- Cuenta de servicio dedicada en Google Cloud IAM, con `roles/datastore.user` y `roles/firebaseauth.admin` sobre el proyecto Firebase.
+- Secretos de Mercado Pago: Access Token y secreto de firma del webhook.
+- Claves VAPID pública y privada del sistema original; reutilizarlas si están disponibles.
+- Firebase Web API Key.
 
-## Límites que impone Spark
+No pegar credenciales en GitHub, en el código, ni en este chat. Guardarlas solamente con `wrangler secret put` dentro de Cloudflare.
 
-Spark no ejecuta código de servidor ni permite Cloud Functions. Por eso:
-
-- Mercado Pago no puede confirmar pagos automáticamente mediante un webhook seguro. La renovación de los barberos debe verificarse manualmente y activarse desde Firebase Console.
-- No se pueden enviar notificaciones Push cuando el navegador está cerrado. Las visitas y promociones se actualizan dentro de la app mientras está abierta.
-- El barbero no puede cambiar desde su panel la contraseña de otra cuenta de cliente. El cliente conserva su acceso y contraseña actuales.
-
-No hay claves privadas de Mercado Pago ni VAPID que configurar en el navegador. Nunca pegar un Access Token privado dentro de `index.html` o `spark-api.js`.
-
-## Publicar la app en Firebase Hosting
-
-1. Entrar al proyecto existente `barbervip-309dc` en Firebase Console y comprobar que esté en Spark.
-2. En Hosting, mantener o crear el sitio predeterminado `barbervip-309dc`.
-3. Publicar las reglas de Firestore incluidas en `firestore.rules`.
-4. Instalar Node.js y Firebase CLI en la computadora.
-5. Desde la carpeta del repositorio:
-
+Desde `worker/`:
 ```bash
-npm install -g firebase-tools
+npm install
+npm test
+npx wrangler deploy --dry-run
+```
+
+Una vez configurados los secretos, desplegar:
+```bash
+npx wrangler deploy
+```
+
+Cloudflare devuelve una dirección similar a `https://barber-vip-api.<tu-subdominio>.workers.dev`. Copiar esa dirección en `worker-config.js` (sin una barra final). Es el único valor que falta en ese archivo.
+
+## 3. Hosting de Firebase
+
+En Firebase Console, proyecto `barbervip-309dc`:
+1. Abrir **Hosting** y crear/confirmar el sitio cuyo Site ID sea `barbervip-309dc`.
+2. En **Authentication → Settings → Authorized domains**, comprobar que `barbervip-309dc.web.app` esté autorizado.
+3. Crear un segundo sitio de Hosting con Site ID `barber-vip-comercial-309dc`.
+4. No hace falta una nueva app Firebase ni una nueva base de Firestore.
+
+Cuando las pruebas estén aprobadas, desde la raíz del repositorio de la app:
+```bash
 firebase login
 firebase use barbervip-309dc
 firebase deploy --only firestore:rules,hosting:app
 ```
 
-No se despliegan funciones ni se habilita Blaze.
+La web comercial está en el repositorio separado `NachoMor123/barber-vip-web`. Se publica desde su propia carpeta con `firebase deploy --only hosting:commercial`.
 
-## Publicar la web comercial
+## 4. Configurar Mercado Pago
 
-En Hosting, agregar un segundo sitio con este ID exacto:
+- El Worker crea una preferencia de Checkout por ARS 8.000.
+- La URL de notificación se configura en cada preferencia hacia `/api/mercadopago-webhook` del Worker.
+- El webhook valida la firma, consulta el pago en Mercado Pago y confirma que esté aprobado y que el importe/moneda coincidan.
+- El mismo ID de pago no puede extender el período dos veces.
+- Cada pago aprobado suma 30 días al vencimiento actual (o empieza desde la aprobación si ya había vencido).
+- No se configura débito automático ni una suscripción recurrente.
 
-`barber-vip-comercial-309dc`
+Configurar `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` como secretos del Worker. Para probar, usar credenciales de prueba de Mercado Pago antes de usar producción.
 
-Luego, desde la carpeta del repositorio `barber-vip-web`:
+## 5. Notificaciones Push
 
-```bash
-firebase use barbervip-309dc
-firebase deploy --only hosting:commercial
-```
+- Los clientes activan las notificaciones desde la pantalla de su tarjeta.
+- El Worker conserva las suscripciones en `pushSubscriptions`.
+- Después de guardar una visita, la app solicita al Worker enviar la notificación al cliente correspondiente.
+- Al crear o activar una promoción actualmente vigente, el Worker notifica a los destinatarios incluidos.
+- Al dar de baja un cliente, se eliminan sus suscripciones Push.
+- Si el proveedor responde 404/410, la suscripción se elimina.
 
-La web comercial enlaza a `https://barbervip-309dc.web.app`.
+Usar las mismas claves VAPID del sistema anterior cuando sea posible. Si se generan claves nuevas, los clientes deberán volver a activar notificaciones en su dispositivo.
 
-## Cobro manual de ARS 8.000
+## 6. Cambio de contraseña de cliente
 
-Crear en Mercado Pago un Link de Pago de un solo pago por ARS 8.000 (no una suscripción ni débito automático) y compartirlo con el barbero. Después de verificar que el dinero esté acreditado, registrar el pago desde el panel privado de administración descrito a continuación. No se cambia ningún vencimiento desde el panel del propio barbero.
+Al guardar una nueva contraseña desde la edición de cliente:
+1. La app envía el Firebase ID token del barbero.
+2. El Worker comprueba que la sesión sea válida y que el usuario tenga rol `barber`.
+3. Comprueba que el cliente exista, esté activo y pertenezca a ese barbero.
+4. Actualiza la contraseña usando el permiso de Firebase Authentication Admin.
 
-## Tu acceso de administrador y cobro de los barberos
+No se guarda la contraseña en Firestore ni en logs.
 
-El panel de activación de pagos está en:
+## 7. Pruebas obligatorias antes de reemplazar el enlace
 
-`https://barbervip-309dc.web.app/billing-admin.html`
+Usar un barbero de prueba y dos cuentas de cliente:
+1. Login de barbero y clientes con credenciales existentes.
+2. Alta de cliente, autorregistro por código y edición de datos.
+3. Visitas, hitos 2/4/6 y actualizaciones de la tarjeta.
+4. Crear promoción activa para todos, seleccionados y excluidos.
+5. Activar notificaciones en un cliente y recibir una visita con la app cerrada.
+6. Desactivar cliente y comprobar que ya no reciba promociones.
+7. Cambiar contraseña desde el panel del barbero y entrar con la contraseña nueva.
+8. Intentar que un barbero cambie la contraseña de un cliente perteneciente a otro barbero; debe rechazarse.
+9. Mercado Pago en modo de prueba: crear Checkout, aprobar el pago, recibir el webhook y comprobar 30 días añadidos.
+10. Reenviar el mismo webhook: no debe extender el período otra vez.
+11. Revisar Workers Analytics y Firebase Usage.
 
-Antes de usarlo, autorizá tu cuenta una sola vez desde Firebase Console:
+## 8. Enlaces
 
-1. Abrí **Authentication → Users** en el proyecto `barbervip-309dc`.
-2. Buscá tu propia cuenta de barbero por correo y copiá su **UID**.
-3. Abrí **Firestore Database → Data → userProfiles**.
-4. Entrá al documento cuyo ID coincide exactamente con tu UID.
-5. Agregá un campo nuevo: nombre `platformAdmin`, tipo **boolean**, valor **true**.
+- App actual, mientras migramos: `https://barber-vip-three.vercel.app/`.
+- App Firebase prevista (todavía no publicada): `https://barbervip-309dc.web.app/`.
+- Web comercial prevista: `https://barber-vip-comercial-309dc.web.app/`.
 
-Ese permiso no se puede activar desde la aplicación. Sólo alguien con acceso de propietario al proyecto Firebase puede asignarlo desde la consola. No se lo asignes a ningún barbero cliente.
-
-### Flujo de renovación por ARS 8.000
-
-1. En Mercado Pago, creá un **Link de Pago** de un solo pago por ARS 8.000. No configures una suscripción ni débito automático.
-2. Compartí ese enlace con el barbero que necesita renovar.
-3. Esperá a que el pago figure como **acreditado/aprobado** en tu cuenta de Mercado Pago. Un comprobante enviado por el cliente no alcanza por sí solo.
-4. Abrí el panel de administración, buscá al barbero y pulsá **Registrar pago**.
-5. Pegá el ID de la operación o una referencia del pago y confirmá.
-
-El panel registra la operación, guarda el pago en `barbers/{UID}/payments` y habilita 30 días. Si la cuenta ya tenía un período pago vigente, suma los 30 días desde su vencimiento actual; si estaba en prueba, vencida o en gracia, comienza desde la fecha en que registrás el pago.
-
-La referencia del comprobante se utiliza como identificador único para evitar que se registre dos veces el mismo pago para el mismo barbero. Si te equivocás o el pago fue revertido, no edites la base para simular un cobro; revisá el caso antes de hacer otra activación.
-
-**Importante:** Mercado Pago no envía una confirmación automática a Firebase en Spark. Vos verificás la acreditación y la activación se hace manualmente desde ese panel. No se guarda el Access Token ni ninguna clave privada de Mercado Pago en el navegador.
-
-## Cuotas gratuitas de Firestore
-
-La cuota gratuita actual de Firestore Standard es 50.000 lecturas de documentos por día, 20.000 escrituras por día, 20.000 eliminaciones por día, 1 GiB almacenado y 10 GiB de transferencia saliente mensual. Las cuotas diarias se reinician aproximadamente a medianoche del Pacífico. Si se supera la cuota de un producto en Spark, ese producto puede quedar bloqueado hasta que se restablezca la cuota o se cambie a Blaze.
-
-Para controlar lecturas:
-- No hay listeners de presencia en línea ni última conexión.
-- La colección de clientes no queda escuchándose permanentemente; se lee al entrar a Clientes.
-- La migración de login por nombre se ejecuta una sola vez por barbero.
-- La sincronización en tiempo real se limita a documentos puntuales y promociones del profesional asociado.
-
-No se promete que 50 barberos estén siempre por debajo de las cuotas: depende de cuántos clientes, pantallas abiertas, actualizaciones y promociones tenga cada uno. Revisar Firebase Console → Firestore → Usage durante las pruebas y las primeras semanas.
-
-## Pruebas antes de reemplazar el enlace actual
-
-Probar con una cuenta de barbero y dos clientes:
-1. Inicio de sesión de barbero y cliente.
-2. Autorregistro de un cliente nuevo por código.
-3. Login de un cliente existente por código, nombre y contraseña.
-4. Alta, edición y baja de clientes.
-5. Registro de visitas y aplicación de descuentos en 2, 4 y 6.
-6. Creación, edición, activación y baja de promociones.
-7. Lectura de servicios, horarios, WhatsApp, Instagram y ubicación desde la tarjeta cliente.
-8. Vencimiento de prueba, suspensión y activación manual de una suscripción paga.
-
-Mantener el sitio de Vercel actual disponible hasta completar todas estas pruebas en el nuevo dominio.
+Mantener Vercel disponible hasta que todas las pruebas estén aprobadas. Cambiar QR, enlaces de invitación y difusión sólo al final.

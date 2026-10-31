@@ -9,6 +9,14 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == barberId;
     }
 
+    // This flag is assigned only by the project owner in Firebase Console.
+    // Clients cannot set or change it through the app's allowed profile writes.
+    function isPlatformAdmin() {
+      return signedIn()
+        && exists(userProfilePath(request.auth.uid))
+        && get(userProfilePath(request.auth.uid)).data.platformAdmin == true;
+    }
+
     function barberPath(barberId) {
       return /databases/$(database)/documents/barbers/$(barberId);
     }
@@ -83,13 +91,15 @@ service cloud.firestore {
         && (
           (
             request.auth.uid == uid
+            && request.resource.data.keys().hasOnly(['uid', 'role', 'createdAt'])
             && request.resource.data.role == 'barber'
             && existsAfter(barberPath(uid))
             && getAfter(barberPath(uid)).data.trialClaimId is string
           )
           ||
           (
-            request.resource.data.role == 'customer'
+            request.resource.data.keys().hasOnly(['uid', 'role', 'barberUid', 'createdAt'])
+            && request.resource.data.role == 'customer'
             && request.resource.data.barberUid is string
             && customerExistsAfter(request.resource.data.barberUid, uid)
             && (
@@ -109,10 +119,18 @@ service cloud.firestore {
     }
 
     match /barbers/{barberId} {
-      allow get: if isOwner(barberId);
-      allow list: if false;
+      allow get: if isOwner(barberId) || isPlatformAdmin();
+      allow list: if isPlatformAdmin();
       allow create: if validNewBarber(barberId);
-      allow update: if isOwner(barberId)
+      allow update: if (
+        isPlatformAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'hasPaidSubscription', 'subscriptionExpiresAt', 'lastPaymentAt', 'updatedAt'
+        ])
+        && request.resource.data.hasPaidSubscription == true
+        && request.resource.data.subscriptionExpiresAt is timestamp
+        && request.resource.data.lastPaymentAt is timestamp
+      ) || (isOwner(barberId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
@@ -129,7 +147,7 @@ service cloud.firestore {
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'sparkLoginIndexMigratedAt', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
           ])
-        );
+        ));
       allow delete: if false;
 
       match /customers/{customerId} {
@@ -215,7 +233,17 @@ service cloud.firestore {
       }
 
       match /payments/{paymentId} {
-        allow read, write: if false;
+        allow get, list: if isOwner(barberId) || isPlatformAdmin();
+        allow create: if isPlatformAdmin()
+          && request.resource.data.status == 'approved'
+          && request.resource.data.amount == 8000
+          && request.resource.data.currency == 'ARS'
+          && request.resource.data.method == 'mercadopago-link-manual'
+          && request.resource.data.receiptReference is string
+          && request.resource.data.receiptReference.size() >= 3
+          && request.resource.data.paidAt is timestamp
+          && request.resource.data.newExpiry is timestamp;
+        allow update, delete: if false;
       }
 
       match /paymentPreferences/{preferenceId} {

@@ -223,6 +223,17 @@ export function createSparkApi({ firebaseConfig, state }) {
       const barberSnap = await getDoc(barberRef);
       if (!barberSnap.exists()) throw fail('Falta configurar el perfil profesional.', 404);
       const barber = { ...barberSnap.data(), uid };
+      if (!barber.sparkLoginIndexMigratedAt) {
+        try {
+          const customerSnapshot = await getDocs(collection(db(), 'barbers', uid, 'customers'));
+          state.customers = customerSnapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
+          state.customersLoaded = true;
+          await migrateCustomerLoginIndex(state.customers, barber);
+          barber.sparkLoginIndexMigratedAt = true;
+        } catch (error) {
+          console.warn('[Barber VIP] No se pudo preparar el acceso de clientes para Spark.', error?.message || error);
+        }
+      }
       await writePublicBarberCode(barber);
       await publicMetaForBarber(uid, barber);
       const result = {
@@ -338,11 +349,10 @@ export function createSparkApi({ firebaseConfig, state }) {
     return { ok: true, email: String(loginSnap.data().email || '') };
   }
 
-  async function migrateCustomerLoginIndex(customers) {
+  async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {
     const uid = currentUid();
     const barberRef = doc(db(), 'barbers', uid);
-    const barberSnap = await getDoc(barberRef);
-    if (!barberSnap.exists() || barberSnap.data().sparkLoginIndexMigratedAt) return { ok: true, migrated: false };
+    if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false };
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
     for (let offset = 0; offset < active.length; offset += 350) {
       const batch = writeBatch(db());

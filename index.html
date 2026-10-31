@@ -961,96 +961,10 @@
         return actual.length===expected.length&&actual.every((value,index)=>value===expected[index]);
       }catch(_){return null;}
     }
-    async function refreshPushStatusFromDevice(){
-      if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window))return;
-      let storedPreference=false;
-      try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-      if(!storedPreference||Notification.permission!=='granted'){
-        state.pushEnabled=false;
-        if(state.role==='customer'&&state.user)renderApp();
-        return;
-      }
-      try{
-        const registration=await navigator.serviceWorker.ready;
-        let subscription=await registration.pushManager.getSubscription();
-        const config=await api('/api/push');
-        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora.');
-        if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
-          try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
-          await subscription.unsubscribe().catch(()=>false);
-          subscription=null;
-        }
-        // Logout removes the server target and browser subscription, but keeps this
-        // device's explicit opt-in. Restore it silently after the next authenticated login.
-        if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
-        await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
-        state.pushEnabled=true;
-        if(state.role==='customer'&&state.user)renderApp();
-      }catch(error){
-        state.pushEnabled=false;
-        // Keep the local opt-in: a temporary failure must not ask for permission again.
-        console.warn('[Barber VIP] No se pudo restaurar la suscripción push.',error?.message||error);
-        if(state.role==='customer'&&state.user)renderApp();
-      }
-    }
-    async function enableCustomerPush(button){
-      const original=button?.textContent||'Activar notificaciones';
-      let createdHere=false,subscription=null,savedOnServer=false;
-      if(button){button.disabled=true;button.textContent='Activando avisos…';}
-      try{
-        if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para activar los avisos.');
-        if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))throw new Error('Este navegador no admite notificaciones push. Probá desde Chrome o un navegador actualizado.');
-        if(/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp())throw new Error('En iPhone o iPad, primero agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono.');
-        if(state.pushEnabled&&Notification.permission==='granted'){
-          return;
-        }
-        const config=await api('/api/push');
-        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora. No se activó ningún aviso. Intentá de nuevo más tarde.');
-        let permission=Notification.permission;
-        if(permission==='default')permission=await Notification.requestPermission();
-        if(permission!=='granted')throw new Error(permission==='denied'
-          ?'El navegador bloqueó las notificaciones. Habilitalas en los permisos del sitio y volvé a intentarlo.'
-          :'No se concedió permiso para mostrar notificaciones. No se activó ningún aviso.');
-        let readyTimer;
-        let registration;
-        try{
-          registration=await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(new Error('Barber VIP todavía no pudo preparar el servicio de notificaciones. Recargá la app y probá otra vez.')),15000);})
-          ]);
-        }finally{if(readyTimer)clearTimeout(readyTimer);}
-        subscription=await registration.pushManager.getSubscription();
-        if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
-          // Remove a prior-key subscription before creating one compatible with the current server key.
-          try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
-          await subscription.unsubscribe().catch(()=>false);
-          subscription=null;
-        }
-        if(!subscription){
-          subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
-          createdHere=true;
-        }
-        await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
-        savedOnServer=true;
-        state.pushEnabled=true;
-        try{localStorage.setItem(pushPreferenceKey(),'true');}catch(_){}
-        renderApp();
-      }catch(error){
-        if(createdHere&&subscription&&!savedOnServer){
-          try{await subscription.unsubscribe();}catch(_){}
-        }
-        state.pushEnabled=false;
-        try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
-        let message;
-        if(error?.name==='NotAllowedError')message='El navegador rechazó la suscripción. Revisá los permisos de notificaciones del sitio y volvé a intentarlo.';
-        else if(error?.name==='InvalidStateError')message='El servicio de notificaciones quedó en un estado incorrecto. Cerrá y volvé a abrir Barber VIP, y probá otra vez.';
-        else if(error?.name==='AbortError')message='El navegador no pudo completar la activación de notificaciones. Revisá la conexión e intentá de nuevo.';
-        else message=userFacingError(error,'No se pudieron activar las notificaciones. Revisá el permiso y tu conexión, e intentá de nuevo.');
-        toast(message,'error');
-        if(state.role==='customer'&&state.user)renderApp();
-      }finally{
-        if(button?.isConnected){button.disabled=false;button.textContent=original;}
-      }
+    async function refreshPushStatusFromDevice(){ state.pushEnabled=false; }
+    async function enableCustomerPush(){
+      state.pushEnabled=false;
+      toast('Las notificaciones en segundo plano no están disponibles en el plan gratuito. Las novedades se muestran dentro de Barber VIP mientras está abierta.','');
     }
     const subscriptionPrice = () => Number.isFinite(Number(state.subscriptionPrice)) && Number(state.subscriptionPrice)>0 ? Number(state.subscriptionPrice) : SUBSCRIPTION_PRICE_ARS;
     function greetingForNow(){const h=new Date().getHours();return h>=5&&h<12?'Buen día':h>=12&&h<20?'Buenas tardes':'Buenas noches';}
@@ -1502,7 +1416,7 @@
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function subscriptionBanner() {
       const s=subStatus(); const cls=s.status; const message=s.status==='active'?(s.isTrial?`Tu prueba gratuita sigue activa por ${s.daysRemaining} día${s.daysRemaining===1?'':'s'}. Podés activar el plan pago cuando quieras.`:`Tu cuenta está activa. Quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} antes del período de gracia.`):s.status==='grace'?`Te quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} de servicio. Pagá para extender el acceso por 30 días.`:s.trialEnded?'Tu prueba gratuita terminó. Renovala para seguir usando Barber VIP.':'La cuenta está vencida o todavía no tiene fecha de vencimiento. No se pueden registrar visitas hasta renovarla.';
-      return `<div class="subscription-banner ${cls}"><div class="banner-icon">${cls==='active'?'✦':cls==='grace'?'◷':'!'}</div><div style="flex:1;min-width:0"><strong>${escapeHtml(s.label)}</strong><p>${escapeHtml(message)}</p></div><div class="banner-actions"><button class="btn ${cls==='active'?'btn-ghost':'btn-primary'} btn-mini" data-action="pay">${cls==='active'?(s.isTrial?'Ver plan · pagar ahora':'Ver plan'):`Continuar con Mercado Pago ↗`}</button></div></div>`;
+      return `<div class="subscription-banner ${cls}"><div class="banner-icon">${cls==='active'?'✦':cls==='grace'?'◷':'!'}</div><div style="flex:1;min-width:0"><strong>${escapeHtml(s.label)}</strong><p>${escapeHtml(message)}</p></div><div class="banner-actions"><button class="btn ${cls==='active'?'btn-ghost':'btn-primary'} btn-mini" data-action="pay">${cls==='active'?(s.isTrial?'Ver plan · pagar ahora':'Ver plan'):`Ver cómo renovar ↗`}</button></div></div>`;
     }
     function metricCard(label,value,icon,caption='') { return `<div class="metric-card"><div class="metric-head"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-caption">${caption}</div></div>`; }
     function dashboardView() {
@@ -1643,7 +1557,7 @@
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Un único ciclo editable para todos los clientes. Las promociones comerciales se configuran por separado.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
-        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Pagar ${money(price)} con Mercado Pago ↗`}</button></div>
+        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Ver instrucciones para renovar`}</button></div>
 <div class="subscription-extra-actions">
   <div class="subscription-resource">
     <div><strong>Guía PIP · Estrategias de uso</strong><small>13 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
@@ -2004,7 +1918,7 @@
         }
       }
       const payment=new URLSearchParams(location.search).get('payment');
-      if(payment){history.replaceState({},'',location.pathname);setTimeout(()=>{if(payment==='success')toast('Volviste de Mercado Pago. Estamos verificando el pago; el estado se actualiza al confirmar el webhook.','success');else if(payment==='pending')toast('El pago quedó pendiente. El acceso se actualiza cuando Mercado Pago lo apruebe.');else if(state.role==='barber'&&subStatus().status==='active')toast('Tu cuenta sigue activa. No necesitás pagar nuevamente ahora.','success');else toast('El pago no se completó. Podés volver a intentarlo desde Configuración.','error');},300);}
+      if(payment){history.replaceState({},'',location.pathname);setTimeout(()=>toast('Las renovaciones se habilitan manualmente después de verificar el pago acreditado.',''),300);}
     }
     async function resumeSession(user) {
       if(!user||state.manualLogin||!firebaseReady)return;
@@ -2420,9 +2334,6 @@
         else if(action==='toggle-promo-customer-editor'){const editor=$('#promotionCustomerEditor',modalRoot);if(editor){editor.dataset.open=editor.dataset.open==='true'?'false':'true';editor.classList.toggle('hidden',editor.dataset.open!=='true');if(editor.dataset.open==='true')$('#promotionCustomerSearch',modalRoot)?.focus();}}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
-        else if(action==='start-subscription-payment'){await paySubscription(false);}
-        else if(action==='start-trial-payment'){await paySubscription(true);}
-        else if(action==='confirm-mp-payment'){await paySubscription(button.dataset.skipTrial==='true');}
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='prompt';renderInstallGate();}
         else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installedPwaDetectionPromise=null;const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}

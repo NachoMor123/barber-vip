@@ -13,6 +13,8 @@
       "api/**",
       "lib/**",
       "functions/**",
+      "worker/**",
+      ".github/**",
       "package.json",
       "package-lock.json",
       "vercel.json",

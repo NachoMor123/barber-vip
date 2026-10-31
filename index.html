@@ -807,6 +807,7 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+    import { createSparkApi } from './spark-api.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
     import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit, disableNetwork, enableNetwork } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
@@ -823,7 +824,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -940,11 +941,12 @@
       return `<section class="client-info-card service-list-card"><span class="eyebrow">SERVICIOS PARA VOS</span><h3>Servicios y precios</h3><div class="customer-services-list">${services.map(service=>`<div class="service-line"><strong>${escapeHtml(service.name)}</strong><span>${service.price===null?'Consultar precio':money(service.price)}</span></div>`).join('')}</div></section>`;
     }
 
-        const SUBSCRIPTION_PRICE_ARS = 5000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
-    const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
+        const SUBSCRIPTION_PRICE_ARS = 8000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
+    const CUSTOMER_APP_URL = `${window.location.origin}/`;
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
+      return '<div class="push-notification-card"><div class="push-notification-main"><span class="push-notification-icon">✦</span><div><strong>Novedades de tu tarjeta</strong><p>Las visitas y promociones se actualizan mientras Barber VIP está abierta. Los avisos Push en segundo plano no están disponibles en el plan gratuito.</p></div></div></div>';
       if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))return '';
       let storedPreference=false;try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
       const permission=Notification.permission,active=permission==='granted'&&(state.pushEnabled===true||storedPreference);
@@ -1232,7 +1234,7 @@
         doc.setTextColor(11,56,116);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text(code,W/2,y+150,{align:'center'});
         doc.setTextColor(75,99,128);doc.setFont('helvetica','normal');doc.setFontSize(8);
         doc.text('BARBER VIP · ACCESO PARA CLIENTES',W/2,280,{align:'center'});
-        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text('barber-vip-three.vercel.app',W/2,287,{align:'center'});
+        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text(window.location.host,W/2,287,{align:'center'});
         doc.save('Barber-VIP-'+safePosterFilename(name)+'.pdf');
         toast('Cartel PDF descargado. Ya podés imprimirlo en tu local.','success');
       } catch(error) {
@@ -1321,37 +1323,7 @@
       if(!ok)throw new Error('El navegador no permitió copiar. Mantené presionado el texto para copiarlo manualmente.');
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
-    const api = async (url, options={}) => {
-      const headers = {'Content-Type':'application/json',...(options.headers||{})};
-      const current = state.auth?.currentUser;
-      if(current){
-        try{const token=await current.getIdToken();headers.Authorization=`Bearer ${token}`;}
-        catch(error){
-          const failure=new Error(navigator.onLine===false||error?.code==='auth/network-request-failed'?'No se pudo validar la sesión por un problema de conexión. Volvé a intentar.':'No se pudo validar tu sesión. Volvé a ingresar e intentá nuevamente.');
-          failure.retryable=navigator.onLine===false||error?.code==='auth/network-request-failed';failure.cause=error;throw failure;
-        }
-      }
-      let response;
-      try{response=await fetch(url,{...options,headers,cache:'no-store'});}
-      catch(error){
-        const failure=new Error(navigator.onLine===false?'Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.':'No pudimos conectar con el servidor de Barber VIP. Revisá tu conexión e intentá nuevamente.');
-        failure.retryable=true;failure.cause=error;throw failure;
-      }
-      let raw='';
-      try{raw=await response.text();}
-      catch(error){const failure=new Error('La conexión se interrumpió mientras se recibía la respuesta. Volvé a intentar.');failure.retryable=true;failure.cause=error;throw failure;}
-      let data=null;
-      try{data=raw?JSON.parse(raw):null;}catch(_){}
-      if(!data||typeof data!=='object'){
-        const failure=new Error(!response.ok?(response.status>=500?'El servidor de Barber VIP no pudo completar la operación. Probá de nuevo en unos minutos.':`La solicitud no se pudo completar (código ${response.status}).`):'El servidor devolvió una respuesta inesperada. Recargá Barber VIP y volvé a intentar.');
-        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
-      }
-      if(!response.ok||data.ok===false){
-        const failure=new Error(data.error||`La solicitud no se pudo completar (código ${response.status}).`);
-        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
-      }
-      return data;
-    };
+    const api = createSparkApi({ firebaseConfig, state });
     const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;try{state.promotionMetaUnsubscribe?.();}catch(_){}state.promotionMetaUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
     const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 

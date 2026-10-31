@@ -218,10 +218,15 @@ export function createSparkApi({ firebaseConfig, state }) {
   async function notifyPromotion(promotion) {
     if (!promotion || promotion.active === false) return;
     try {
+      const workerPromotion = {
+        ...promotion,
+        startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
+        endsAt: dateOf(promotion.endsAt)?.toISOString() || null
+      };
       let offset = 0;
       for (let pages = 0; pages < 40; pages++) {
         const result = await workerRequest('/api/push/promotion', {
-          method: 'POST', body: { promotion, offset }
+          method: 'POST', body: { promotion: workerPromotion, offset }
         });
         if (result.nextOffset === null || result.nextOffset === undefined) break;
         if (Number(result.nextOffset) <= offset) break;

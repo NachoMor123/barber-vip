@@ -6,7 +6,7 @@ const { db } = require('./admin');
 
 const BATCH_SIZE = 400;
 const SEND_CONCURRENCY = 25;
-const APP_ORIGIN = String(process.env.APP_URL || 'https://barber-vip-three.vercel.app').replace(/\\/+$/, '');
+const APP_ORIGIN = (() => { const value = String(process.env.APP_URL || 'https://barber-vip-three.vercel.app').trim(); return value.endsWith('/') ? value.slice(0, -1) : value; })();
 
 function pushConfigured() {
   return Boolean(String(process.env.VAPID_PUBLIC_KEY || '').trim() && String(process.env.VAPID_PRIVATE_KEY || '').trim());

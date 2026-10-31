@@ -17,6 +17,35 @@ test('marca una prueba vigente como activa y calcula días sin lecturas adiciona
   assert.equal(result.daysRemaining, 2);
 });
 
+test('una prueba gratuita vencida se suspende inmediatamente y no recibe gracia', () => {
+  const result = subscription({
+    trialStartedAt: new Date('2026-10-20T12:00:00.000Z'),
+    hasPaidSubscription: false,
+    subscriptionExpiresAt: new Date('2026-10-25T12:00:00.000Z')
+  }, now);
+  assert.equal(result.status, 'suspended');
+  assert.equal(result.label, 'Prueba finalizada');
+  assert.equal(result.isTrial, false);
+  assert.equal(result.trialEnded, true);
+});
+
+test('una cuenta sin pagos aprobados nunca recibe período de gracia', () => {
+  const result = subscription({
+    hasPaidSubscription: false,
+    subscriptionExpiresAt: new Date('2026-10-24T12:00:00.000Z')
+  }, now);
+  assert.equal(result.status, 'suspended');
+  assert.equal(result.label, 'Cuenta vencida');
+});
+
+test('la gracia de una cuenta paga comienza después del vencimiento y termina al cumplir cinco días', () => {
+  const expiry = new Date('2026-10-24T12:00:00.000Z');
+  const atExpiry = subscription({hasPaidSubscription:true,subscriptionExpiresAt:expiry}, expiry);
+  const afterGrace = subscription({hasPaidSubscription:true,subscriptionExpiresAt:expiry}, new Date(expiry.getTime()+5*DAY_MS));
+  assert.equal(atExpiry.status, 'active');
+  assert.equal(afterGrace.status, 'suspended');
+});
+
 test('clasifica el período de gracia de cinco días', () => {
   const result = subscription({
     hasPaidSubscription: true,

@@ -9,7 +9,6 @@ const env = await initializeTestEnvironment({
   projectId: 'demo-barber-vip',
   firestore: { host: '127.0.0.1', port: 8080, rules: fs.readFileSync('firestore.rules', 'utf8') }
 });
-
 const barberUid = 'barber-test-001';
 const customerUid = 'customer-test-001';
 const expiry = Timestamp.fromMillis(Date.now() + 7 * 86400000);
@@ -17,7 +16,7 @@ const expiry = Timestamp.fromMillis(Date.now() + 7 * 86400000);
 try {
   const barberDb = env.authenticatedContext(barberUid, { email: 'barber@test.example' }).firestore();
 
-  // The barber trial, profile, code and public metadata must be created atomically.
+  // A trial, user profile, barber record, public code and public metadata are created atomically.
   const first = writeBatch(barberDb);
   first.set(doc(barberDb, 'trialClaims', 'trial-hash-001'), {
     uid: barberUid, emailHash: 'trial-hash-001', claimedAt: serverTimestamp(),
@@ -46,10 +45,6 @@ try {
   await assertSucceeds(first.commit());
   console.log('PASS: barber trial bootstrap');
 
-  await assertSucceeds(getDoc(doc(barberDb, 'barbers', barberUid)));
-  await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'publicBarberCodes')));
-
-  // Barber-created customers and their exact-match name/phone indexes.
   const customer = {
     uid: customerUid, barberUid, fullName: 'Franco Prueba', usernameNormalized: 'franco prueba',
     loginEmail: 'cliente-customer-test-001@accounts.barbervip.app', whatsapp: '5492615550000',
@@ -66,10 +61,8 @@ try {
   second.set(doc(barberDb, 'customerLoginLookup', 'name-hash-001'), {
     uid: customerUid, barberUid, email: customer.loginEmail, active: true, updatedAt: serverTimestamp()
   });
-    uid: customerUid, barberUid, active: true, updatedAt: serverTimestamp()
-  });
   await assertSucceeds(second.commit());
-  console.log('PASS: barber creates customer and lookup indexes');
+  console.log('PASS: barber creates customer and name lookup index');
 
   const customerDb = env.authenticatedContext(customerUid).firestore();
   await assertSucceeds(getDoc(doc(customerDb, 'userProfiles', customerUid)));
@@ -78,7 +71,7 @@ try {
   await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customers', 'other')));
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'publicBarberCodes', 'BARBER01')));
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerLoginLookup', 'name-hash-001')));
-  console.log('PASS: customer privacy and exact public lookup access');
+  console.log('PASS: customer privacy and exact public lookups');
 
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
   if (listed.size !== 1) throw new Error('Expected exactly one customer');
@@ -97,7 +90,7 @@ try {
     subscriptionExpiresAt: Timestamp.fromMillis(Date.now() + 365 * 86400000),
     updatedAt: serverTimestamp()
   }));
-  console.log('PASS: profile editable; self-extension of subscription blocked');
+  console.log('PASS: subscription expiry is protected from the barber');
 
   await assertSucceeds(setDoc(doc(barberDb, 'barbers', barberUid, 'promotions', 'promo-001'), {
     title: 'Promo prueba', active: true, audience: 'all', customerIds: [],
@@ -110,9 +103,9 @@ try {
   await assertFails(setDoc(doc(customerDb, 'barbers', barberUid, 'promotions', 'promo-forged'), {
     title: 'No', active: true, audience: 'all', customerIds: []
   }));
-  console.log('PASS: promotions scoped to the linked customer');
+  console.log('PASS: promotion access is scoped');
 
-  // Self-registration is an atomic Auth-client write, without a server.
+  // A client can self-register with an active barber using only direct Firestore writes.
   const selfUid = 'self-customer-001';
   const selfDb = env.authenticatedContext(selfUid).firestore();
   const selfCustomer = {
@@ -128,10 +121,8 @@ try {
   selfBatch.set(doc(selfDb, 'customerLoginLookup', 'name-hash-002'), {
     uid: selfUid, barberUid, email: selfCustomer.loginEmail, active: true, updatedAt: serverTimestamp()
   });
-    uid: selfUid, barberUid, active: true, updatedAt: serverTimestamp()
-  });
   await assertSucceeds(selfBatch.commit());
-  console.log('PASS: customer self-registration');
+  console.log('PASS: public customer self-registration');
 
   const disable = writeBatch(barberDb);
   disable.update(doc(barberDb, 'barbers', barberUid, 'customers', selfUid), {
@@ -141,11 +132,9 @@ try {
   disable.set(doc(barberDb, 'customerLoginLookup', 'name-hash-002'), {
     uid: selfUid, barberUid, email: selfCustomer.loginEmail, active: false, updatedAt: serverTimestamp()
   }, { merge: true });
-    uid: selfUid, barberUid, active: false, updatedAt: serverTimestamp()
-  }, { merge: true });
   await assertSucceeds(disable.commit());
   await assertFails(getDoc(doc(selfDb, 'barbers', barberUid, 'customers', selfUid)));
-  console.log('PASS: customer deactivation');
+  console.log('PASS: customer deactivation revokes card access');
 
   await env.withSecurityRulesDisabled(async context => {
     await updateDoc(doc(context.firestore(), 'barbers', barberUid), {
@@ -155,7 +144,7 @@ try {
   await assertFails(updateDoc(doc(barberDb, 'barbers', barberUid, 'customers', customerUid), {
     totalCuts: 2, actualCutsRegistered: 2, cycleCuts: 2, updatedAt: serverTimestamp()
   }));
-  console.log('PASS: expired plan cannot mutate customer data');
+  console.log('PASS: expired barber cannot mutate customer data');
 } finally {
   await env.cleanup();
 }

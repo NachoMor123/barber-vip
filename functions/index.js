@@ -71,6 +71,7 @@ exports.api = onRequest({
   region: 'us-central1', // Confirm against the Firestore database location before deployment.
   memory: '256MiB',
   timeoutSeconds: 60,
+  minInstances: 0,
   maxInstances: 5,
   concurrency: 80,
   invoker: 'public',

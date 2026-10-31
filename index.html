@@ -831,10 +831,11 @@
     let installVerificationTimer = null;
     const BRAND_ACCENT = '#3478ff';
     let clientsRefreshCooldownTimer = null;
+    let paymentRequestInFlight = false;
     function updateClientsRefreshControl(){
       const remaining=Math.max(0,Math.ceil((Number(state.clientsRefreshUntil||0)-Date.now())/1000));
       state.clientsRefreshUntil=remaining?state.clientsRefreshUntil:0;
-      $('.clients-refresh-btn').forEach(button=>{
+      $$('.clients-refresh-btn').forEach(button=>{
         const counter=$('.clients-refresh-countdown',button);
         button.disabled=remaining>0||state.customersLoading;
         button.classList.toggle('is-busy',remaining>0);
@@ -851,7 +852,7 @@
       clientsRefreshCooldownTimer=setInterval(()=>{
         updateClientsRefreshControl();
         if(!state.clientsRefreshUntil){clearInterval(clientsRefreshCooldownTimer);clientsRefreshCooldownTimer=null;}
-      },250);
+      },1000);
       return true;
     }
 
@@ -2174,14 +2175,16 @@
       const s=subStatus();
       if(s.status==='active'||s.isTrial){
         const trial=s.isTrial;
-        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, podés activar el plan pago ahora y empezar tu período de 30 días desde la aprobación. Si decidís continuar, el pago se hace manualmente desde la app; no hay débitos automáticos.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+s.daysRemaining+' día'+(s.daysRemaining===1?'':'s'):'Plan de 30 días'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. No se realizan débitos automáticos mensuales.':' El pago se extiende cuando corresponda renovar. No se realizan débitos automáticos mensuales.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Continuar con Mercado Pago ↗</button>':''}</div></section></div>`;
+        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, activá el plan pago ahora. Te llevamos a Mercado Pago y el cobro solo ocurre si confirmás allí; abrirlo no te cobra. No hay débitos automáticos ni renovaciones automáticas.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+s.daysRemaining+' día'+(s.daysRemaining===1?'':'s'):'Plan de 30 días'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. El cobro solo ocurre si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.':' El pago se extiende cuando corresponda renovar. El cobro solo ocurre si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Continuar con Mercado Pago ↗</button>':''}</div></section></div>`;
         return;
       }
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${s.status==='grace'?'Estás en período de gracia':'Tu cuenta está vencida'}</h2><p>Cada pago aprobado suma 30 días de servicio. La renovación se inicia manualmente desde la app a través de Mercado Pago.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · ${money(subscriptionPrice())}</strong><p>${s.status==='grace'?`Te quedan ${Math.max(0,s.daysRemaining)} día(s) de servicio.`:'Para volver a registrar visitas y crear promociones, renová tu cuenta.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Continuar con Mercado Pago ↗</button></div></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${s.status==='grace'?'Estás en período de gracia':'Tu cuenta está vencida'}</h2><p>Cada pago aprobado suma 30 días de servicio. El pago se inicia manualmente desde la app y solo se cobra si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · ${money(subscriptionPrice())}</strong><p>${s.status==='grace'?`Te quedan ${Math.max(0,s.daysRemaining)} día(s) de servicio.`:'Para volver a registrar visitas y crear promociones, renová tu cuenta.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Continuar con Mercado Pago ↗</button></div></section></div>`;
     }
     /* Payment starts directly from the plan-status panel; Mercado Pago is the final confirmation step. */
     async function paySubscription(skipTrial=false) {
       if(subStatus().status==='active'&&!skipTrial){openPlanInfo();return;}
+      if(paymentRequestInFlight)return;
+      paymentRequestInFlight=true;
       modalRoot.innerHTML='<div class="modal-backdrop"><section class="modal-card plan-info-card" role="status" aria-live="polite"><div class="install-waiting"><span class="install-spinner"></span><strong>Preparando el pago en Mercado Pago…</strong></div><p class="muted">Todavía no se realizó ningún cobro. Esperá un momento.</p></section></div>';
       try {
         const data=await api('/api/create-preference',{method:'POST',body:JSON.stringify(skipTrial?{action:'skip-trial'}:{})});
@@ -2193,7 +2196,7 @@
       } catch(error) {
         const message=userFacingError(error,'No se pudo iniciar el pago. No se realizó ningún cobro. Revisá tu conexión e intentá nuevamente.');
         modalRoot.innerHTML='<div class="modal-backdrop"><section class="modal-card plan-info-card" role="alert"><span class="eyebrow">NO SE INICIÓ EL PAGO</span><h2>No pudimos abrir Mercado Pago</h2><p class="muted">'+escapeHtml(message)+'</p><p class="tiny muted">No se realizó ningún cobro. Podés volver a intentarlo.</p><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button><button class="btn btn-primary" data-action="confirm-mp-payment" data-skip-trial="'+(skipTrial?'true':'false')+'">Reintentar</button></div></section></div>';
-      }
+      } finally { paymentRequestInFlight=false; }
     }
 
 

@@ -941,7 +941,7 @@
     }
 
         const SUBSCRIPTION_PRICE_ARS = 5000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
-    const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
+    const CUSTOMER_APP_URL = `${window.location.origin}/`;
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
@@ -1232,7 +1232,7 @@
         doc.setTextColor(11,56,116);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text(code,W/2,y+150,{align:'center'});
         doc.setTextColor(75,99,128);doc.setFont('helvetica','normal');doc.setFontSize(8);
         doc.text('BARBER VIP · ACCESO PARA CLIENTES',W/2,280,{align:'center'});
-        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text('barber-vip-three.vercel.app',W/2,287,{align:'center'});
+        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text(window.location.host,W/2,287,{align:'center'});
         doc.save('Barber-VIP-'+safePosterFilename(name)+'.pdf');
         toast('Cartel PDF descargado. Ya podés imprimirlo en tu local.','success');
       } catch(error) {

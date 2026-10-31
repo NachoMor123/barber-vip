@@ -68,16 +68,7 @@ La web comercial enlaza a `https://barbervip-309dc.web.app`.
 
 ## Cobro manual de ARS 8.000
 
-Crear en la cuenta de Mercado Pago un Link de Pago por ARS 8.000 (no un débito automático). Compartir ese enlace con el barbero cuando corresponda renovar. Una vez acreditado el pago, abrir Firestore Console y actualizar el documento:
-
-`barbers/{UID_DEL_BARBER}`
-
-Campos:
-- `hasPaidSubscription`: `true`
-- `subscriptionExpiresAt`: fecha/hora Timestamp que corresponda (30 días desde la acreditación, o desde el vencimiento vigente si se renueva antes).
-- `lastPaymentAt`: fecha/hora Timestamp del pago.
-
-La consola de Firebase administra esos campos directamente; las reglas de la app impiden que el propio barbero extienda su vencimiento. No registrar pagos pendientes como acreditados.
+Crear en Mercado Pago un Link de Pago de un solo pago por ARS 8.000 (no una suscripción ni débito automático) y compartirlo con el barbero. Después de verificar que el dinero esté acreditado, registrar la renovación en `/billing-admin.html`; no editar el vencimiento desde la cuenta del propio barbero.
 
 ## Cuotas gratuitas de Firestore
 

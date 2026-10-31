@@ -12,7 +12,17 @@
       ".firebaserc",
       "firebase.json",
       ".env",
-      ".env.*"
+      ".env.*",
+      "index.html",
+      "sw.js",
+      "manifest.webmanifest",
+      "assets/**",
+      "web-comercial/**",
+      "FIREBASE-MIGRATION.md",
+      "firebase.env.example",
+      "env.example",
+      "README.md",
+      "vercel.json"
     ]
   },
   "hosting": {
@@ -32,7 +42,9 @@
       "env.example",
       "README.md",
       "firebase-debug.log",
-      "firebase-debug.*.log"
+      "firebase-debug.*.log",
+      "FIREBASE-MIGRATION.md",
+      "firebase.env.example"
     ],
     "rewrites": [
       {

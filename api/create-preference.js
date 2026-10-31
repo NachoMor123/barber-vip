@@ -19,8 +19,8 @@ module.exports = async function handler(req, res) {
     const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
     const price = Number.parseInt(process.env.SUBSCRIPTION_PRICE_ARS || '5000', 10);
     if (!Number.isFinite(price) || price < 1) return send(res, 503, { ok: false, error: 'SUBSCRIPTION_PRICE_ARS debe ser un importe válido en pesos.' });
-    if (!token) return send(res, 503, { ok: false, error: 'Falta configurar MP_ACCESS_TOKEN en Vercel.' });
-    if (!appUrl.startsWith('https://')) return send(res, 503, { ok: false, error: 'Falta configurar APP_URL con la URL HTTPS real de Vercel.' });
+    if (!token) return send(res, 503, { ok: false, error: 'Falta configurar la credencial privada de Mercado Pago en el servidor.' });
+    if (!appUrl.startsWith('https://')) return send(res, 503, { ok: false, error: 'Falta configurar APP_URL con la URL HTTPS pública de la aplicación.' });
 
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',

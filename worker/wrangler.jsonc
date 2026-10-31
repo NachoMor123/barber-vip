@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "barber-vip-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-04",
+  "vars": {
+    "FIREBASE_PROJECT_ID": "barbervip-309dc",
+    "APP_ORIGIN": "https://barbervip-309dc.web.app",
+    "COMMERCIAL_ORIGIN": "https://barber-vip-comercial-309dc.web.app",
+    "SUBSCRIPTION_PRICE_ARS": "8000"
+  }
+}

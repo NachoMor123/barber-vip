@@ -104,3 +104,11 @@ Probar con una cuenta de barbero y dos clientes:
 8. Vencimiento de prueba, suspensión y activación manual de una suscripción paga.
 
 Mantener el sitio de Vercel actual disponible hasta completar todas estas pruebas en el nuevo dominio.
+## Administración de pagos en Spark
+
+El panel de administración manual está disponible en `/billing-admin.html` una vez publicado. Para habilitar tu propia cuenta, agregá `platformAdmin: true` como campo booleano en tu documento `userProfiles/{UID}` desde Firebase Console. Sólo el propietario del proyecto debe asignar ese permiso.
+
+Los pagos de ARS 8.000 se cobran mediante un Link de Pago de Mercado Pago y se registran manualmente después de comprobar que estén acreditados. El panel extiende 30 días y almacena el comprobante; Spark no procesa el webhook de Mercado Pago ni valida el pago automáticamente.
+
+Ver el procedimiento completo en [SPARK-SETUP.md](SPARK-SETUP.md).
+

@@ -136,6 +136,38 @@ try {
   await assertFails(getDoc(doc(selfDb, 'barbers', barberUid, 'customers', selfUid)));
   console.log('PASS: customer deactivation revokes card access');
 
+  // Ordinary barbers may not list all professionals or grant themselves admin status.
+  await assertFails(getDocs(collection(barberDb, 'barbers')));
+  await assertFails(updateDoc(doc(barberDb, 'userProfiles', barberUid), { platformAdmin: true }));
+  console.log('PASS: platform-admin privileges cannot be self-assigned');
+
+  const adminUid = 'platform-admin-001';
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'userProfiles', adminUid), {
+      uid: adminUid, role: 'barber', platformAdmin: true, createdAt: serverTimestamp()
+    });
+  });
+  const adminDb = env.authenticatedContext(adminUid).firestore();
+  const allBarbers = await assertSucceeds(getDocs(collection(adminDb, 'barbers')));
+  if (allBarbers.size !== 1) throw new Error('Platform admin should see all barber accounts');
+  const paymentTime = Timestamp.fromMillis(Date.now());
+  const expiry = Timestamp.fromMillis(paymentTime.toMillis() + 30 * 86400000);
+  const billingBatch = writeBatch(adminDb);
+  billingBatch.update(doc(adminDb, 'barbers', barberUid), {
+    hasPaidSubscription: true,
+    subscriptionExpiresAt: expiry,
+    lastPaymentAt: paymentTime,
+    updatedAt: serverTimestamp()
+  });
+  billingBatch.set(doc(collection(adminDb, 'barbers', barberUid, 'payments'), 'manual-payment-001'), {
+    amount: 8000, currency: 'ARS', status: 'approved', method: 'mercadopago-link-manual',
+    receiptReference: 'MP-RECEIPT-001', paidAt: paymentTime, newExpiry: expiry, createdAt: serverTimestamp()
+  });
+  await assertSucceeds(billingBatch.commit());
+  const payment = await assertSucceeds(getDoc(doc(adminDb, 'barbers', barberUid, 'payments', 'manual-payment-001')));
+  if (!payment.exists() || payment.data().amount !== 8000) throw new Error('Manual payment record missing');
+  console.log('PASS: platform admin records an ARS 8000 payment and extends the subscription atomically');
+
   await env.withSecurityRulesDisabled(async context => {
     await updateDoc(doc(context.firestore(), 'barbers', barberUid), {
       subscriptionExpiresAt: Timestamp.fromMillis(Date.now() - 86400000), hasPaidSubscription: false

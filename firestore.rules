@@ -242,7 +242,11 @@ service cloud.firestore {
           && request.resource.data.receiptReference is string
           && request.resource.data.receiptReference.size() >= 3
           && request.resource.data.paidAt is timestamp
-          && request.resource.data.newExpiry is timestamp;
+          && request.resource.data.newExpiry is timestamp
+          && existsAfter(barberPath(barberId))
+          && getAfter(barberPath(barberId)).data.hasPaidSubscription == true
+          && getAfter(barberPath(barberId)).data.lastPaymentAt == request.resource.data.paidAt
+          && getAfter(barberPath(barberId)).data.subscriptionExpiresAt == request.resource.data.newExpiry;
         allow update, delete: if false;
       }
 

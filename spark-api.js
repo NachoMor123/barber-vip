@@ -560,6 +560,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
     }
     await batch.commit();
+    try {
+      await workerRequest('/api/push/remove-customer', { method: 'POST', body: { customerId: id } });
+    } catch (error) {
+      console.warn('[Barber VIP] No se pudieron limpiar las suscripciones Push del cliente dado de baja.', error?.message || error);
+    }
     return { ok: true };
   }
 
@@ -660,7 +665,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const payload = cleanPromotion(data, true);
       await setDoc(doc(ref, id), { ...payload, createdAt: now, updatedAt: now });
       await touchPromotionRevision(barberUid);
-      await notifyPromotion({ ...payload, id });
+      if (promotionIsLive(payload)) await notifyPromotion({ ...payload, id });
       return { ok: true, id };
     }
     const id = cleanText(data.id, 100);
@@ -671,10 +676,14 @@ export function createSparkApi({ firebaseConfig, state }) {
       return { ok: true, id };
     }
     if (method === 'PUT') {
+      const promotionRef = doc(ref, id);
+      const previousSnap = await getDoc(promotionRef);
+      if (!previousSnap.exists()) throw fail('No se encontró la promoción.', 404);
+      const wasActive = previousSnap.data().active !== false;
       const payload = cleanPromotion(data, false);
-      await updateDoc(doc(ref, id), { ...payload, updatedAt: serverTimestamp() });
+      await updateDoc(promotionRef, { ...payload, updatedAt: serverTimestamp() });
       await touchPromotionRevision(barberUid);
-      await notifyPromotion({ ...payload, id });
+      if (!wasActive && promotionIsLive(payload)) await notifyPromotion({ ...payload, id });
       return { ok: true, id };
     }
     throw fail('Método no permitido.', 405);
@@ -735,6 +744,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw error;
     }
   };
+
+  function promotionIsLive(promotion) {
+    const now = Date.now();
+    const start = dateOf(promotion?.startsAt)?.getTime() ?? 0;
+    const end = dateOf(promotion?.endsAt)?.getTime() ?? Infinity;
+    return promotion?.active !== false && start <= now && end >= now;
+  }
 
   async function saveProfile(data) {
     const uid = currentUid();

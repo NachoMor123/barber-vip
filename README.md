@@ -1,105 +1,77 @@
-# Barber VIP — edición Firebase Spark
+# Barber VIP — arquitectura híbrida gratuita
 
-Esta rama prepara una edición de Barber VIP que funciona con Firebase Spark (sin facturación ni Cloud Functions).
+Barber VIP se prepara para funcionar con **Firebase Spark + Cloudflare Workers Free**, sin Vercel Hobby, sin Firebase Blaze y sin Cloud Functions.
 
-## Proyecto que se conserva
+## Proyecto y enlaces
 
-- Firebase: `barbervip-309dc`
-- Firebase Authentication: se conservan las cuentas actuales.
-- Cloud Firestore: se conservan todos los perfiles, clientes, visitas y promociones.
-- Sitio de aplicación: `https://barbervip-309dc.web.app`
-- Web comercial: sitio separado `barber-vip-comercial-309dc` dentro del mismo proyecto.
+- Proyecto Firebase existente: `barbervip-309dc`
+- Hosting de la aplicación previsto: `https://barbervip-309dc.web.app`
+- Hosting comercial previsto: `https://barber-vip-comercial-309dc.web.app`
+- Aplicación actual mientras se prueba la migración: `https://barber-vip-three.vercel.app/`
 
-**No crear otro proyecto ni otra base de datos.** El cambio de dominio requiere que cada usuario abra el nuevo enlace, inicie sesión nuevamente y vuelva a instalar la PWA en el nuevo dominio.
+**Importante:** los enlaces Firebase son los destinos previstos. Esta rama todavía no está desplegada; mantener Vercel activo hasta terminar las pruebas.
 
-## Qué funciona en Spark
+No crear otra base de datos ni otro proyecto Firebase. Los usuarios y documentos actuales se deben conservar.
 
-- Alta e inicio de sesión de barberos y clientes con Firebase Authentication.
-- Clientes creados por el barbero o autorregistro por código.
-- Tarjetas de cliente y datos del profesional.
-- Registro de visitas y premios en hitos 2, 4 y 6.
-- Promociones y sincronización mientras la app está abierta.
-- PWA y Hosting estático.
-- Precio de referencia del servicio: ARS 8.000 por mes.
+## Qué hace cada servicio
 
-La lista de clientes se carga una vez al abrir Clientes. Al primer ingreso de cada barbero se hace una migración única de sus índices de acceso para conservar el login de clientes por código y nombre. Esa primera carga consume lecturas y escrituras proporcionales a sus clientes; después no se repite gracias a una marca guardada en el perfil.
+**Firebase Spark**
+- Aloja la aplicación PWA y la web comercial.
+- Firebase Authentication: cuentas de barberos y clientes.
+- Firestore: perfiles, clientes, visitas, hitos fijos 2/4/6, servicios, horarios y promociones.
 
-## Límites que impone Spark
+**Cloudflare Worker**
+- Crea preferencias de Checkout de Mercado Pago y recibe el webhook firmado para activar automáticamente 30 días una vez aprobado el pago.
+- Guarda suscripciones Web Push y envía avisos de visitas y promociones aunque la PWA esté cerrada.
+- Restablece la contraseña de un cliente cuando lo solicita el barbero dueño de esa cuenta.
 
-Spark no ejecuta código de servidor ni permite Cloud Functions. Por eso:
+El Worker no aloja la aplicación ni reemplaza Firestore. Las claves privadas permanecen en Cloudflare Secrets, nunca en el navegador ni en GitHub.
 
-- Mercado Pago no puede confirmar pagos automáticamente mediante un webhook seguro. La renovación de los barberos debe verificarse manualmente y activarse desde Firebase Console.
-- No se pueden enviar notificaciones Push cuando el navegador está cerrado. Las visitas y promociones se actualizan dentro de la app mientras está abierta.
-- El barbero no puede cambiar desde su panel la contraseña de otra cuenta de cliente. El cliente conserva su acceso y contraseña actuales.
+## Funcionalidad que se conserva
 
-No hay claves privadas de Mercado Pago ni VAPID que configurar en el navegador. Nunca pegar un Access Token privado dentro de `index.html` o `spark-api.js`.
+- Registro e inicio de sesión de barberos y clientes.
+- Alta de clientes desde el panel y autorregistro por código.
+- Tarjetas de fidelización, visitas y premios en los hitos 2, 4 y 6.
+- Servicios y precios, WhatsApp, Instagram, ubicación y horarios.
+- Promociones por audiencia y actualización dentro de la aplicación.
+- Notificaciones Push después de una visita y al publicar/activar una promoción.
+- Checkout de Mercado Pago, confirmación de pago por webhook y renovación automática del período de acceso.
+- Cambio de contraseña desde la edición del cliente.
 
-## Publicar la app en Firebase Hosting
+Las notificaciones Push requieren que cada cliente conceda permiso en su dispositivo. Los avisos programados para promociones futuras no se envían antes de su fecha de inicio.
 
-1. Entrar al proyecto existente `barbervip-309dc` en Firebase Console y comprobar que esté en Spark.
-2. En Hosting, mantener o crear el sitio predeterminado `barbervip-309dc`.
-3. Publicar las reglas de Firestore incluidas en `firestore.rules`.
-4. Instalar Node.js y Firebase CLI en la computadora.
-5. Desde la carpeta del repositorio:
+## Orden de despliegue
+
+1. Preparar Cloudflare Worker y sus secretos siguiendo [worker/README.md](worker/README.md).
+2. Ejecutar pruebas y una compilación sin publicar: `cd worker && npm install && npm test && npx wrangler deploy --dry-run`.
+3. Desplegar el Worker, copiar su URL `workers.dev` en `worker-config.js`.
+4. Crear/confirmar los dos sitios de Firebase Hosting en el proyecto existente.
+5. Desplegar primero las reglas y la app de prueba; después desplegar la web comercial desde su repositorio.
+6. Ejecutar las pruebas funcionales de la guía antes de reemplazar enlaces o invitar clientes.
+
+Comandos para la app (sólo cuando la configuración anterior esté lista):
 
 ```bash
-npm install -g firebase-tools
 firebase login
 firebase use barbervip-309dc
 firebase deploy --only firestore:rules,hosting:app
 ```
 
-No se despliegan funciones ni se habilita Blaze.
+La web comercial se despliega desde el repositorio independiente `barber-vip-web` con el target `commercial`.
 
-## Publicar la web comercial
+## Lecturas y cuotas
 
-En Hosting, agregar un segundo sitio con este ID exacto:
+La app evita listeners de presencia/última conexión y carga la lista de clientes al abrir la sección correspondiente. Las cuotas de Spark no son ilimitadas: revisar Firebase Console → Firestore → Usage durante las pruebas y el uso inicial.
 
-`barber-vip-comercial-309dc`
+No hay una garantía de capacidad para un número fijo de barberos sin medir lecturas, escrituras, almacenamiento y transferencia reales.
 
-Luego, desde la carpeta del repositorio `barber-vip-web`:
+## Pagos manuales de contingencia
 
-```bash
-firebase use barbervip-309dc
-firebase deploy --only hosting:commercial
-```
+Se mantiene `/billing-admin.html` como herramienta de recuperación para el propietario del proyecto si fuera necesario registrar un pago verificado manualmente. El flujo habitual debe utilizar Checkout de Mercado Pago y el webhook del Worker.
 
-La web comercial enlaza a `https://barbervip-309dc.web.app`.
+## Estado de validación
 
-## Cobro manual de ARS 8.000
-
-Crear en Mercado Pago un Link de Pago de un solo pago por ARS 8.000 (no una suscripción ni débito automático) y compartirlo con el barbero. Después de verificar que el dinero esté acreditado, registrar la renovación en `/billing-admin.html`; no editar el vencimiento desde la cuenta del propio barbero.
-
-## Cuotas gratuitas de Firestore
-
-La cuota gratuita actual de Firestore Standard es 50.000 lecturas de documentos por día, 20.000 escrituras por día, 20.000 eliminaciones por día, 1 GiB almacenado y 10 GiB de transferencia saliente mensual. Las cuotas diarias se reinician aproximadamente a medianoche del Pacífico. Si se supera la cuota de un producto en Spark, ese producto puede quedar bloqueado hasta que se restablezca la cuota o se cambie a Blaze.
-
-Para controlar lecturas:
-- No hay listeners de presencia en línea ni última conexión.
-- La colección de clientes no queda escuchándose permanentemente; se lee al entrar a Clientes.
-- La migración de login por nombre se ejecuta una sola vez por barbero.
-- La sincronización en tiempo real se limita a documentos puntuales y promociones del profesional asociado.
-
-No se promete que 50 barberos estén siempre por debajo de las cuotas: depende de cuántos clientes, pantallas abiertas, actualizaciones y promociones tenga cada uno. Revisar Firebase Console → Firestore → Usage durante las pruebas y las primeras semanas.
-
-## Pruebas antes de reemplazar el enlace actual
-
-Probar con una cuenta de barbero y dos clientes:
-1. Inicio de sesión de barbero y cliente.
-2. Autorregistro de un cliente nuevo por código.
-3. Login de un cliente existente por código, nombre y contraseña.
-4. Alta, edición y baja de clientes.
-5. Registro de visitas y aplicación de descuentos en 2, 4 y 6.
-6. Creación, edición, activación y baja de promociones.
-7. Lectura de servicios, horarios, WhatsApp, Instagram y ubicación desde la tarjeta cliente.
-8. Vencimiento de prueba, suspensión y activación manual de una suscripción paga.
-
-Mantener el sitio de Vercel actual disponible hasta completar todas estas pruebas en el nuevo dominio.
-## Administración de pagos en Spark
-
-El panel de administración manual está disponible en `/billing-admin.html` una vez publicado. Para habilitar tu propia cuenta, agregá `platformAdmin: true` como campo booleano en tu documento `userProfiles/{UID}` desde Firebase Console. Sólo el propietario del proyecto debe asignar ese permiso.
-
-Los pagos de ARS 8.000 se cobran mediante un Link de Pago de Mercado Pago y se registran manualmente después de comprobar que estén acreditados. El panel extiende 30 días y almacena el comprobante; Spark no procesa el webhook de Mercado Pago ni valida el pago automáticamente.
-
-Ver el procedimiento completo en [SPARK-SETUP.md](SPARK-SETUP.md).
-
+- Pruebas unitarias y sintaxis del Worker: automatizadas en GitHub Actions.
+- Compilación de Wrangler sin despliegue: automatizada.
+- Sintaxis de `spark-api.js` y módulos de `index.html`: automatizada.
+- Faltan pruebas de integración con las credenciales reales de Firebase, Cloudflare y Mercado Pago. No se ha desplegado en producción.

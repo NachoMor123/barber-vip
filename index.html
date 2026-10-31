@@ -1680,19 +1680,24 @@
     }
     function sortPromotionCustomerRows(root=modalRoot){
       const list=$('#promotionCustomerList',root);if(!list)return;
-      const rows=Array.from($(':scope > .bulk-row',list));
-      rows.sort((a,b)=>{
-        const selectedA=$('input[name="customerIds"]',a)?.checked?1:0;
-        const selectedB=$('input[name="customerIds"]',b)?.checked?1:0;
-        return selectedB-selectedA||String(a.dataset.customerName||'').localeCompare(String(b.dataset.customerName||''),'es');
-      });
-      rows.forEach(row=>list.appendChild(row));
-      const selectedCount=rows.filter(row=>$('input[name="customerIds"]',row)?.checked).length;
+      const divider=$('#promotionOtherCustomersTitle',root);
+      if(divider)divider.remove();
+      const rows=Array.from(list.querySelectorAll('.bulk-row'));
+      const selected=rows.filter(row=>row.querySelector('input[name="customerIds"]')?.checked);
+      const others=rows.filter(row=>!row.querySelector('input[name="customerIds"]')?.checked);
+      const fragment=document.createDocumentFragment();
+      selected.forEach(row=>fragment.appendChild(row));
+      if(selected.length&&others.length){
+        const heading=document.createElement('div');
+        heading.id='promotionOtherCustomersTitle';
+        heading.className='promotion-customer-group-title';
+        heading.textContent='Otros clientes';
+        fragment.appendChild(heading);
+      }
+      others.forEach(row=>fragment.appendChild(row));
+      list.appendChild(fragment);
       const title=$('#promotionSelectedTitle',root);
-      if(title)title.textContent=selectedCount?'Todos seleccionados ('+selectedCount+')':'Clientes seleccionados';
-      let divider=$('#promotionOtherCustomersTitle',root);
-      if(!divider){divider=document.createElement('div');divider.id='promotionOtherCustomersTitle';divider.className='promotion-customer-group-title';divider.textContent='Otros clientes';}
-      if(selectedCount&&selectedCount<rows.length){rows[selectedCount-1].after(divider);}else divider.remove();
+      if(title)title.textContent=selected.length?'Marcados ('+selected.length+')':'Clientes seleccionados';
     }
     function updatePromotionAudienceSummary(root=modalRoot){
       const audience=$('#promotionAudience',root)?.value||'all';

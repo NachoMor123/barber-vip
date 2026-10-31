@@ -428,6 +428,20 @@ async function removePushSubscription(env, context, endpoint) {
   }
   return { ok: true, enabled: false };
 }
+async function removeCustomerPushSubscriptions(request, env) {
+  const barber = await requireBarber(env, request, false);
+  const data = await parseBody(request);
+  const customerId = String(data.customerId || "");
+  if (!customerId) throw Object.assign(new Error("Falta identificar al cliente."), { status: 400 });
+  const customer = await fsGet(env, "barbers/" + barber.uid + "/customers/" + customerId);
+  if (!customer || customer.data.barberUid !== barber.uid) {
+    throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
+  }
+  const subscriptions = await subscriptionsForBarber(env, barber.uid);
+  const targets = subscriptions.filter(item => item.data.customerId === customerId);
+  for (const item of targets) await fsDelete(env, item.path);
+  return { ok: true, removed: targets.length };
+}
 function cleanPushPayload(data, origin) {
   let url = "/";
   try {
@@ -566,6 +580,7 @@ async function route(request, env) {
   }
   if (path === "/api/push/send" && request.method === "POST") return json(await sendVisitPush(request, env), 200, corsHeaders(request, env));
   if (path === "/api/push/promotion" && request.method === "POST") return json(await sendPromotionPush(request, env), 200, corsHeaders(request, env));
+  if (path === "/api/push/remove-customer" && request.method === "POST") return json(await removeCustomerPushSubscriptions(request, env), 200, corsHeaders(request, env));
   if (path === "/api/customers/reset-password" && request.method === "POST") return json(await resetCustomerPassword(request, env), 200, corsHeaders(request, env));
   return json({ ok: false, error: "Ruta no encontrada." }, 404, corsHeaders(request, env));
 }

@@ -125,6 +125,11 @@ const DAYS=30, PRICE=8000;
 let barberRows=[], selectedBarber=null, isAdmin=false;
 
 function safe(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function paymentDocId(reference){
+  const bytes=new TextEncoder().encode(String(reference).trim().toLowerCase());
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return 'mp-'+[...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('');
+}
 function asDate(value){if(!value)return null;if(typeof value.toDate==='function')return value.toDate();const d=new Date(value);return Number.isNaN(d.getTime())?null:d;}
 function formatDate(value){const d=asDate(value);return d?new Intl.DateTimeFormat('es-AR',{dateStyle:'medium'}).format(d):'Sin fecha';}
 function stateOf(barber){
@@ -195,7 +200,7 @@ el('confirm-payment').addEventListener('click',async()=>{
     const base=selectedBarber.hasPaidSubscription===true&&currentExpiry&&currentExpiry.getTime()>now.getTime()?currentExpiry:now;
     const expiry=new Date(base.getTime()+DAYS*86400000);
     const barberRef=doc(db,'barbers',selectedBarber.uid);
-    const paymentRef=doc(collection(db,'barbers',selectedBarber.uid,'payments'));
+    const paymentId=await paymentDocId(reference);\n    const paymentRef=doc(db,'barbers',selectedBarber.uid,'payments',paymentId);
     const batch=writeBatch(db);
     batch.update(barberRef,{
       hasPaidSubscription:true,

@@ -173,7 +173,7 @@ export function createSparkApi({ firebaseConfig, state }) {
   const invalidate = () => { cachedMe = null; cachedUid = ''; };
 
   async function workerRequest(path, options = {}) {
-    const base = String(WORKER_API_BASE || '').trim().replace(/\\/+$/, '');
+    const base = String(WORKER_API_BASE || '').trim().replace(/\/+$/, '');
     if (!base || base.includes('<COMPLETAR')) {
       throw fail('El servidor auxiliar de Barber VIP todavía no está conectado. Falta terminar la configuración de Cloudflare.', 503);
     }

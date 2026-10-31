@@ -174,6 +174,7 @@ module.exports = async function handler(req, res) {
       await sendPushToBarberCustomers({
         barberUid: ctx.uid,
         customerIds: audience === 'selected' ? customerIds : null,
+        excludedCustomerIds: audience === 'except' ? customerIds : null,
         title: 'Nueva promoción: '+title,
         body: 'Se activó una promoción para vos. Abrí Barber VIP para verla.',
         tag: 'barber-vip-promo-'+id,

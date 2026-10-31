@@ -184,7 +184,7 @@ service cloud.firestore {
           && (isOwner(barberId) || activeCustomerOf(barberId));
         allow list: if false;
         allow create, update: if isOwner(barberId)
-        && exists(barberPath(barberId))
+        && existsAfter(barberPath(barberId))
         && metaId in ['professional', 'promotions'];
         allow delete: if false;
       }

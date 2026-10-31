@@ -11,8 +11,8 @@ Firebase Hosting, Authentication y Firestore siguen siendo la plataforma princip
 
 1. Necesitás una cuenta Cloudflare en el plan Free y entrar desde la carpeta worker.
 2. Mantener el proyecto Firebase existente: barbervip-309dc.
-3. Crear una cuenta de servicio con permisos de Firestore (lectura/escritura) y Firebase Authentication Admin. Descargar el JSON y guardarlo como secreto; nunca subirlo a GitHub.
-4. Usar el mismo par VAPID que tenía la versión original, si se conservaron, para no invalidar suscripciones existentes.
+3. Crear una cuenta de servicio dedicada para Barber VIP en Google Cloud IAM. Concederle solamente estos roles sobre el proyecto `barbervip-309dc`: **Cloud Datastore User** (`roles/datastore.user`) para leer/escribir Firestore y **Firebase Authentication Admin** (`roles/firebaseauth.admin`) para actualizar contraseñas. Esta cuenta tiene acceso administrativo a Authentication, por lo que su clave es muy sensible. Descargar el JSON y guardarlo como secreto de Cloudflare; nunca subirlo a GitHub ni pegarlo en un chat. La API `projects.accounts:update` exige el permiso `firebaseauth.users.update` y un OAuth de Google con alcance `identitytoolkit`.
+4. Usar el mismo par VAPID que tenía la versión original, si se conservaron, para no invalidar suscripciones existentes. Si no están disponibles, generar un par nuevo y pedir a los clientes que vuelvan a activar las notificaciones.
 5. Tener el Access Token y el secreto de webhook de Mercado Pago.
 
 ## Secretos
@@ -61,7 +61,7 @@ Copiar esa URL en WORKER_API_BASE de spark-api.js y volver a publicar Firebase H
 7. Activar promociones para todos, seleccionados y excluidos; comprobar los destinatarios.
 8. Cambiar contraseña de un cliente desde el panel del barbero y probar su nuevo acceso.
 9. Verificar que un barbero no pueda notificar ni cambiar la contraseña de clientes de otro barbero.
-10. Revisar Cloudflare Workers Analytics y Firebase Usage.
+10. Revisar Cloudflare Workers Analytics y Firebase Usage. También probar la baja de un cliente: el Worker debe eliminar sus suscripciones Push para que no reciba promociones futuras.
 
 ## Seguridad y alcance
 

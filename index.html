@@ -1947,28 +1947,8 @@
       }
     }
 
-    async function removeCustomerPushOnLogout() {
-      if (state.role !== 'customer' || !state.user) return;
-      try {
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
-          const registration = await navigator.serviceWorker.getRegistration();
-          const subscription = registration ? await registration.pushManager.getSubscription() : null;
-          if (subscription) {
-            // Remove the server-side delivery target while the Firebase session is still valid.
-            try {
-              await api('/api/push', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
-            } finally {
-              await subscription.unsubscribe().catch(() => false);
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('[Barber VIP] No se pudo desvincular el dispositivo de notificaciones al cerrar sesión.', error?.message || error);
-      } finally {
-        // Preserve the explicit opt-in; next login can silently recreate this device subscription.
-        state.pushEnabled = false;
-      }
-    }
+    async function removeCustomerPushOnLogout(){ state.pushEnabled=false; }
+
 
     async function signOutAndReturn() {
       state.manualLogin = true;

@@ -66,7 +66,6 @@ try {
   second.set(doc(barberDb, 'customerLoginLookup', 'name-hash-001'), {
     uid: customerUid, barberUid, email: customer.loginEmail, active: true, updatedAt: serverTimestamp()
   });
-  second.set(doc(barberDb, 'customerPhoneLookup', 'phone-hash-001'), {
     uid: customerUid, barberUid, active: true, updatedAt: serverTimestamp()
   });
   await assertSucceeds(second.commit());
@@ -79,7 +78,6 @@ try {
   await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customers', 'other')));
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'publicBarberCodes', 'BARBER01')));
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerLoginLookup', 'name-hash-001')));
-  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerPhoneLookup', 'phone-hash-001')));
   console.log('PASS: customer privacy and exact public lookup access');
 
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
@@ -130,7 +128,6 @@ try {
   selfBatch.set(doc(selfDb, 'customerLoginLookup', 'name-hash-002'), {
     uid: selfUid, barberUid, email: selfCustomer.loginEmail, active: true, updatedAt: serverTimestamp()
   });
-  selfBatch.set(doc(selfDb, 'customerPhoneLookup', 'phone-hash-002'), {
     uid: selfUid, barberUid, active: true, updatedAt: serverTimestamp()
   });
   await assertSucceeds(selfBatch.commit());
@@ -144,7 +141,6 @@ try {
   disable.set(doc(barberDb, 'customerLoginLookup', 'name-hash-002'), {
     uid: selfUid, barberUid, email: selfCustomer.loginEmail, active: false, updatedAt: serverTimestamp()
   }, { merge: true });
-  disable.set(doc(barberDb, 'customerPhoneLookup', 'phone-hash-002'), {
     uid: selfUid, barberUid, active: false, updatedAt: serverTimestamp()
   }, { merge: true });
   await assertSucceeds(disable.commit());

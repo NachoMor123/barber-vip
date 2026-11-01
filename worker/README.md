@@ -12,7 +12,7 @@ Firebase Hosting, Authentication y Firestore siguen siendo la plataforma princip
 1. Necesitás una cuenta Cloudflare en el plan Free y entrar desde la carpeta worker.
 2. Mantener el proyecto Firebase existente: barbervip-309dc.
 3. Crear una cuenta de servicio dedicada para Barber VIP en Google Cloud IAM. Concederle solamente estos roles sobre el proyecto `barbervip-309dc`: **Cloud Datastore User** (`roles/datastore.user`) para leer/escribir Firestore y **Firebase Authentication Admin** (`roles/firebaseauth.admin`) para actualizar contraseñas. Esta cuenta tiene acceso administrativo a Authentication, por lo que su clave es muy sensible. Descargar el JSON y guardarlo como secreto de Cloudflare; nunca subirlo a GitHub ni pegarlo en un chat. La API `projects.accounts:update` exige el permiso `firebaseauth.users.update` y un OAuth de Google con alcance `identitytoolkit`.
-4. Usar el mismo par VAPID que tenía la versión original, si se conservaron, para no invalidar suscripciones existentes. Si no están disponibles, generar un par nuevo y pedir a los clientes que vuelvan a activar las notificaciones.
+4. Esta migración usa un par VAPID nuevo: la clave pública y el identificador de contacto ya están en `wrangler.jsonc`; la clave privada se entregó al propietario en un archivo separado y debe cargarse como secreto `VAPID_PRIVATE_KEY`. No subirla al repositorio ni compartirla por chat. Al cambiar del origen Vercel a Firebase Hosting, los clientes deberán activar las notificaciones en el nuevo dominio.
 5. Tener el Access Token y el secreto de webhook de Mercado Pago.
 
 ## Secretos

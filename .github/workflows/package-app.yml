@@ -22,6 +22,10 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm install --no-audit --no-fund
+
       - name: Validate app and Worker
         shell: bash
         run: |
@@ -39,10 +43,6 @@ jobs:
               json.loads(Path(name).read_text(encoding="utf-8"))
           print("Validated app and Firebase/Cloudflare configuration JSON.")
           PY
-
-      - name: Install Worker dependencies
-        working-directory: worker
-        run: npm install --no-audit --no-fund
 
       - name: Build Worker without deploying
         working-directory: worker

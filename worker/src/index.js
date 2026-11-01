@@ -1,3 +1,5 @@
+import { buildPushPayload } from "@block65/webcrypto-web-push";
+
 
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
@@ -455,24 +457,45 @@ function cleanPushPayload(data, origin) {
   };
 }
 async function deliverPush(env, docs, payload) {
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) throw Object.assign(new Error("Las notificaciones no están configuradas."), { status: 503 });
-  const webPushModule = await import("web-push");
-  const webpush = webPushModule.default || webPushModule;
-  webpush.setVapidDetails(String(env.VAPID_SUBJECT || "mailto:soporte@barbervip.app"), env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+    throw Object.assign(new Error("Las notificaciones no están configuradas."), { status: 503 });
+  }
+
+  const vapid = {
+    subject: String(env.VAPID_SUBJECT || "https://barbervip-309dc.web.app"),
+    publicKey: String(env.VAPID_PUBLIC_KEY),
+    privateKey: String(env.VAPID_PRIVATE_KEY)
+  };
   let sent = 0;
-  for (let offset = 0; offset < docs.length; offset += 15) {
-    const results = await Promise.all(docs.slice(offset, offset + 15).map(async doc => {
+
+  // Small batches keep each free-tier Worker invocation within a conservative CPU/subrequest budget.
+  const batchSize = 5;
+  for (let offset = 0; offset < docs.length; offset += batchSize) {
+    const batch = docs.slice(offset, offset + batchSize);
+    const results = await Promise.all(batch.map(async doc => {
       try {
-        await webpush.sendNotification(
-          { endpoint: doc.data.endpoint, keys: doc.data.keys },
-          JSON.stringify(payload),
-          { TTL: 3600, urgency: "normal" }
-        );
+        const subscription = {
+          endpoint: String(doc.data.endpoint || ""),
+          expirationTime: doc.data.expirationTime ?? null,
+          keys: doc.data.keys
+        };
+        const requestInit = await buildPushPayload({
+          data: payload,
+          options: { ttl: 3600, urgency: "normal" }
+        }, subscription, vapid);
+        const response = await fetch(subscription.endpoint, requestInit);
+
+        if (response.status === 404 || response.status === 410) {
+          await fsDelete(env, doc.path).catch(() => {});
+          return false;
+        }
+        if (!response.ok) {
+          console.warn("[Barber VIP push] Delivery failed with status", response.status);
+          return false;
+        }
         return true;
       } catch (error) {
-        const status = Number(error?.statusCode || 0);
-        if (status === 404 || status === 410) await fsDelete(env, doc.path).catch(() => {});
-        else console.warn("[Barber VIP push] Delivery failed with status", status || "unknown");
+        console.warn("[Barber VIP push] Delivery failed:", error?.message || "unknown error");
         return false;
       }
     }));

@@ -18,7 +18,7 @@ Seguir los pasos detallados en [worker/README.md](worker/README.md).
 El Worker necesita:
 - Cuenta de servicio dedicada en Google Cloud IAM, con `roles/datastore.user` y `roles/firebaseauth.admin` sobre el proyecto Firebase.
 - Secretos de Mercado Pago: Access Token y secreto de firma del webhook.
-- Claves VAPID pública y privada del sistema original; reutilizarlas si están disponibles.
+- Clave pública VAPID y `VAPID_SUBJECT` ya están configurados en `worker/wrangler.jsonc`. La clave privada nueva fue entregada al propietario por separado y debe guardarse en Cloudflare como `VAPID_PRIVATE_KEY`; nunca subirla a GitHub ni pegarla en el chat.
 - Firebase Web API Key.
 
 No pegar credenciales en GitHub, en el código, ni en este chat. Guardarlas solamente con `wrangler secret put` dentro de Cloudflare.
@@ -74,7 +74,7 @@ Configurar `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` como secretos del Worker. Par
 - Al dar de baja un cliente, se eliminan sus suscripciones Push.
 - Si el proveedor responde 404/410, la suscripción se elimina.
 
-Usar las mismas claves VAPID del sistema anterior cuando sea posible. Si se generan claves nuevas, los clientes deberán volver a activar notificaciones en su dispositivo.
+Esta migración utiliza un par VAPID nuevo preparado para Firebase Hosting. Al cambiar desde el dominio Vercel al dominio Firebase, cada cliente tendrá que activar las notificaciones en la nueva dirección; la autorización y la suscripción Push pertenecen al origen del sitio.
 
 ## 6. Cambio de contraseña de cliente
 

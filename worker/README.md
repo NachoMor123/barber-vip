@@ -70,3 +70,8 @@ Cada operación iniciada desde la app valida el Firebase ID token y comprueba ro
 Las notificaciones se disparan después de que la operación principal se guardó en Firestore; un fallo de Push nunca debe revertir una visita o una promoción.
 
 La implementación inicial y las pruebas unitarias de lógica pura están en esta carpeta. La validación integral exige secretos reales y ejecutar el Worker en la cuenta Cloudflare del propietario. Todavía no se desplegó ningún Worker ni se modificó el Hosting de producción.
+
+
+## Validación de compilación en Cloudflare
+
+El despliegue de prueba debe usar `npx wrangler deploy --dry-run` desde esta carpeta (`worker`). Este comando valida el paquete sin publicar una versión del Worker.

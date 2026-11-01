@@ -9,7 +9,7 @@
     "COMMERCIAL_ORIGIN": "https://barber-vip-comercial-309dc.web.app",
     "SUBSCRIPTION_PRICE_ARS": "8000",
     "FIREBASE_WEB_API_KEY": "AIzaSyBUx_sCO9FlyUsA4TpYUDLbHTNfl9tKkMw",
-    "VAPID_PUBLIC_KEY": "BIU0MMXEoZYk6mGgVY2NqT5bfuEFNIE35pcGSZw4G__v7WTBU6JtP0y89MFp4pYe7Sw45kwgOHXIdujYy5YFLjM",
-    "VAPID_SUBJECT": "https://barber-vip-three.vercel.app"
+    "VAPID_PUBLIC_KEY": "BL5bnsED-G20Zx8nxrDU3fAJAfrxhsn4HNyxF1UML8RfGU4md4eqJ59RdC2Ded4YK_E2k1JTBt9Aw2nHSqQebqQ",
+    "VAPID_SUBJECT": "https://barbervip-309dc.web.app"
   }
 }

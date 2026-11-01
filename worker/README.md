@@ -17,16 +17,14 @@ Firebase Hosting, Authentication y Firestore siguen siendo la plataforma princip
 
 ## Secretos
 
-wrangler.jsonc contiene sólo configuración no sensible. Cargar los siguientes secretos desde worker:
+wrangler.jsonc contiene la configuración pública de Firebase y VAPID (incluidas VAPID_PUBLIC_KEY y VAPID_SUBJECT). Cargar solamente los siguientes valores privados como secretos desde worker:
 
 ~~~bash
 npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 npx wrangler secret put FIREBASE_WEB_API_KEY
 npx wrangler secret put MP_ACCESS_TOKEN
 npx wrangler secret put MP_WEBHOOK_SECRET
-npx wrangler secret put VAPID_PUBLIC_KEY
 npx wrangler secret put VAPID_PRIVATE_KEY
-npx wrangler secret put VAPID_SUBJECT
 ~~~
 
 FIREBASE_SERVICE_ACCOUNT_JSON es el contenido completo del JSON de la cuenta de servicio, no la ruta. FIREBASE_WEB_API_KEY es la clave pública de configuración web de Firebase.
@@ -62,6 +60,8 @@ Copiar esa URL en WORKER_API_BASE de spark-api.js y volver a publicar Firebase H
 8. Cambiar contraseña de un cliente desde el panel del barbero y probar su nuevo acceso.
 9. Verificar que un barbero no pueda notificar ni cambiar la contraseña de clientes de otro barbero.
 10. Revisar Cloudflare Workers Analytics y Firebase Usage. También probar la baja de un cliente: el Worker debe eliminar sus suscripciones Push para que no reciba promociones futuras.
+
+El envío Push usa `@block65/webcrypto-web-push`, una implementación basada en Web Crypto y `fetch` compatible con Cloudflare Workers, en lugar de la biblioteca Node.js `web-push`.
 
 ## Seguridad y alcance
 

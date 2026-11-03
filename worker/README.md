@@ -53,10 +53,11 @@ El Worker expone GET /health. Antes de publicar, configurar APP_ORIGIN y COMMERC
 npm run deploy
 ~~~
 
-Cloudflare asignará una URL con este formato:
-https://barber-vip-api.<tu-subdominio>.workers.dev
+El Worker que ya está activo para Barber VIP responde en:
+https://barber-vip.barbervip.workers.dev
 
-Copiar esa URL en WORKER_API_BASE de spark-api.js y volver a publicar Firebase Hosting.
+La aplicación utiliza esa dirección en worker-config.js. La ruta de webhook que debe utilizarse es:
+https://barber-vip.barbervip.workers.dev/api/mercadopago-webhook.
 
 ## Pruebas funcionales obligatorias
 
@@ -79,7 +80,7 @@ Cada operación iniciada desde la app valida el Firebase ID token y comprueba ro
 
 Las notificaciones se disparan después de que la operación principal se guardó en Firestore; un fallo de Push nunca debe revertir una visita o una promoción.
 
-La implementación inicial y las pruebas unitarias de lógica pura están en esta carpeta. La validación integral exige secretos reales y ejecutar el Worker en la cuenta Cloudflare del propietario. Todavía no se desplegó ningún Worker ni se modificó el Hosting de producción.
+El Worker productivo existente responde en https://barber-vip.barbervip.workers.dev según la comprobación de salud comunicada por el propietario. Los cambios de integración de esta rama todavía requieren revisión y no deben promoverse a producción hasta aprobar las pruebas. Firebase Hosting no reemplaza todavía al frontend activo de Vercel.
 
 
 ## Validación de compilación en Cloudflare

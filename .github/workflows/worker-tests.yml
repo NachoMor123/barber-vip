@@ -3,7 +3,7 @@ on:
   push:
     branches: [hybrid-cloudflare]
   pull_request:
-    branches: [main]
+    branches: [main, hybrid-cloudflare]
     paths:
       - 'worker/**'
       - '.github/workflows/worker-tests.yml'

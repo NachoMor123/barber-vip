@@ -255,15 +255,33 @@ async function validMercadoPagoSignature(request, paymentId, secret) {
 function appOrigin(env) {
   return String(env.APP_ORIGIN || "https://barbervip-309dc.web.app").replace(/\/+$/, "");
 }
+function isVercelPreviewOrigin(origin, env) {
+  const configuredPreview = String(env.VERCEL_PREVIEW_ORIGIN || "");
+  if (configuredPreview && origin === configuredPreview) return true;
+
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:" &&
+      /^barber-vip-git-[a-z0-9-]+-im565991-4576[.]vercel[.]app$/i.test(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
 function originAllowed(request, env) {
   const origin = request.headers.get("origin");
   if (!origin) return true;
   const allowed = [
     appOrigin(env),
-    String(env.COMMERCIAL_ORIGIN || "https://barber-vip-comercial-309dc.web.app").replace(/\/+$/, ""),
+    String(env.COMMERCIAL_ORIGIN || "https://barber-vip-comercial-309dc.web.app"),
+    String(env.VERCEL_APP_ORIGIN || "https://barber-vip-three.vercel.app"),
+    String(env.VERCEL_PREVIEW_ORIGIN || ""),
     "http://localhost:5000", "http://127.0.0.1:5000"
-  ];
-  return allowed.includes(origin);
+  ].filter(Boolean);
+  return allowed.includes(origin) || isVercelPreviewOrigin(origin, env);
+}
+function frontendReturnOrigin(request, env) {
+  const origin = String(request.headers.get("origin") || "");
+  return origin && originAllowed(request, env) ? origin : appOrigin(env);
 }
 function corsHeaders(request, env) {
   const origin = request.headers.get("origin") || "";
@@ -296,7 +314,14 @@ async function createPaymentPreference(request, env) {
   if (skipTrial && paid) throw Object.assign(new Error("Tu cuenta ya registra un pago."), { status: 409 });
   const price = Number.parseInt(env.SUBSCRIPTION_PRICE_ARS || "8000", 10);
   if (!Number.isFinite(price) || price < 1 || !env.MP_ACCESS_TOKEN) throw new Error("La configuración de Mercado Pago está incompleta.");
-  const origin = appOrigin(env);
+  const requestOrigin = request.headers.get("origin") || "";
+  if (isVercelPreviewOrigin(requestOrigin, env) && String(env.VERCEL_PREVIEW_PAYMENTS_ENABLED || "false").toLowerCase() !== "true") {
+    throw Object.assign(
+      new Error("Los pagos están temporalmente deshabilitados en esta vista previa para evitar cobros reales."),
+      { status: 403 }
+    );
+  }
+  const origin = frontendReturnOrigin(request, env);
   const workerOrigin = new URL(request.url).origin;
   const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "POST",
@@ -629,4 +654,8 @@ export default {
   }
 };
 
-export { renewalExpiry, planCanOperate, subscriptionStatus, safeEqual, validMercadoPagoSignature, encodeValue, decodeValue };
+export {
+  renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
+  validMercadoPagoSignature, encodeValue, decodeValue,
+  originAllowed, frontendReturnOrigin, isVercelPreviewOrigin
+};

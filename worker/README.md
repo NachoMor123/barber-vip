@@ -21,13 +21,23 @@ wrangler.jsonc contiene la configuración pública de Firebase y VAPID (incluida
 
 ~~~bash
 npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
-npx wrangler secret put FIREBASE_WEB_API_KEY
 npx wrangler secret put MP_ACCESS_TOKEN
 npx wrangler secret put MP_WEBHOOK_SECRET
 npx wrangler secret put VAPID_PRIVATE_KEY
 ~~~
 
 FIREBASE_SERVICE_ACCOUNT_JSON es el contenido completo del JSON de la cuenta de servicio, no la ruta. FIREBASE_WEB_API_KEY es la clave pública de configuración web de Firebase.
+
+
+## Frontend Vercel y seguridad de pagos
+
+- El Worker mantiene Firebase Hosting como origen de retorno predeterminado mediante APP_ORIGIN.
+- Se permiten el dominio Vercel de producción y los previews del proyecto Barber VIP. El patrón de previews está limitado al nombre del proyecto y al identificador de equipo Vercel configurado.
+- worker-config.js apunta al Worker existente: https://barber-vip.barbervip.workers.dev.
+- Checkout vuelve al origen HTTPS autorizado que inició la solicitud; el webhook usa el endpoint del propio Worker.
+- Las solicitudes de creación de pagos originadas desde Vercel Preview se bloquean por defecto con VERCEL_PREVIEW_PAYMENTS_ENABLED=false. Esto evita crear checkouts con credenciales productivas durante pruebas de interfaz.
+- Para probar cobros, se debe usar un Worker de pruebas separado con Access Token y secreto de webhook de prueba. No reemplazar los secretos productivos por credenciales de prueba.
+- FIREBASE_WEB_API_KEY es una configuración pública ya declarada en wrangler.jsonc; no se carga como secreto.
 
 ## Pruebas y despliegue
 

@@ -1,6 +1,6 @@
 # Puesta en marcha — Barber VIP híbrido (Firebase Spark + Cloudflare Workers)
 
-Esta guía describe el orden seguro de configuración. La versión preparada en GitHub todavía no está publicada. No desactivar Vercel ni reemplazar enlaces hasta completar todas las pruebas.
+Esta guía describe el orden seguro de configuración. El Worker existente responde en https://barber-vip.barbervip.workers.dev; los cambios nuevos de integración siguen en revisión y no deben fusionarse ni promoverse hasta completar las pruebas. No desactivar Vercel ni reemplazar enlaces.
 
 ## 1. Conservar el proyecto actual
 
@@ -35,7 +35,7 @@ Una vez configurados los secretos, desplegar:
 npx wrangler deploy
 ```
 
-Cloudflare devuelve una dirección similar a `https://barber-vip-api.<tu-subdominio>.workers.dev`. Copiar esa dirección en `worker-config.js` (sin una barra final). Es el único valor que falta en ese archivo.
+La dirección existente del Worker es `https://barber-vip.barbervip.workers.dev`. La rama de integración configura esa dirección en `worker-config.js`; no usar el nombre anterior `barber-vip-api.<tu-subdominio>.workers.dev`.
 
 ## 3. Hosting de Firebase
 
@@ -63,7 +63,7 @@ La web comercial está en el repositorio separado `NachoMor123/barber-vip-web`. 
 - Cada pago aprobado suma 30 días al vencimiento actual (o empieza desde la aprobación si ya había vencido).
 - No se configura débito automático ni una suscripción recurrente.
 
-Configurar `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` como secretos del Worker. Para probar, usar credenciales de prueba de Mercado Pago antes de usar producción.
+Configurar `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` como secretos del Worker. Las credenciales productivas deben permanecer únicamente en el Worker productivo. Para probar pagos, crear un Worker de staging separado con credenciales de prueba y su propio webhook; no reemplazar temporalmente los secretos de producción.
 
 ## 5. Notificaciones Push
 

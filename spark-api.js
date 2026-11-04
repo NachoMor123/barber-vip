@@ -657,7 +657,17 @@ export function createSparkApi({ firebaseConfig, state }) {
       const snapshot = isCustomer
         ? await getDocs(query(ref, where('active', '==', true), limit(100)))
         : await getDocs(query(ref, limit(100)));
-      const raw = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const raw = snapshot.docs.map(d => {
+        const promotion = { id: d.id, ...d.data() };
+        // Normalize Firestore Timestamp values before they reach local cache or UI.
+        return {
+          ...promotion,
+          startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
+          endsAt: dateOf(promotion.endsAt)?.toISOString() || null,
+          createdAt: dateOf(promotion.createdAt)?.toISOString() || null,
+          updatedAt: dateOf(promotion.updatedAt)?.toISOString() || null
+        };
+      });
       const now = Date.now();
       const visible = isCustomer ? raw.filter(p => p.audience === 'all' || (p.audience === 'except' && !(p.customerIds || []).includes(currentUid())) || (p.audience === 'selected' && (p.customerIds || []).includes(currentUid()))) : raw;
       const next = visible.filter(p => p.active !== false && p.startsAt && dateOf(p.startsAt)?.getTime() > now).sort((a,b)=>dateOf(a.startsAt)-dateOf(b.startsAt))[0]?.startsAt || null;

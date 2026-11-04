@@ -938,7 +938,9 @@
     }
 
         const SUBSCRIPTION_PRICE_ARS = 8000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
-    const CUSTOMER_APP_URL = `${window.location.origin}/`;
+    // Always share the canonical production Firebase Hosting origin, even when an
+    // administrator temporarily opens a preview or backup copy of the app.
+    const CUSTOMER_APP_URL = 'https://barbervip-309dc.web.app/';
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
@@ -2438,7 +2440,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
-        else if(action==='nav'){const previousSection=state.section,nextSection=button.dataset.section;state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&!state.customersLoaded)pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
+        else if(action==='nav'){const previousSection=state.section,nextSection=button.dataset.section;state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients')pendingLoad=ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));if(state.role==='barber'&&state.section==='promotions'&&(!state.promotionsLoaded||state.promotionsDirty))pendingLoad=loadPromotions();renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='enable-push-notifications'){await enableCustomerPush(button);}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}

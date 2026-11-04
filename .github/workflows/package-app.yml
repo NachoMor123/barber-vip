@@ -1,10 +1,10 @@
-name: Package Barber VIP app without commercial website
+name: Package Barber VIP hybrid app
 
 on:
   push:
-    branches: [main]
+    branches: [main, hybrid-cloudflare]
   pull_request:
-    branches: [main]
+    branches: [main, hybrid-cloudflare]
   workflow_dispatch:
 
 permissions:
@@ -17,45 +17,55 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Validate API, library and inline application JavaScript
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm install --no-audit --no-fund
+
+      - name: Validate app and Worker
         shell: bash
         run: |
           set -euo pipefail
           find api lib -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --input-type=module --check < spark-api.js
+          node --input-type=module --check < worker-config.js
+          node --check worker/src/index.js
+          node worker/test/check-app-syntax.mjs
+          node worker/test/check-payment-flow.mjs
           node --test
           python3 - <<'PY'
-          import json, re
+          import json
           from pathlib import Path
-          for name in ("package.json", "manifest.webmanifest", "vercel.json"):
+          for name in ("package.json", "manifest.webmanifest", "firebase.json", ".firebaserc", "worker/wrangler.jsonc"):
               json.loads(Path(name).read_text(encoding="utf-8"))
-          html = Path("index.html").read_text(encoding="utf-8")
-          scripts = re.findall(r"<script[^>]*>(.*?)</script\s*>", html, flags=re.IGNORECASE | re.DOTALL)
-          inline = [script for script in scripts if script.strip()]
-          if not inline:
-              raise SystemExit("No inline application JavaScript was found.")
-          Path("/tmp/barber-vip-inline.mjs").write_text(max(inline, key=len), encoding="utf-8")
-          print(f"Validated JSON and extracted {len(inline)} inline script(s).")
+          print("Validated app and Firebase/Cloudflare configuration JSON.")
           PY
-          node --check /tmp/barber-vip-inline.mjs
 
-      - name: Assemble application-only folder
+      - name: Build Worker without deploying
+        working-directory: worker
+        run: npx wrangler deploy --dry-run
+
+      - name: Assemble hybrid application package
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/barber-vip-app"
-          cp index.html manifest.webmanifest sw.js package.json firestore.rules vercel.json env.example README.md invitacion.html "$RUNNER_TEMP/barber-vip-app/"
-          cp -R api lib assets tests "$RUNNER_TEMP/barber-vip-app/"
-          if find "$RUNNER_TEMP/barber-vip-app" -iname '*comercial*' | grep -q .; then
-            echo "Unexpected commercial file found in app package" >&2
-            exit 1
-          fi
-          cd "$RUNNER_TEMP/barber-vip-app"
-          zip -qr "$GITHUB_WORKSPACE/BarberVIP-App.zip" .
+          DEST="$RUNNER_TEMP/barber-vip-hybrid"
+          mkdir -p "$DEST"
+          cp index.html manifest.webmanifest sw.js firebase.json .firebaserc firestore.rules \
+            spark-api.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
+          cp -R assets worker "$DEST/"
+          rm -rf "$DEST/worker/node_modules" "$DEST/worker/.wrangler" "$DEST/worker/.dev.vars"
+          cd "$DEST"
+          zip -qr "$GITHUB_WORKSPACE/BarberVIP-Hybrid.zip" .
 
-      - name: Upload clean app ZIP
+      - name: Upload hybrid app ZIP
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: BarberVIP-App
-          path: BarberVIP-App.zip
+          name: BarberVIP-Hybrid
+          path: BarberVIP-Hybrid.zip
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14

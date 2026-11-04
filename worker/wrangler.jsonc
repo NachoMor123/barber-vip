@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "barber-vip",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-31",
+  "vars": {
+    "FIREBASE_PROJECT_ID": "barbervip-309dc",
+    "APP_ORIGIN": "https://barbervip-309dc.web.app",
+    "COMMERCIAL_ORIGIN": "https://barber-vip-comercial-309dc.web.app",
+    "SUBSCRIPTION_PRICE_ARS": "8000",
+    "VERCEL_APP_ORIGIN": "https://barber-vip-three.vercel.app",
+    "VERCEL_PREVIEW_ORIGIN": "https://barber-vip-git-hybrid-cloudflare-im565991-4576.vercel.app",
+    "VERCEL_PREVIEW_PAYMENTS_ENABLED": "false",
+    "FIREBASE_WEB_API_KEY": "AIzaSyBUx_sCO9FlyUsA4TpYUDLbHTNfl9tKkMw",
+    "VAPID_PUBLIC_KEY": "BL5bnsED-G20Zx8nxrDU3fAJAfrxhsn4HNyxF1UML8RfGU4md4eqJ59RdC2Ded4YK_E2k1JTBt9Aw2nHSqQebqQ",
+    "VAPID_SUBJECT": "https://barbervip-309dc.web.app"
+  }
+}

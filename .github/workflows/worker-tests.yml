@@ -1,0 +1,41 @@
+name: Cloudflare Worker tests
+on:
+  push:
+    branches: [hybrid-cloudflare]
+  pull_request:
+    branches: [main, hybrid-cloudflare]
+    paths:
+      - 'worker/**'
+      - 'index.html'
+      - 'spark-api.js'
+      - 'worker-config.js'
+      - 'firestore.rules'
+      - 'firebase.json'
+      - 'tests/**'
+      - '.github/workflows/worker-tests.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm install --no-audit --no-fund
+      - name: Run Worker tests
+        working-directory: worker
+        run: npm test
+      - name: Check Worker syntax
+        working-directory: worker
+        run: node --check src/index.js
+      - name: Build Worker without deploying
+        working-directory: worker
+        run: npx wrangler deploy --dry-run
+      - name: Check Firebase Spark app and Worker client-side syntax
+        working-directory: .
+        run: |
+          node --input-type=module --check < spark-api.js
+          node worker/test/check-app-syntax.mjs
+          node worker/test/check-payment-flow.mjs

@@ -807,6 +807,7 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+    import { createSparkApi } from './spark-api.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
     import { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, query, orderBy, limit, disableNetwork, enableNetwork } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
@@ -823,7 +824,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:2500, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, promotionMetaUnsubscribe:null, promotions:[], promotionsLoaded:false, promotionsLoading:false, promotionsLoadPromise:null, promotionsDirty:true, promoMetaVersion:'', promoNextScheduledAt:null, promotionSyncSequence:0, promoMetaListenerFailed:false, relativeTimeTimer:null, promoTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', customerRewardFilter:'all',  unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, pushEnabled:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
@@ -940,24 +941,22 @@
       return `<section class="client-info-card service-list-card"><span class="eyebrow">SERVICIOS PARA VOS</span><h3>Servicios y precios</h3><div class="customer-services-list">${services.map(service=>`<div class="service-line"><strong>${escapeHtml(service.name)}</strong><span>${service.price===null?'Consultar precio':money(service.price)}</span></div>`).join('')}</div></section>`;
     }
 
-        const SUBSCRIPTION_PRICE_ARS = 5000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
-    const CUSTOMER_APP_URL = 'https://barber-vip-three.vercel.app/';
+        const SUBSCRIPTION_PRICE_ARS = 8000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
+    const CUSTOMER_APP_URL = `${window.location.origin}/`;
     function customerSignupUrl(){ return CUSTOMER_APP_URL; }
     function pushPreferenceKey(){return 'barberVipPushEnabled:'+String(state.user?.uid||'anonymous');}
     function customerPushSettingsMarkup(){
       if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))return '';
-      let storedPreference=false;try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-      const permission=Notification.permission,active=permission==='granted'&&(state.pushEnabled===true||storedPreference);
-      if(active)return '';
-      const denied=permission==='denied',iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
+      const permission=Notification.permission;
+      const active=permission==='granted'&&state.pushEnabled===true;
+      if(active)return '<section class="push-notification-card enabled"><div class="push-notification-main"><span class="push-notification-icon">🔔</span><div><strong>Notificaciones activadas</strong><p>Vas a recibir avisos cuando se registre una visita o tu profesional publique una promoción, incluso con Barber VIP cerrada.</p></div></div></section>';
+      const denied=permission==='denied';
+      const iosNeedsInstall=/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp();
       const description=denied?'El navegador bloqueó los avisos. Habilitá las notificaciones desde los permisos de este sitio.'
         :iosNeedsInstall?'En iPhone o iPad, agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono para activar avisos.'
-        :'Recibí avisos en tu dispositivo cuando se registre una visita, alcances un hito o se active una promoción, aunque cierres Barber VIP.';
-      const action=`<button class="btn btn-primary" type="button" data-action="enable-push-notifications" ${(denied||iosNeedsInstall)?'disabled':''}>${denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones'}</button>`;
-      return `<section class="push-notification-card ${active?'enabled':''}" aria-label="Notificaciones">
-        <div class="push-notification-main"><span class="push-notification-icon" aria-hidden="true">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>${description}</p>${denied?'<small class="push-notification-note">Después de cambiar el permiso en el navegador, volvé a esta pantalla.</small>':''}</div></div>
-        ${action}
-      </section>`;
+        :'Recibí avisos de visitas, hitos y promociones aunque cierres Barber VIP.';
+      const disabled=denied||iosNeedsInstall;
+      return '<section class="push-notification-card"><div class="push-notification-main"><span class="push-notification-icon">🔔</span><div><strong>Notificaciones de tu tarjeta</strong><p>'+escapeHtml(description)+'</p></div></div><button class="btn btn-primary" type="button" data-action="enable-push-notifications" '+(disabled?'disabled':'')+'>'+(denied?'Permiso bloqueado':iosNeedsInstall?'Abrí desde el ícono':'Activar notificaciones')+'</button></section>';
     }
     function base64UrlToUint8Array(value){
       const normalized=String(value||'').replace(/-/g,'+').replace(/_/g,'/');
@@ -976,89 +975,51 @@
       if(state.role!=='customer'||!state.user||typeof window.Notification==='undefined'||!('serviceWorker' in navigator)||!('PushManager' in window))return;
       let storedPreference=false;
       try{storedPreference=localStorage.getItem(pushPreferenceKey())==='true';}catch(_){}
-      if(!storedPreference||Notification.permission!=='granted'){
-        state.pushEnabled=false;
-        if(state.role==='customer'&&state.user)renderApp();
-        return;
-      }
+      if(!storedPreference||Notification.permission!=='granted'){state.pushEnabled=false;return;}
       try{
         const registration=await navigator.serviceWorker.ready;
         let subscription=await registration.pushManager.getSubscription();
         const config=await api('/api/push');
-        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora.');
+        if(!config?.enabled||!config.publicKey)throw new Error('Las notificaciones todavía no están configuradas.');
         if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
           try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
           await subscription.unsubscribe().catch(()=>false);
           subscription=null;
         }
-        // Logout removes the server target and browser subscription, but keeps this
-        // device's explicit opt-in. Restore it silently after the next authenticated login.
         if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
         await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
         state.pushEnabled=true;
         if(state.role==='customer'&&state.user)renderApp();
-      }catch(error){
-        state.pushEnabled=false;
-        // Keep the local opt-in: a temporary failure must not ask for permission again.
-        console.warn('[Barber VIP] No se pudo restaurar la suscripción push.',error?.message||error);
-        if(state.role==='customer'&&state.user)renderApp();
-      }
+      }catch(error){state.pushEnabled=false;console.warn('[Barber VIP] No se pudo restaurar la suscripción push.',error?.message||error);}
     }
     async function enableCustomerPush(button){
       const original=button?.textContent||'Activar notificaciones';
-      let createdHere=false,subscription=null,savedOnServer=false;
       if(button){button.disabled=true;button.textContent='Activando avisos…';}
       try{
         if(state.role!=='customer'||!state.user)throw new Error('Ingresá con tu cuenta de cliente para activar los avisos.');
-        if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))throw new Error('Este navegador no admite notificaciones push. Probá desde Chrome o un navegador actualizado.');
-        if(/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp())throw new Error('En iPhone o iPad, primero agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono.');
-        if(state.pushEnabled&&Notification.permission==='granted'){
-          return;
-        }
+        if(typeof window.Notification==='undefined'||!('PushManager' in window)||!('serviceWorker' in navigator))throw new Error('Este navegador no admite notificaciones Push.');
+        if(/iPad|iPhone|iPod/i.test(navigator.userAgent)&&!isStandaloneApp())throw new Error('Primero agregá Barber VIP a la pantalla de inicio y abrila desde ese ícono.');
         const config=await api('/api/push');
-        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones no está disponible ahora. No se activó ningún aviso. Intentá de nuevo más tarde.');
+        if(!config?.enabled||!config.publicKey)throw new Error('El servicio de notificaciones todavía no está configurado.');
         let permission=Notification.permission;
         if(permission==='default')permission=await Notification.requestPermission();
-        if(permission!=='granted')throw new Error(permission==='denied'
-          ?'El navegador bloqueó las notificaciones. Habilitalas en los permisos del sitio y volvé a intentarlo.'
-          :'No se concedió permiso para mostrar notificaciones. No se activó ningún aviso.');
-        let readyTimer;
-        let registration;
-        try{
-          registration=await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(new Error('Barber VIP todavía no pudo preparar el servicio de notificaciones. Recargá la app y probá otra vez.')),15000);})
-          ]);
-        }finally{if(readyTimer)clearTimeout(readyTimer);}
-        subscription=await registration.pushManager.getSubscription();
+        if(permission!=='granted')throw new Error(permission==='denied'?'El navegador bloqueó las notificaciones. Habilitalas en los permisos del sitio.':'No se concedió permiso para mostrar avisos.');
+        const registration=await navigator.serviceWorker.ready;
+        let subscription=await registration.pushManager.getSubscription();
         if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
-          // Remove a prior-key subscription before creating one compatible with the current server key.
           try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
           await subscription.unsubscribe().catch(()=>false);
           subscription=null;
         }
-        if(!subscription){
-          subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
-          createdHere=true;
-        }
+        if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
         await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
-        savedOnServer=true;
         state.pushEnabled=true;
         try{localStorage.setItem(pushPreferenceKey(),'true');}catch(_){}
         renderApp();
+        toast('Notificaciones activadas. Vas a recibir avisos de visitas y promociones.','success');
       }catch(error){
-        if(createdHere&&subscription&&!savedOnServer){
-          try{await subscription.unsubscribe();}catch(_){}
-        }
         state.pushEnabled=false;
-        try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
-        let message;
-        if(error?.name==='NotAllowedError')message='El navegador rechazó la suscripción. Revisá los permisos de notificaciones del sitio y volvé a intentarlo.';
-        else if(error?.name==='InvalidStateError')message='El servicio de notificaciones quedó en un estado incorrecto. Cerrá y volvé a abrir Barber VIP, y probá otra vez.';
-        else if(error?.name==='AbortError')message='El navegador no pudo completar la activación de notificaciones. Revisá la conexión e intentá de nuevo.';
-        else message=userFacingError(error,'No se pudieron activar las notificaciones. Revisá el permiso y tu conexión, e intentá de nuevo.');
-        toast(message,'error');
-        if(state.role==='customer'&&state.user)renderApp();
+        toast(userFacingError(error,'No se pudieron activar las notificaciones. Revisá el permiso y tu conexión.'),'error');
       }finally{
         if(button?.isConnected){button.disabled=false;button.textContent=original;}
       }
@@ -1232,7 +1193,7 @@
         doc.setTextColor(11,56,116);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text(code,W/2,y+150,{align:'center'});
         doc.setTextColor(75,99,128);doc.setFont('helvetica','normal');doc.setFontSize(8);
         doc.text('BARBER VIP · ACCESO PARA CLIENTES',W/2,280,{align:'center'});
-        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text('barber-vip-three.vercel.app',W/2,287,{align:'center'});
+        doc.setTextColor(112,133,157);doc.setFontSize(7);doc.text(window.location.host,W/2,287,{align:'center'});
         doc.save('Barber-VIP-'+safePosterFilename(name)+'.pdf');
         toast('Cartel PDF descargado. Ya podés imprimirlo en tu local.','success');
       } catch(error) {
@@ -1321,37 +1282,7 @@
       if(!ok)throw new Error('El navegador no permitió copiar. Mantené presionado el texto para copiarlo manualmente.');
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
-    const api = async (url, options={}) => {
-      const headers = {'Content-Type':'application/json',...(options.headers||{})};
-      const current = state.auth?.currentUser;
-      if(current){
-        try{const token=await current.getIdToken();headers.Authorization=`Bearer ${token}`;}
-        catch(error){
-          const failure=new Error(navigator.onLine===false||error?.code==='auth/network-request-failed'?'No se pudo validar la sesión por un problema de conexión. Volvé a intentar.':'No se pudo validar tu sesión. Volvé a ingresar e intentá nuevamente.');
-          failure.retryable=navigator.onLine===false||error?.code==='auth/network-request-failed';failure.cause=error;throw failure;
-        }
-      }
-      let response;
-      try{response=await fetch(url,{...options,headers,cache:'no-store'});}
-      catch(error){
-        const failure=new Error(navigator.onLine===false?'Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.':'No pudimos conectar con el servidor de Barber VIP. Revisá tu conexión e intentá nuevamente.');
-        failure.retryable=true;failure.cause=error;throw failure;
-      }
-      let raw='';
-      try{raw=await response.text();}
-      catch(error){const failure=new Error('La conexión se interrumpió mientras se recibía la respuesta. Volvé a intentar.');failure.retryable=true;failure.cause=error;throw failure;}
-      let data=null;
-      try{data=raw?JSON.parse(raw):null;}catch(_){}
-      if(!data||typeof data!=='object'){
-        const failure=new Error(!response.ok?(response.status>=500?'El servidor de Barber VIP no pudo completar la operación. Probá de nuevo en unos minutos.':`La solicitud no se pudo completar (código ${response.status}).`):'El servidor devolvió una respuesta inesperada. Recargá Barber VIP y volvé a intentar.');
-        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
-      }
-      if(!response.ok||data.ok===false){
-        const failure=new Error(data.error||`La solicitud no se pudo completar (código ${response.status}).`);
-        failure.status=response.status;failure.retryable=response.status>=500||response.status===429;throw failure;
-      }
-      return data;
-    };
+    const api = createSparkApi({ firebaseConfig, state });
     const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];try{state.customersUnsubscribe?.();}catch(_){}state.customersUnsubscribe=null;try{state.promotionMetaUnsubscribe?.();}catch(_){}state.promotionMetaUnsubscribe=null;state.customersLoaded=false;state.customersListenerStarted=false;state.customersLoadPromise=null; };
     const cleanupContext = () => { clearListeners(); state.promoMetaVersion=''; state.promotionSyncSequence=(state.promotionSyncSequence||0)+1;  if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.promotions=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
@@ -1543,7 +1474,7 @@
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function subscriptionBanner() {
       const s=subStatus(); const cls=s.status; const message=s.status==='active'?(s.isTrial?`Tu prueba gratuita sigue activa por ${s.daysRemaining} día${s.daysRemaining===1?'':'s'}. Podés activar el plan pago cuando quieras.`:`Tu cuenta está activa. Quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} antes del período de gracia.`):s.status==='grace'?`Te quedan ${s.daysRemaining} día${s.daysRemaining===1?'':'s'} de servicio. Pagá para extender el acceso por 30 días.`:s.trialEnded?'Tu prueba gratuita terminó. Renovala para seguir usando Barber VIP.':'La cuenta está vencida o todavía no tiene fecha de vencimiento. No se pueden registrar visitas hasta renovarla.';
-      return `<div class="subscription-banner ${cls}"><div class="banner-icon">${cls==='active'?'✦':cls==='grace'?'◷':'!'}</div><div style="flex:1;min-width:0"><strong>${escapeHtml(s.label)}</strong><p>${escapeHtml(message)}</p></div><div class="banner-actions"><button class="btn ${cls==='active'?'btn-ghost':'btn-primary'} btn-mini" data-action="pay">${cls==='active'?(s.isTrial?'Ver plan · pagar ahora':'Ver plan'):`Continuar con Mercado Pago ↗`}</button></div></div>`;
+      return `<div class="subscription-banner ${cls}"><div class="banner-icon">${cls==='active'?'✦':cls==='grace'?'◷':'!'}</div><div style="flex:1;min-width:0"><strong>${escapeHtml(s.label)}</strong><p>${escapeHtml(message)}</p></div><div class="banner-actions"><button class="btn ${cls==='active'?'btn-ghost':'btn-primary'} btn-mini" data-action="pay">${cls==='active'?(s.isTrial?'Ver plan · pagar ahora':'Ver plan'):`Ver cómo renovar ↗`}</button></div></div>`;
     }
     function metricCard(label,value,icon,caption='') { return `<div class="metric-card"><div class="metric-head"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-caption">${caption}</div></div>`; }
     function dashboardView() {
@@ -1684,7 +1615,7 @@
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Un único ciclo editable para todos los clientes. Las promociones comerciales se configuran por separado.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
-        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Pagar ${money(price)} con Mercado Pago ↗`}</button></div>
+        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Ver instrucciones para renovar`}</button></div>
 <div class="subscription-extra-actions">
   <div class="subscription-resource">
     <div><strong>Guía PIP · Estrategias de uso</strong><small>13 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
@@ -2045,7 +1976,16 @@
         }
       }
       const payment=new URLSearchParams(location.search).get('payment');
-      if(payment){history.replaceState({},'',location.pathname);setTimeout(()=>{if(payment==='success')toast('Volviste de Mercado Pago. Estamos verificando el pago; el estado se actualiza al confirmar el webhook.','success');else if(payment==='pending')toast('El pago quedó pendiente. El acceso se actualiza cuando Mercado Pago lo apruebe.');else if(state.role==='barber'&&subStatus().status==='active')toast('Tu cuenta sigue activa. No necesitás pagar nuevamente ahora.','success');else toast('El pago no se completó. Podés volver a intentarlo desde Configuración.','error');},300);}
+      if(payment){
+        history.replaceState({},'',location.pathname);
+        const messages={
+          success:['Mercado Pago recibió tu pago. Estamos esperando la confirmación segura para activar los 30 días.','success'],
+          pending:['Tu pago quedó pendiente en Mercado Pago. El plan se activará cuando se confirme.',''],
+          failure:['El pago no se completó. No se modificó tu suscripción. Podés volver a intentarlo.','error']
+        };
+        const [message,type]=messages[payment]||['Volviste de Mercado Pago. Revisá el estado de tu suscripción.',''];
+        setTimeout(()=>toast(message,type),300);
+      }
     }
     async function resumeSession(user) {
       if(!user||state.manualLogin||!firebaseReady)return;
@@ -2074,28 +2014,8 @@
       }
     }
 
-    async function removeCustomerPushOnLogout() {
-      if (state.role !== 'customer' || !state.user) return;
-      try {
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
-          const registration = await navigator.serviceWorker.getRegistration();
-          const subscription = registration ? await registration.pushManager.getSubscription() : null;
-          if (subscription) {
-            // Remove the server-side delivery target while the Firebase session is still valid.
-            try {
-              await api('/api/push', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
-            } finally {
-              await subscription.unsubscribe().catch(() => false);
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('[Barber VIP] No se pudo desvincular el dispositivo de notificaciones al cerrar sesión.', error?.message || error);
-      } finally {
-        // Preserve the explicit opt-in; next login can silently recreate this device subscription.
-        state.pushEnabled = false;
-      }
-    }
+    async function removeCustomerPushOnLogout(){ state.pushEnabled=false; }
+
 
     async function signOutAndReturn() {
       state.manualLogin = true;
@@ -2217,33 +2137,39 @@
       catch(error){toast(userFacingError(error,'No se pudo guardar el programa de premios. Revisá la conexión e intentá nuevamente.'),'error');if(btn){btn.disabled=false;btn.textContent='Guardar programa de premios';}}
     }
     function openPlanInfo(){
-      const s=subStatus();
-      if(s.status==='active'||s.isTrial){
-        const trial=s.isTrial;
-        modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${trial?'Estás en tu prueba gratuita':'Tu cuenta está activa'}</h2><p>${trial?'Si querés, activá el plan pago ahora. Te llevamos a Mercado Pago y el cobro solo ocurre si confirmás allí; abrirlo no te cobra. No hay débitos automáticos ni renovaciones automáticas.':'No necesitás pagar para seguir usando el plan actual.'}</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>✅ ${trial?'Prueba gratuita · quedan '+s.daysRemaining+' día'+(s.daysRemaining===1?'':'s'):'Plan de 30 días'} · ${money(subscriptionPrice())}</strong><p>Tu servicio está habilitado${s.expiresAt?` hasta el ${escapeHtml(dateLabel(s.expiresAt))}`:''}.${trial?' Si pagás ahora, la prueba se reemplaza por 30 días desde la aprobación. El cobro solo ocurre si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.':' El pago se extiende cuando corresponda renovar. El cobro solo ocurre si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>${trial?'<button class="btn btn-primary" data-action="start-trial-payment">Continuar con Mercado Pago ↗</button>':''}</div></section></div>`;
-        return;
+      const status=subStatus();
+      const trial=status.isTrial===true;
+      const expired=status.status==='suspended';
+      const canCheckout=trial||expired||status.status==='grace';
+      const title=trial?'Tu prueba gratuita está activa':status.status==='grace'?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
+      const statusText=trial?'Tenés 7 días de prueba gratuita.':status.status==='grace'?'Tu suscripción está en período de gracia.':expired?'Para volver a registrar visitas y administrar clientes, necesitás renovar tu plan.':'Tu suscripción está habilitada.';
+      const expiry=status.expiresAt?' Vence el '+escapeHtml(dateLabel(status.expiresAt))+'.':'';
+      const paymentText=canCheckout
+        ? '<p>El pago se realiza de forma segura en Mercado Pago. Cuando Mercado Pago confirme el pago, el webhook habilitará automáticamente 30 días de servicio. No hay débitos automáticos.</p>'
+        : '<p>Tu suscripción está activa. Podés volver a consultar el vencimiento desde esta pantalla.</p>';
+      const paymentButton=canCheckout
+        ? '<button class="btn btn-primary" data-action="checkout">Pagar $8.000 · activar 30 días</button>'
+        : '';
+      modalRoot.innerHTML='<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">'+title+'</h2><p>'+statusText+expiry+'</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · '+money(subscriptionPrice())+' / 30 días</strong>'+paymentText+'</div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>'+paymentButton+'</div></section></div>';
+    }
+    async function paySubscription(button){
+      const status=subStatus();
+      if(status.status==='active'&&status.isTrial!==true){openPlanInfo();return;}
+      const action=status.isTrial===true?'skip-trial':'renew';
+      const original=button?.textContent||'Pagar $8.000 · activar 30 días';
+      if(button){button.disabled=true;button.textContent='Conectando con Mercado Pago…';}
+      try{
+        const preference=await api('/api/create-preference',{method:'POST',body:{action}});
+        const checkoutUrl=new URL(String(preference?.url||''));
+        const host=checkoutUrl.hostname.toLowerCase();
+        const trustedHost=host==='mercadopago.com'||host.endsWith('.mercadopago.com')||host==='mercadopago.com.ar'||host.endsWith('.mercadopago.com.ar');
+        if(checkoutUrl.protocol!=='https:'||!trustedHost)throw new Error('Mercado Pago devolvió una dirección de pago no válida. No abrimos el enlace por seguridad.');
+        window.location.assign(checkoutUrl.href);
+      }catch(error){
+        toast(userFacingError(error,'No se pudo iniciar el pago. Revisá la conexión e intentá nuevamente.'),'error');
+        if(button?.isConnected){button.disabled=false;button.textContent=original;}
       }
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">💳 TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">${s.status==='grace'?'Estás en período de gracia':s.trialEnded?'Tu prueba terminó':'Tu cuenta está vencida'}</h2><p>Cada pago aprobado suma 30 días de servicio. El pago se inicia manualmente desde la app y solo se cobra si lo confirmás en Mercado Pago. No hay débitos automáticos ni renovaciones automáticas.</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · ${money(subscriptionPrice())}</strong><p>${s.status==='grace'?`Te quedan ${Math.max(0,s.daysRemaining)} día(s) de servicio.`:'Para volver a registrar visitas y crear promociones, renová tu cuenta.'}</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Ahora no</button><button class="btn btn-primary" data-action="start-subscription-payment">Continuar con Mercado Pago ↗</button></div></section></div>`;
     }
-    /* Payment starts directly from the plan-status panel; Mercado Pago is the final confirmation step. */
-    async function paySubscription(skipTrial=false) {
-      if(subStatus().status==='active'&&!skipTrial){openPlanInfo();return;}
-      if(paymentRequestInFlight)return;
-      paymentRequestInFlight=true;
-      modalRoot.innerHTML='<div class="modal-backdrop"><section class="modal-card plan-info-card" role="status" aria-live="polite"><div class="install-waiting"><span class="install-spinner"></span><strong>Preparando el pago con Mercado Pago…</strong></div></section></div>';
-      try {
-        const data=await api('/api/create-preference',{method:'POST',body:JSON.stringify(skipTrial?{action:'skip-trial'}:{})});
-        const destination=new URL(String(data?.url||''));
-        const host=destination.hostname.toLowerCase();
-        const trusted=destination.protocol==='https:'&&(host==='mercadopago.com.ar'||host.endsWith('.mercadopago.com.ar')||host==='mercadopago.com'||host.endsWith('.mercadopago.com'));
-        if(!trusted)throw new Error('No pudimos validar el destino seguro de Mercado Pago. No se abrió ningún enlace.');
-        location.assign(destination.href);
-      } catch(error) {
-        const message=userFacingError(error,'No se pudo iniciar el pago. No se realizó ningún cobro. Revisá tu conexión e intentá nuevamente.');
-        modalRoot.innerHTML='<div class="modal-backdrop"><section class="modal-card plan-info-card" role="alert"><span class="eyebrow">NO SE INICIÓ EL PAGO</span><h2>No pudimos abrir Mercado Pago</h2><p class="muted">'+escapeHtml(message)+'</p><p class="tiny muted">No se realizó ningún cobro. Podés volver a intentarlo.</p><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button><button class="btn btn-primary" data-action="confirm-mp-payment" data-skip-trial="'+(skipTrial?'true':'false')+'">Reintentar</button></div></section></div>';
-      } finally { paymentRequestInFlight=false; }
-    }
-
 
     const PIP_TOPICS_ADMIN = [
       ['start','👋 Empezá por acá','Primero prepará tu perfil. Después clientes y visitas.'],
@@ -2477,9 +2403,7 @@
         else if(action==='toggle-promo-customer-editor'){const editor=$('#promotionCustomerEditor',modalRoot);if(editor){editor.dataset.open=editor.dataset.open==='true'?'false':'true';editor.classList.toggle('hidden',editor.dataset.open!=='true');if(editor.dataset.open==='true')$('#promotionCustomerSearch',modalRoot)?.focus();}}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
-        else if(action==='start-subscription-payment'){await paySubscription(false);}
-        else if(action==='start-trial-payment'){await paySubscription(true);}
-        else if(action==='confirm-mp-payment'){await paySubscription(button.dataset.skipTrial==='true');}
+        else if(action==='checkout'){await paySubscription(button);}
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='prompt';renderInstallGate();}
         else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installedPwaDetectionPromise=null;const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}

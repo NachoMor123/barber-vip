@@ -1,5 +1,5 @@
 {
-  "id": "https://barber-vip-three.vercel.app/",
+  "id": "https://barbervip-309dc.web.app/",
   "name": "Barber VIP",
   "short_name": "Barber VIP",
   "description": "Fidelización de clientes y visitas para barberías",
@@ -17,7 +17,7 @@
     {
       "platform": "webapp",
       "url": "/manifest.webmanifest",
-      "id": "https://barber-vip-three.vercel.app/"
+      "id": "https://barbervip-309dc.web.app/"
     }
   ],
   "icons": [

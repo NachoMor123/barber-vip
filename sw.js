@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v66-relative-time-selector-fix';
+const CACHE_NAME = 'barber-vip-shell-v67-firebase-migration';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

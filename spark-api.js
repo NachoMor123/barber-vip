@@ -224,7 +224,7 @@ export function createSparkApi({ firebaseConfig, state }) {
         endsAt: dateOf(promotion.endsAt)?.toISOString() || null
       };
       let cursor = '';
-      for (let pages = 0; pages < 101; pages++) {
+      for (let pages = 0; pages < 100; pages++) {
         const result = await workerRequest('/api/push/promotion', {
           method: 'POST', body: { promotion: workerPromotion, cursor }
         });

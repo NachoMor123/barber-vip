@@ -223,14 +223,14 @@ export function createSparkApi({ firebaseConfig, state }) {
         startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
         endsAt: dateOf(promotion.endsAt)?.toISOString() || null
       };
-      let offset = 0;
+      let cursor = '';
       for (let pages = 0; pages < 40; pages++) {
         const result = await workerRequest('/api/push/promotion', {
-          method: 'POST', body: { promotion: workerPromotion, offset }
+          method: 'POST', body: { promotion: workerPromotion, cursor }
         });
-        if (result.nextOffset === null || result.nextOffset === undefined) break;
-        if (Number(result.nextOffset) <= offset) break;
-        offset = Number(result.nextOffset);
+        if (!result.nextCursor) break;
+        if (String(result.nextCursor) === cursor) break;
+        cursor = String(result.nextCursor);
       }
     } catch (error) {
       console.warn('[Barber VIP] No se pudieron enviar todos los avisos de promoción.', error?.message || error);

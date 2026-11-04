@@ -6,6 +6,12 @@ on:
     branches: [main, hybrid-cloudflare]
     paths:
       - 'worker/**'
+      - 'index.html'
+      - 'spark-api.js'
+      - 'worker-config.js'
+      - 'firestore.rules'
+      - 'firebase.json'
+      - 'tests/**'
       - '.github/workflows/worker-tests.yml'
 jobs:
   test:
@@ -32,3 +38,4 @@ jobs:
         run: |
           node --input-type=module --check < spark-api.js
           node worker/test/check-app-syntax.mjs
+          node worker/test/check-payment-flow.mjs

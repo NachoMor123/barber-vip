@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, hybrid-cloudflare]
   pull_request:
-    branches: [main]
+    branches: [main, hybrid-cloudflare]
   workflow_dispatch:
 
 permissions:
@@ -35,6 +35,7 @@ jobs:
           node --input-type=module --check < worker-config.js
           node --check worker/src/index.js
           node worker/test/check-app-syntax.mjs
+          node worker/test/check-payment-flow.mjs
           node --test
           python3 - <<'PY'
           import json

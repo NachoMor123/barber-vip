@@ -45,25 +45,29 @@ En Firebase Console, proyecto `barbervip-309dc`:
 3. Crear un segundo sitio de Hosting con Site ID `barber-vip-comercial-309dc`.
 4. No hace falta una nueva app Firebase ni una nueva base de Firestore.
 
-Cuando las pruebas estén aprobadas, desde la raíz del repositorio de la app:
+Desde la raíz del repositorio, después de confirmar que el sitio de Hosting `barbervip-309dc` existe:
 ```bash
 firebase login
 firebase use barbervip-309dc
-firebase deploy --only firestore:rules,hosting:app
+firebase deploy --only hosting:app
 ```
+
+Las reglas actuales ya se publicaron desde Firebase Console y el archivo `firestore.rules` de esta rama mantiene la misma versión. No hace falta volver a publicar reglas para actualizar solamente la aplicación.
 
 La web comercial está en el repositorio separado `NachoMor123/barber-vip-web`. Se publica desde su propia carpeta con `firebase deploy --only hosting:commercial`.
 
-## 4. Configurar Mercado Pago
+## 4. Mercado Pago en producción
 
-- El Worker crea una preferencia de Checkout por ARS 8.000.
-- La URL de notificación se configura en cada preferencia hacia `/api/mercadopago-webhook` del Worker.
-- El webhook valida la firma, consulta el pago en Mercado Pago y confirma que esté aprobado y que el importe/moneda coincidan.
-- El mismo ID de pago no puede extender el período dos veces.
-- Cada pago aprobado suma 30 días al vencimiento actual (o empieza desde la aprobación si ya había vencido).
-- No se configura débito automático ni una suscripción recurrente.
+- Desde la pantalla **Tu suscripción**, un barbero con plan vencido, en gracia o en prueba puede iniciar Checkout desde el botón **Pagar $8.000 · activar 30 días**.
+- La aplicación solicita al Worker autenticado una preferencia por ARS 8.000 y redirige al `init_point` seguro de Mercado Pago.
+- Cada preferencia envía las notificaciones a `/api/mercadopago-webhook` del Worker.
+- El webhook valida la firma, consulta el pago directamente en la API de Mercado Pago y exige estado `approved`, importe ARS 8.000 y moneda `ARS`.
+- También comprueba que exista una preferencia de esa cuenta y que el ID de pago no se haya procesado anteriormente.
+- Al confirmarse el pago, Firestore recibe una extensión de 30 días. Si la suscripción venció, los 30 días empiezan en la fecha de aprobación; si aún estaba vigente, se extienden desde su vencimiento.
+- La renovación es manual por Checkout. No hay débitos automáticos ni cobros recurrentes.
+- Los pagos iniciados desde Vercel Preview permanecen bloqueados para impedir cobros reales accidentales. El dominio de producción de Firebase Hosting y el dominio productivo de Vercel están permitidos.
 
-Configurar `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` como secretos del Worker. Las credenciales productivas deben permanecer únicamente en el Worker productivo. Para probar pagos, crear un Worker de staging separado con credenciales de prueba y su propio webhook; no reemplazar temporalmente los secretos de producción.
+Las credenciales productivas `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` permanecen exclusivamente como secretos del Worker. No reemplazarlas por credenciales de prueba en el Worker productivo.
 
 ## 5. Notificaciones Push
 

@@ -162,8 +162,8 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
   }));
 }
 
-function buildQueryPageRequest(collectionId, fieldPath, value, pageSize = 15, cursor = "") {
-  const pageLimit = Math.max(1, Math.min(15, Math.floor(Number(pageSize) || 15)));
+function buildQueryPageRequest(collectionId, fieldPath, value, pageSize = 5, cursor = "") {
+  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
   const structuredQuery = {
     from: [{ collectionId }],
     where: { fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } },
@@ -174,8 +174,8 @@ function buildQueryPageRequest(collectionId, fieldPath, value, pageSize = 15, cu
   return { structuredQuery };
 }
 
-async function fsQueryPage(env, collectionId, fieldPath, value, pageSize = 15, cursor = "") {
-  const pageLimit = Math.max(1, Math.min(15, Math.floor(Number(pageSize) || 15)));
+async function fsQueryPage(env, collectionId, fieldPath, value, pageSize = 5, cursor = "") {
+  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
   const response = await fsRequest(env, ":runQuery", {
     method: "POST",
     body: JSON.stringify(buildQueryPageRequest(collectionId, fieldPath, value, pageLimit, cursor))
@@ -603,7 +603,7 @@ async function sendPromotionPush(request, env) {
   }
   // Page through subscriptions once. The previous offset-based flow re-read
   // every subscription for every batch, multiplying Firestore document reads.
-  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barber.uid, 15, cursor);
+  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barber.uid, 5, cursor);
   const matched = page.documents.filter(item => {
     const customerId = String(item.data.customerId || "");
     if (!customerId || item.data.enabled === false || item.data.barberUid !== barber.uid) return false;

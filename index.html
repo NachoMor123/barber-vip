@@ -1941,11 +1941,12 @@
       state.customersListenerStarted=false;
       if(typeof unsubscribe==='function'){try{unsubscribe();}catch(_){}}
     }
-    const ADMIN_CUSTOMERS_CACHE_TTL_MS=30*60*1000;
+    const ADMIN_CUSTOMERS_CACHE_TTL_MS=15*60*1000;
     function adminCustomersCacheKey(){return 'barberVipAdminCustomers:v1:'+String(state.user?.uid||'')+':'+String(state.barberUid||'');}
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded)return;
-      try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({savedAt:Date.now(),customers:state.customers}));}catch(_){}
+      const savedAt=Date.now();state.customersCacheSavedAt=savedAt;
+      try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({savedAt,customers:state.customers}));}catch(_){}
     }
     function restoreAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid)return false;
@@ -1966,7 +1967,7 @@
     async function ensureAdminCustomersLoaded({force=false}={}){
       if(state.role!=='barber'||document.visibilityState!=='visible')return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
-      if(state.customersLoaded&&!force)return;
+      if(state.customersLoaded&&!force&&Date.now()-Number(state.customersCacheSavedAt||0)<ADMIN_CUSTOMERS_CACHE_TTL_MS)return;
       const barberUid=state.barberUid;
       state.customersLoading=true;
       const promise=(async()=>{

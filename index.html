@@ -1976,7 +1976,16 @@
         }
       }
       const payment=new URLSearchParams(location.search).get('payment');
-      if(payment){history.replaceState({},'',location.pathname);setTimeout(()=>toast('Las renovaciones se habilitan manualmente después de verificar el pago acreditado.',''),300);}
+      if(payment){
+        history.replaceState({},'',location.pathname);
+        const messages={
+          success:['Mercado Pago recibió tu pago. Estamos esperando la confirmación segura para activar los 30 días.','success'],
+          pending:['Tu pago quedó pendiente en Mercado Pago. El plan se activará cuando se confirme.',''],
+          failure:['El pago no se completó. No se modificó tu suscripción. Podés volver a intentarlo.','error']
+        };
+        const [message,type]=messages[payment]||['Volviste de Mercado Pago. Revisá el estado de tu suscripción.',''];
+        setTimeout(()=>toast(message,type),300);
+      }
     }
     async function resumeSession(user) {
       if(!user||state.manualLogin||!firebaseReady)return;
@@ -2131,13 +2140,35 @@
       const status=subStatus();
       const trial=status.isTrial===true;
       const expired=status.status==='suspended';
+      const canCheckout=trial||expired||status.status==='grace';
       const title=trial?'Tu prueba gratuita está activa':status.status==='grace'?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
-      const statusText=trial?'Tenés 7 días de prueba gratuita.':status.status==='grace'?'Tu suscripción está en período de gracia. Coordiná la renovación para mantener el acceso.':expired?'Para volver a registrar visitas y administrar clientes, necesitás renovar tu plan.':'Tu suscripción está habilitada.';
+      const statusText=trial?'Tenés 7 días de prueba gratuita.':status.status==='grace'?'Tu suscripción está en período de gracia.':expired?'Para volver a registrar visitas y administrar clientes, necesitás renovar tu plan.':'Tu suscripción está habilitada.';
       const expiry=status.expiresAt?' Vence el '+escapeHtml(dateLabel(status.expiresAt))+'.':'';
-      modalRoot.innerHTML='<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">'+title+'</h2><p>'+statusText+expiry+'</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · '+money(subscriptionPrice())+'</strong><p>La renovación cuesta <strong>$8.000 por 30 días</strong>. En Firebase Spark el pago se coordina mediante un enlace de Mercado Pago enviado por el equipo de Barber VIP. Cuando el pago esté acreditado, tu cuenta se habilita manualmente. No hay débitos automáticos y abrir un enlace no confirma el pago.</p></div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button></div></section></div>';
+      const paymentText=canCheckout
+        ? '<p>El pago se realiza de forma segura en Mercado Pago. Cuando Mercado Pago confirme el pago, el webhook habilitará automáticamente 30 días de servicio. No hay débitos automáticos.</p>'
+        : '<p>Tu suscripción está activa. Podés volver a consultar el vencimiento desde esta pantalla.</p>';
+      const paymentButton=canCheckout
+        ? '<button class="btn btn-primary" data-action="checkout">Pagar $8.000 · activar 30 días</button>'
+        : '';
+      modalRoot.innerHTML='<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">'+title+'</h2><p>'+statusText+expiry+'</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · '+money(subscriptionPrice())+' / 30 días</strong>'+paymentText+'</div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>'+paymentButton+'</div></section></div>';
     }
-    async function paySubscription(){
-      openPlanInfo();
+    async function paySubscription(button){
+      const status=subStatus();
+      if(status.status==='active'&&status.isTrial!==true){openPlanInfo();return;}
+      const action=status.isTrial===true?'skip-trial':'renew';
+      const original=button?.textContent||'Pagar $8.000 · activar 30 días';
+      if(button){button.disabled=true;button.textContent='Conectando con Mercado Pago…';}
+      try{
+        const preference=await api('/api/create-preference',{method:'POST',body:{action}});
+        const checkoutUrl=new URL(String(preference?.url||''));
+        const host=checkoutUrl.hostname.toLowerCase();
+        const trustedHost=host==='mercadopago.com'||host.endsWith('.mercadopago.com')||host==='mercadopago.com.ar'||host.endsWith('.mercadopago.com.ar');
+        if(checkoutUrl.protocol!=='https:'||!trustedHost)throw new Error('Mercado Pago devolvió una dirección de pago no válida. No abrimos el enlace por seguridad.');
+        window.location.assign(checkoutUrl.href);
+      }catch(error){
+        toast(userFacingError(error,'No se pudo iniciar el pago. Revisá la conexión e intentá nuevamente.'),'error');
+        if(button?.isConnected){button.disabled=false;button.textContent=original;}
+      }
     }
 
     const PIP_TOPICS_ADMIN = [
@@ -2372,6 +2403,7 @@
         else if(action==='toggle-promo-customer-editor'){const editor=$('#promotionCustomerEditor',modalRoot);if(editor){editor.dataset.open=editor.dataset.open==='true'?'false':'true';editor.classList.toggle('hidden',editor.dataset.open!=='true');if(editor.dataset.open==='true')$('#promotionCustomerSearch',modalRoot)?.focus();}}
         else if(action==='insert-promo-emoji'){const input=$('#promotionTitle',modalRoot);if(input){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length,emoji=button.dataset.emoji||'✨';input.value=input.value.slice(0,start)+emoji+input.value.slice(end);input.focus();input.setSelectionRange(start+emoji.length,start+emoji.length);}}
         else if(action==='pay'){openPlanInfo();}
+        else if(action==='checkout'){await paySubscription(button);}
         else if(action==='install-manual-check'){installHelpExpanded=true;installPhase='prompt';renderInstallGate();}
         else if(action==='install-verify'){if(isStandaloneApp()){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installedPwaDetectionPromise=null;const installed=await isInstalledPwaInBrowser();if(installed){installPhase='installed';setInstallGateLock(false);modalRoot.innerHTML='';}else{installPhase='prompt';installHelpExpanded=true;renderInstallGate();toast('Todavía no pudimos confirmar la instalación. Si no ves el ícono, seguí los pasos manuales.','error');}}}
         else if(action==='install-retry'){installPhase='prompt';installHelpExpanded=true;renderInstallGate();}

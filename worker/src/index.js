@@ -1,4 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
 import { buildPushPayload } from "@block65/webcrypto-web-push";
 
 
@@ -677,7 +676,12 @@ async function schedulePromotionPush(request, env) {
   return { ok: true, scheduled: true, scheduledAt: result.scheduledAt };
 }
 
-export class PromotionPushAlarm extends DurableObject {
+export class PromotionPushAlarm {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
   async fetch(request) {
     if (request.method === "DELETE") {
       await this.ctx.storage.delete("promotionPush");

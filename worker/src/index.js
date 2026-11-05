@@ -161,6 +161,45 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
     data: decodeFields(row.document.fields || {})
   }));
 }
+
+function buildQueryPageRequest(collectionId, fieldPath, value, pageSize = 5, cursor = "") {
+  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
+  const structuredQuery = {
+    from: [{ collectionId }],
+    where: { fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } },
+    orderBy: [{ field: { fieldPath: "__name__" }, direction: "ASCENDING" }],
+    limit: pageLimit
+  };
+  if (cursor) structuredQuery.startAt = { values: [{ referenceValue: cursor }], before: false };
+  return { structuredQuery };
+}
+
+async function fsQueryPage(env, collectionId, fieldPath, value, pageSize = 5, cursor = "") {
+  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
+  const response = await fsRequest(env, ":runQuery", {
+    method: "POST",
+    body: JSON.stringify(buildQueryPageRequest(collectionId, fieldPath, value, pageLimit, cursor))
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) throw new Error("Firestore no pudo consultar " + collectionId + " (" + response.status + ").");
+  const documents = (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
+    name: row.document.name,
+    path: row.document.name.split("/documents/")[1],
+    data: decodeFields(row.document.fields || {})
+  }));
+  return {
+    documents,
+    nextCursor: documents.length === pageLimit ? documents[documents.length - 1].name : null
+  };
+}
+
+function filterCustomerSubscriptions(subscriptions, barberUid, customerId, enabledOnly = true) {
+  return subscriptions.filter(item =>
+    String(item.data.customerId || "") === String(customerId) &&
+    String(item.data.barberUid || "") === String(barberUid) &&
+    (!enabledOnly || item.data.enabled !== false)
+  );
+}
 async function fsCommit(env, writes) {
   const response = await fsRequest(env, ":commit", { method: "POST", body: JSON.stringify({ writes }) });
   const result = await response.json().catch(() => ({}));
@@ -423,8 +462,11 @@ async function handleMercadoPagoWebhook(request, env) {
   }
 }
 
-async function subscriptionsForBarber(env, barberUid) {
-  return fsQuery(env, "pushSubscriptions", "barberUid", barberUid, 500);
+async function subscriptionsForCustomer(env, barberUid, customerId, enabledOnly = true) {
+  // customerId is the authenticated Firebase UID; query only this customer's devices.
+  // The barberUid check is retained as a second ownership boundary.
+  const subscriptions = await fsQuery(env, "pushSubscriptions", "customerId", customerId, 500);
+  return filterCustomerSubscriptions(subscriptions, barberUid, customerId, enabledOnly);
 }
 async function savePushSubscription(env, context, subscription) {
   const endpoint = String(subscription?.endpoint || "").slice(0, 2048);
@@ -463,8 +505,7 @@ async function removeCustomerPushSubscriptions(request, env) {
   if (!customer || customer.data.barberUid !== barber.uid) {
     throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
   }
-  const subscriptions = await subscriptionsForBarber(env, barber.uid);
-  const targets = subscriptions.filter(item => item.data.customerId === customerId);
+  const targets = await subscriptionsForCustomer(env, barber.uid, customerId, false);
   for (const item of targets) await fsDelete(env, item.path);
   return { ok: true, removed: targets.length };
 }
@@ -537,8 +578,7 @@ async function sendVisitPush(request, env) {
   if (!customer || customer.data.barberUid !== barber.uid || customer.data.active === false) {
     throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
   }
-  const all = await subscriptionsForBarber(env, barber.uid);
-  const targets = all.filter(item => item.data.customerId === customerId && item.data.enabled !== false);
+  const targets = await subscriptionsForCustomer(env, barber.uid, customerId, true);
   const sent = await deliverPush(env, targets, cleanPushPayload(data, appOrigin(env)));
   return { ok: true, sent };
 }
@@ -546,34 +586,38 @@ async function sendPromotionPush(request, env) {
   const barber = await requireBarber(env, request);
   const data = await parseBody(request);
   const promotion = data.promotion || {};
-  if (!promotion.active) return { ok: true, sent: 0, nextOffset: null };
+  if (!promotion.active) return { ok: true, sent: 0, nextCursor: null };
   const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
   const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
   const now = Date.now();
   if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
     throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
   }
-  if (startsAt > now || endsAt < now) return { ok: true, sent: 0, nextOffset: null };
+  if (startsAt > now || endsAt < now) return { ok: true, sent: 0, nextCursor: null };
   const audience = ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all";
   const ids = new Set(Array.isArray(promotion.customerIds) ? promotion.customerIds.map(String) : []);
-  const offset = Math.max(0, Number(data.offset) || 0);
-  const all = await subscriptionsForBarber(env, barber.uid);
-  const matched = all.filter(item => {
+  const cursor = String(data.cursor || "");
+  const expectedPrefix = firestoreResourceName(env, "pushSubscriptions/");
+  if (cursor && !cursor.startsWith(expectedPrefix)) {
+    throw Object.assign(new Error("El cursor de notificaciones no es válido."), { status: 400 });
+  }
+  // Page through subscriptions once. The previous offset-based flow re-read
+  // every subscription for every batch, multiplying Firestore document reads.
+  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barber.uid, 5, cursor);
+  const matched = page.documents.filter(item => {
     const customerId = String(item.data.customerId || "");
     if (!customerId || item.data.enabled === false || item.data.barberUid !== barber.uid) return false;
     if (audience === "selected") return ids.has(customerId);
     if (audience === "except") return !ids.has(customerId);
     return true;
   });
-  const chunk = matched.slice(offset, offset + 15);
   const payload = cleanPushPayload({
     title: promotion.title || "Nueva promoción",
     body: promotion.description || "Tu profesional publicó una promoción en Barber VIP.",
     tag: "promotion-" + String(promotion.id || "update")
   }, appOrigin(env));
-  const sent = await deliverPush(env, chunk, payload);
-  const nextOffset = offset + chunk.length < matched.length ? offset + chunk.length : null;
-  return { ok: true, sent, nextOffset, total: matched.length };
+  const sent = await deliverPush(env, matched, payload);
+  return { ok: true, sent, nextCursor: page.nextCursor };
 }
 async function resetCustomerPassword(request, env) {
   const barber = await requireBarber(env, request);
@@ -657,5 +701,6 @@ export default {
 export {
   renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
   validMercadoPagoSignature, encodeValue, decodeValue,
-  originAllowed, frontendReturnOrigin, isVercelPreviewOrigin
+  originAllowed, frontendReturnOrigin, isVercelPreviewOrigin,
+  buildQueryPageRequest, filterCustomerSubscriptions
 };

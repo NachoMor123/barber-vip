@@ -21,6 +21,28 @@ test("paid account gets five grace days; free trial does not", () => {
   assert.equal(subscriptionStatus({ subscriptionExpiresAt: "2026-10-08T00:00:00.000Z", hasPaidSubscription: true }, now), "grace");
 });
 
+test("trial has no grace at expiry, while a paid subscription has exactly five days", () => {
+  const expiry = "2026-11-01T00:00:00.000Z";
+  const trial = { subscriptionExpiresAt: expiry, trialStartedAt: "2026-10-25T00:00:00.000Z", hasPaidSubscription: false };
+  const paid = { subscriptionExpiresAt: expiry, trialStartedAt: "2026-10-25T00:00:00.000Z", hasPaidSubscription: true };
+
+  assert.equal(subscriptionStatus(trial, Date.parse("2026-11-01T00:00:00.000Z")), "suspended");
+  assert.equal(planCanOperate(trial, Date.parse("2026-11-02T00:00:00.000Z")), false);
+  assert.equal(subscriptionStatus(paid, Date.parse("2026-11-01T00:00:00.000Z")), "grace");
+  assert.equal(planCanOperate(paid, Date.parse("2026-11-05T23:59:59.999Z")), true);
+  assert.equal(subscriptionStatus(paid, Date.parse("2026-11-06T00:00:00.000Z")), "suspended");
+  assert.equal(planCanOperate(paid, Date.parse("2026-11-06T00:00:00.000Z")), false);
+});
+
+test("renewal adds exactly 30 days from payment when expired and from future expiry when active", () => {
+  const approvedAt = new Date("2026-11-04T12:34:56.000Z");
+  const expired = new Date("2026-11-01T12:34:56.000Z");
+  const future = new Date("2026-11-20T12:34:56.000Z");
+
+  assert.equal(renewalExpiry(expired, approvedAt, "renew").toISOString(), "2026-12-04T12:34:56.000Z");
+  assert.equal(renewalExpiry(future, approvedAt, "renew").toISOString(), "2026-12-20T12:34:56.000Z");
+});
+
 test("signature compare is constant-time shaped and exact", () => {
   assert.equal(safeEqual("abcdef", "abcdef"), true);
   assert.equal(safeEqual("abcdef", "abcdeg"), false);

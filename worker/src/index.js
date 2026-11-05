@@ -582,10 +582,7 @@ async function sendVisitPush(request, env) {
   const sent = await deliverPush(env, targets, cleanPushPayload(data, appOrigin(env)));
   return { ok: true, sent };
 }
-async function sendPromotionPush(request, env) {
-  const barber = await requireBarber(env, request);
-  const data = await parseBody(request);
-  const promotion = data.promotion || {};
+async function sendPromotionPushPage(env, barberUid, promotion, cursor = "", allowPastWindow = false) {
   if (!promotion.active) return { ok: true, sent: 0, nextCursor: null };
   const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
   const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
@@ -593,20 +590,23 @@ async function sendPromotionPush(request, env) {
   if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
     throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
   }
-  if (startsAt > now || endsAt < now) return { ok: true, sent: 0, nextCursor: null };
+  if (!allowPastWindow && (startsAt > now || endsAt < now)) {
+    return { ok: true, sent: 0, nextCursor: null };
+  }
+
   const audience = ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all";
   const ids = new Set(Array.isArray(promotion.customerIds) ? promotion.customerIds.map(String) : []);
-  const cursor = String(data.cursor || "");
+  const pageCursor = String(cursor || "");
   const expectedPrefix = firestoreResourceName(env, "pushSubscriptions/");
-  if (cursor && !cursor.startsWith(expectedPrefix)) {
+  if (pageCursor && !pageCursor.startsWith(expectedPrefix)) {
     throw Object.assign(new Error("El cursor de notificaciones no es válido."), { status: 400 });
   }
-  // Page through subscriptions once. The previous offset-based flow re-read
-  // every subscription for every batch, multiplying Firestore document reads.
-  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barber.uid, 5, cursor);
+
+  // Subscription documents are read once in small pages; no polling is needed.
+  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barberUid, 5, pageCursor);
   const matched = page.documents.filter(item => {
     const customerId = String(item.data.customerId || "");
-    if (!customerId || item.data.enabled === false || item.data.barberUid !== barber.uid) return false;
+    if (!customerId || item.data.enabled === false || item.data.barberUid !== barberUid) return false;
     if (audience === "selected") return ids.has(customerId);
     if (audience === "except") return !ids.has(customerId);
     return true;
@@ -619,6 +619,153 @@ async function sendPromotionPush(request, env) {
   const sent = await deliverPush(env, matched, payload);
   return { ok: true, sent, nextCursor: page.nextCursor };
 }
+
+async function sendPromotionPush(request, env) {
+  const barber = await requireBarber(env, request);
+  const data = await parseBody(request);
+  return sendPromotionPushPage(env, barber.uid, data.promotion || {}, String(data.cursor || ""));
+}
+
+async function schedulePromotionPush(request, env) {
+  const barber = await requireBarber(env, request);
+  const data = await parseBody(request);
+  const promotion = data.promotion || {};
+  const promotionId = String(promotion.id || "");
+  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(promotionId)) {
+    throw Object.assign(new Error("La promoción no tiene un identificador válido."), { status: 400 });
+  }
+
+  const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
+  const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
+  if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
+    throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
+  }
+  if (endsAt < startsAt) {
+    throw Object.assign(new Error("La fecha de finalización debe ser posterior al inicio."), { status: 400 });
+  }
+
+  const objectId = env.PROMOTION_PUSH_ALARMS.idFromName("promotion:" + barber.uid + ":" + promotionId);
+  const alarm = env.PROMOTION_PUSH_ALARMS.get(objectId);
+  if (promotion.active === false || !promotion.startsAt || startsAt <= Date.now()) {
+    const response = await alarm.fetch("https://promotion-push-alarm/cancel", { method: "DELETE" });
+    if (!response.ok) throw Object.assign(new Error("No se pudo actualizar la programación de la promoción."), { status: 502 });
+    return { ok: true, scheduled: false };
+  }
+
+  const cleanPromotion = {
+    id: promotionId,
+    title: String(promotion.title || "Nueva promoción").slice(0, 80),
+    description: String(promotion.description || "").slice(0, 300),
+    active: true,
+    startsAt: new Date(startsAt).toISOString(),
+    endsAt: promotion.endsAt ? new Date(endsAt).toISOString() : null,
+    audience: ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all",
+    customerIds: Array.isArray(promotion.customerIds)
+      ? [...new Set(promotion.customerIds.map(String))].slice(0, 250)
+      : []
+  };
+  const response = await alarm.fetch("https://promotion-push-alarm/schedule", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ barberUid: barber.uid, promotion: cleanPromotion })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok !== true) {
+    throw Object.assign(new Error(result.error || "No se pudo programar la notificación de la promoción."), { status: 502 });
+  }
+  return { ok: true, scheduled: true, scheduledAt: result.scheduledAt };
+}
+
+export class PromotionPushAlarm {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    if (request.method === "DELETE") {
+      await this.ctx.storage.delete("promotionPush");
+      await this.ctx.storage.deleteAlarm();
+      return json({ ok: true });
+    }
+    if (request.method !== "POST") return json({ ok: false, error: "Método no permitido." }, 405);
+
+    const data = await request.json().catch(() => null);
+    const barberUid = String(data?.barberUid || "");
+    const promotion = data?.promotion || {};
+    const promotionId = String(promotion.id || "");
+    const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : NaN;
+    if (!barberUid || !/^[a-zA-Z0-9_-]{1,120}$/.test(promotionId) || !Number.isFinite(startsAt)) {
+      return json({ ok: false, error: "Los datos de la programación no son válidos." }, 400);
+    }
+
+    await this.ctx.storage.put("promotionPush", {
+      barberUid, promotionId, promotion, started: false, cursor: "", sent: 0
+    });
+    await this.ctx.storage.setAlarm(startsAt);
+    return json({ ok: true, scheduledAt: new Date(startsAt).toISOString() });
+  }
+
+  async alarm() {
+    let pending = await this.ctx.storage.get("promotionPush");
+    if (!pending) return;
+
+    try {
+      let promotion = pending.promotion;
+      if (!pending.started) {
+        // Recheck Firestore once at start, then paginate push subscriptions from DO storage.
+        const stored = await fsGet(
+          this.env,
+          "barbers/" + pending.barberUid + "/promotions/" + pending.promotionId
+        );
+        if (!stored || stored.data.active === false) {
+          await this.ctx.storage.delete("promotionPush");
+          return;
+        }
+
+        promotion = { ...stored.data, id: pending.promotionId };
+        const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
+        const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
+        if ((promotion.startsAt && !Number.isFinite(startsAt)) ||
+            (promotion.endsAt && !Number.isFinite(endsAt))) {
+          await this.ctx.storage.delete("promotionPush");
+          return;
+        }
+        if (startsAt > Date.now()) {
+          await this.ctx.storage.put("promotionPush", { ...pending, promotion, started: false, cursor: "" });
+          await this.ctx.storage.setAlarm(startsAt);
+          return;
+        }
+        if (endsAt < Date.now()) {
+          await this.ctx.storage.delete("promotionPush");
+          return;
+        }
+
+        pending = { ...pending, promotion, started: true, cursor: "" };
+        await this.ctx.storage.put("promotionPush", pending);
+      }
+
+      const result = await sendPromotionPushPage(
+        this.env, pending.barberUid, promotion, pending.cursor || "", true
+      );
+      if (result.nextCursor) {
+        await this.ctx.storage.put("promotionPush", {
+          ...pending,
+          promotion,
+          cursor: result.nextCursor,
+          sent: Number(pending.sent || 0) + Number(result.sent || 0)
+        });
+        await this.ctx.storage.setAlarm(Date.now() + 1000);
+      } else {
+        await this.ctx.storage.delete("promotionPush");
+      }
+    } catch (error) {
+      console.error("[Barber VIP] Error al enviar una promoción programada:", error?.message || error);
+      throw error;
+    }
+  }
+}
+
 async function resetCustomerPassword(request, env) {
   const barber = await requireBarber(env, request);
   const data = await parseBody(request);
@@ -680,6 +827,7 @@ async function route(request, env) {
   }
   if (path === "/api/push/send" && request.method === "POST") return json(await sendVisitPush(request, env), 200, corsHeaders(request, env));
   if (path === "/api/push/promotion" && request.method === "POST") return json(await sendPromotionPush(request, env), 200, corsHeaders(request, env));
+  if (path === "/api/push/schedule-promotion" && request.method === "POST") return json(await schedulePromotionPush(request, env), 200, corsHeaders(request, env));
   if (path === "/api/push/remove-customer" && request.method === "POST") return json(await removeCustomerPushSubscriptions(request, env), 200, corsHeaders(request, env));
   if (path === "/api/customers/reset-password" && request.method === "POST") return json(await resetCustomerPassword(request, env), 200, corsHeaders(request, env));
   return json({ ok: false, error: "Ruta no encontrada." }, 404, corsHeaders(request, env));

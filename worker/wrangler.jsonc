@@ -3,6 +3,14 @@
   "name": "barber-vip",
   "main": "src/index.js",
   "compatibility_date": "2026-10-31",
+  "durable_objects": {
+    "bindings": [
+      { "name": "PROMOTION_PUSH_ALARMS", "class_name": "PromotionPushAlarm" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PromotionPushAlarm"] }
+  ],
   "vars": {
     "FIREBASE_PROJECT_ID": "barbervip-309dc",
     "APP_ORIGIN": "https://barbervip-309dc.web.app",

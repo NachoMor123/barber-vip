@@ -223,14 +223,14 @@ export function createSparkApi({ firebaseConfig, state }) {
         startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
         endsAt: dateOf(promotion.endsAt)?.toISOString() || null
       };
-      let offset = 0;
-      for (let pages = 0; pages < 40; pages++) {
+      let cursor = '';
+      for (let pages = 0; pages < 100; pages++) {
         const result = await workerRequest('/api/push/promotion', {
-          method: 'POST', body: { promotion: workerPromotion, offset }
+          method: 'POST', body: { promotion: workerPromotion, cursor }
         });
-        if (result.nextOffset === null || result.nextOffset === undefined) break;
-        if (Number(result.nextOffset) <= offset) break;
-        offset = Number(result.nextOffset);
+        if (!result.nextCursor) break;
+        if (String(result.nextCursor) === cursor) break;
+        cursor = String(result.nextCursor);
       }
     } catch (error) {
       console.warn('[Barber VIP] No se pudieron enviar todos los avisos de promoción.', error?.message || error);
@@ -657,7 +657,17 @@ export function createSparkApi({ firebaseConfig, state }) {
       const snapshot = isCustomer
         ? await getDocs(query(ref, where('active', '==', true), limit(100)))
         : await getDocs(query(ref, limit(100)));
-      const raw = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const raw = snapshot.docs.map(d => {
+        const promotion = { id: d.id, ...d.data() };
+        // Normalize Firestore Timestamp values before they reach local cache or UI.
+        return {
+          ...promotion,
+          startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
+          endsAt: dateOf(promotion.endsAt)?.toISOString() || null,
+          createdAt: dateOf(promotion.createdAt)?.toISOString() || null,
+          updatedAt: dateOf(promotion.updatedAt)?.toISOString() || null
+        };
+      });
       const now = Date.now();
       const visible = isCustomer ? raw.filter(p => p.audience === 'all' || (p.audience === 'except' && !(p.customerIds || []).includes(currentUid())) || (p.audience === 'selected' && (p.customerIds || []).includes(currentUid()))) : raw;
       const next = visible.filter(p => p.active !== false && p.startsAt && dateOf(p.startsAt)?.getTime() > now).sort((a,b)=>dateOf(a.startsAt)-dateOf(b.startsAt))[0]?.startsAt || null;

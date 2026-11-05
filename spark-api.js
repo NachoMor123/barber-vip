@@ -237,6 +237,22 @@ export function createSparkApi({ firebaseConfig, state }) {
     }
   }
 
+  async function syncPromotionPushSchedule(promotion) {
+    if (!promotion?.id) return;
+    try {
+      const workerPromotion = {
+        ...promotion,
+        startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
+        endsAt: dateOf(promotion.endsAt)?.toISOString() || null
+      };
+      await workerRequest('/api/push/schedule-promotion', {
+        method: 'POST', body: { promotion: workerPromotion }
+      });
+    } catch (error) {
+      console.warn('[Barber VIP] No se pudo programar el aviso de promoción.', error?.message || error);
+    }
+  }
+
   async function writePublicBarberCode(barber) {
     const code = cleanCode(barber.barberCode);
     if (!code) return;
@@ -680,13 +696,16 @@ export function createSparkApi({ firebaseConfig, state }) {
       const payload = cleanPromotion(data, true);
       await setDoc(doc(ref, id), { ...payload, createdAt: now, updatedAt: now });
       await touchPromotionRevision(barberUid);
-      if (promotionIsLive(payload)) await notifyPromotion({ ...payload, id });
+      const savedPromotion = { ...payload, id };
+      if (promotionIsLive(payload)) await notifyPromotion(savedPromotion);
+      else await syncPromotionPushSchedule(savedPromotion);
       return { ok: true, id };
     }
     const id = cleanText(data.id, 100);
     if (!id) throw fail('Falta identificar la promoción.');
     if (method === 'DELETE') {
       await deleteDoc(doc(ref, id));
+      await syncPromotionPushSchedule({ id, active: false });
       await touchPromotionRevision(barberUid);
       return { ok: true, id };
     }
@@ -694,11 +713,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       const promotionRef = doc(ref, id);
       const previousSnap = await getDoc(promotionRef);
       if (!previousSnap.exists()) throw fail('No se encontró la promoción.', 404);
-      const wasActive = previousSnap.data().active !== false;
+      const wasLive = promotionIsLive(previousSnap.data());
       const payload = cleanPromotion(data, false);
       await updateDoc(promotionRef, { ...payload, updatedAt: serverTimestamp() });
+      await syncPromotionPushSchedule({ ...payload, id });
       await touchPromotionRevision(barberUid);
-      if (!wasActive && promotionIsLive(payload)) await notifyPromotion({ ...payload, id });
+      const savedPromotion = { ...payload, id };
+      if (!wasLive && promotionIsLive(payload)) await notifyPromotion(savedPromotion);
       return { ok: true, id };
     }
     throw fail('Método no permitido.', 405);

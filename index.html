@@ -1466,17 +1466,73 @@
 
     function scheduleMarkup(schedule){const days=Array.isArray(schedule?.days)?schedule.days:[];if(!days.length||!days.some(d=>d.enabled))return '<p class="muted">Todavía no se configuraron los horarios de atención.</p>';const labels=[['mon','Lunes'],['tue','Martes'],['wed','Miércoles'],['thu','Jueves'],['fri','Viernes'],['sat','Sábado'],['sun','Domingo']];const byDay=new Map(days.map(d=>[d.day,d]));return labels.map(([key,name])=>{const d=byDay.get(key);if(!d||!d.enabled)return `<div class="schedule-line closed"><strong>${name}</strong><span>Cerrado</span></div>`;const mode=d.mode||schedule.mode||'continuous';const first=`${escapeHtml(d.start1||'—')}–${escapeHtml(d.end1||'—')}`;const second=mode==='double'&&d.start2&&d.end2?` <i>·</i> ${escapeHtml(d.start2)}–${escapeHtml(d.end2)}`:'';return `<div class="schedule-line"><strong>${name}</strong><span>${first}${second}</span></div>`;}).join('');}
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
-    function promoIsActive(p){const now=Date.now(),start=asDate(p.startsAt)?.getTime(),end=asDate(p.endsAt)?.getTime();return p.active!==false&&(!start||start<=now)&&(!end||end>=now);}
-    function promoCountdown(value){const d=asDate(value);if(!d)return 'Sin vencimiento';const ms=d.getTime()-Date.now();if(ms<=0)return 'Finalizada';const total=Math.floor(ms/1000),days=Math.floor(total/86400),hours=Math.floor(total%86400/3600),minutes=Math.floor(total%3600/60),seconds=total%60;return days?`${days} d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`:`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;}
     function promotionTimeState(p,now=Date.now()){
       if(!p||p.active===false)return 'paused';
-      const start=p.startsAt?asDate(p.startsAt)?.getTime():0;
-      const end=p.endsAt?asDate(p.endsAt)?.getTime():Infinity;
-      if(p.startsAt&&!Number.isFinite(start))return 'invalid';
-      if(p.endsAt&&!Number.isFinite(end))return 'invalid';
+
+      const hasStart=p.startsAt!==null&&p.startsAt!==undefined&&p.startsAt!=='';
+      const hasEnd=p.endsAt!==null&&p.endsAt!==undefined&&p.endsAt!=='';
+      const startDate=hasStart?asDate(p.startsAt):null;
+      const endDate=hasEnd?asDate(p.endsAt):null;
+
+      // Una fecha presente pero no interpretable no se debe tratar como si no existiera.
+      if((hasStart&&!startDate)||(hasEnd&&!endDate))return 'invalid';
+
+      const start=startDate?.getTime()??-Infinity;
+      const end=endDate?.getTime()??Infinity;
+      if(startDate&&endDate&&end<start)return 'invalid';
       if(start>now)return 'scheduled';
       if(end<now)return 'expired';
       return 'live';
+    }
+
+    function promoIsActive(p){
+      return promotionTimeState(p)==='live';
+    }
+
+    function promoCountdown(value){
+      const d=asDate(value);
+      if(!d)return 'Fecha inválida';
+      const ms=d.getTime()-Date.now();
+      if(ms<=0)return 'Finalizada';
+      const total=Math.floor(ms/1000);
+      const days=Math.floor(total/86400);
+      const hours=Math.floor(total%86400/3600);
+      const minutes=Math.floor(total%3600/60);
+      const seconds=total%60;
+      const clock=`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+      return days?`${days} d ${clock}`:clock;
+    }
+
+    function promotionCountdownMarkup(p){
+      const status=promotionTimeState(p);
+      let value=null,label='VIGENCIA',emptyMessage='';
+
+      if(status==='scheduled'){
+        value=p.startsAt;
+        label='COMIENZA EN';
+      }else if(status==='live'&&p.endsAt){
+        value=p.endsAt;
+        label='FINALIZA EN';
+      }else if(status==='live'){
+        emptyMessage='Sin fecha de finalización';
+      }else if(status==='expired'){
+        emptyMessage='Promoción finalizada';
+      }else if(status==='invalid'){
+        emptyMessage='Revisá la fecha de inicio y finalización';
+      }else{
+        emptyMessage='Promoción pausada';
+      }
+
+      if(emptyMessage){
+        return `<div class="promo-time-block"><small class="countdown-label">${label}</small><strong class="promo-countdown">${escapeHtml(emptyMessage)}</strong></div>`;
+      }
+
+      const target=dateIso(value);
+      if(!target){
+        return '<div class="promo-time-block"><small class="countdown-label">FECHAS</small><strong class="promo-countdown">Revisá la fecha configurada</strong></div>';
+      }
+
+      return `<div class="promo-time-block"><small class="countdown-label">${label}</small><strong class="promo-countdown" data-promo-countdown="${escapeHtml(target)}">${promoCountdown(target)}</strong></div>`;
     }
     function startPromoCountdowns(){
       if(state.promoTimer){clearInterval(state.promoTimer);state.promoTimer=null;}
@@ -1694,8 +1750,11 @@
         function promotionsView(){
       const list=state.promotions||[];
       return `${sectionHeading('COMUNICACIÓN','Promociones','Ofertas comerciales independientes de los premios automáticos.','<button class="btn btn-primary" data-action="new-promotion">＋ Crear promoción</button>')}<div class="promotion-list admin-promotion-list">${list.length===0?(state.promotionsLoading?'<div class="empty-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando promociones…</strong><p>Estamos sincronizando tus promociones.</p></div>':'<div class="empty-state"><strong>Todavía no creaste promociones</strong><p>Creá una oferta cuando quieras comunicar un beneficio puntual.</p></div>'):list.map(p=>{
-        const inRange=(!p.startsAt||asDate(p.startsAt)?.getTime()<=Date.now())&&(!p.endsAt||asDate(p.endsAt)?.getTime()>=Date.now());const active=promoIsActive(p);const stateLabel=p.active===false?'Pausada':inRange?'Activa':'Fuera de vigencia';
-        return `<article class="panel promotion-card admin-promo-card"><div class="promotion-card-head"><div><span class="promo-active-tag">${active?'PROMO ACTIVA':p.active===false?'PROMO PAUSADA':'OFERTA PROGRAMADA'}</span><h3>${escapeHtml(p.title)}</h3></div><div class="promo-state-control"><span class="status-chip ${active?'good':'warn'}">${stateLabel}</span><button class="promo-switch ${p.active!==false?'on':''}" role="switch" aria-checked="${p.active!==false}" aria-label="${p.active!==false?'Desactivar':'Activar'} promoción ${escapeHtml(p.title)}" data-action="toggle-promotion" data-id="${escapeHtml(p.id)}"><span></span></button></div></div><div class="promo-admin-info"><span class="pill">${p.audience==='all'?'Todos los clientes':'Clientes seleccionados'}</span></div><div class="promotion-actions"><button class="btn btn-ghost btn-mini" data-action="edit-promotion" data-id="${escapeHtml(p.id)}">Editar detalles</button><button class="btn btn-danger btn-mini" data-action="delete-promotion" data-id="${escapeHtml(p.id)}">Eliminar</button></div></article>`;
+        const timeState=promotionTimeState(p);
+        const active=timeState==='live';
+        const stateLabel=p.active===false?'Pausada':timeState==='scheduled'?'Programada':timeState==='expired'?'Finalizada':timeState==='invalid'?'Revisar fechas':'Activa';
+        const promoTag=active?'PROMO ACTIVA':p.active===false?'PROMO PAUSADA':timeState==='invalid'?'REVISAR FECHAS':'OFERTA PROGRAMADA';
+        return `<article class="panel promotion-card admin-promo-card"><div class="promotion-card-head"><div><span class="promo-active-tag">${promoTag}</span><h3>${escapeHtml(p.title)}</h3></div><div class="promo-state-control"><span class="status-chip ${active?'good':'warn'}">${stateLabel}</span><button class="promo-switch ${p.active!==false?'on':''}" role="switch" aria-checked="${p.active!==false}" aria-label="${p.active!==false?'Desactivar':'Activar'} promoción ${escapeHtml(p.title)}" data-action="toggle-promotion" data-id="${escapeHtml(p.id)}"><span></span></button></div></div>${promotionCountdownMarkup(p)}<div class="promo-admin-info"><span class="pill">${p.audience==='all'?'Todos los clientes':'Clientes seleccionados'}</span></div><div class="promotion-actions"><button class="btn btn-ghost btn-mini" data-action="edit-promotion" data-id="${escapeHtml(p.id)}">Editar detalles</button><button class="btn btn-danger btn-mini" data-action="delete-promotion" data-id="${escapeHtml(p.id)}">Eliminar</button></div></article>`;
       }).join('')||`<div class="empty-state"><div class="empty-icon">✦</div><strong>Todavía no hay promociones</strong><p>Creá una oferta para comunicar algo especial a tus clientes.</p><button class="btn btn-primary" data-action="new-promotion">＋ Crear promoción</button></div>`}</div>`;
     }
     function sortPromotionCustomerRows(root=modalRoot){
@@ -1942,7 +2001,7 @@
         return;
       }
       const milestones=rewards.map(r=>{const applied=(!!lastApplied&&Number(lastApplied.cut)===Number(r.cut))||(finalApplied&&Number(r.cut)===Number(max));const saved=ready.some(x=>Number(x.cut)===Number(r.cut));const upcoming=nextVisit.some(x=>Number(x.cut)===Number(r.cut));const reached=displayCount>=r.cut||applied;const status=applied?'Descuento aplicado':saved?'Disponible para esta visita':finalApplied&&Number(r.cut)<Number(max)?'Completado':upcoming&&left===1?'Se aplica al alcanzar esta visita':count>=r.cut?'Completado':'Por desbloquear';return `<div class="milestone ${reached?'reached':''} ${(saved||upcoming&&left===1)?'unlocked':''}"><span class="milestone-cut">Visita ${r.cut}</span><strong>${escapeHtml(r.label||`${r.discount}% OFF`)}</strong><small>${status}</small></div>`;}).join('');
-      const customerPromos=(state.promotions||[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3></article>`).join('');
+      const customerPromos=(Array.isArray(state.promotions)?state.promotions:[]).filter(promoIsActive).map(p=>`<article class="client-info-card promotion-card customer-promo-card"><span class="promo-active-tag">✦ PROMO ACTIVA</span><h3>${escapeHtml(p.title)}</h3>${promotionCountdownMarkup(p)}</article>`).join('');
       const readyMarkup=ready.length?`<div class="available-discounts"><strong>🎁 Descuento disponible</strong><div>${ready.map(r=>`<span class="discount-chip">${escapeHtml(r.label||`${r.discount}% OFF`)} · hito ${Number(r.cut||'')}</span>`).join('')}</div><small>Este beneficio corresponde a la visita que alcanzó el hito.</small></div>`:finalApplied?`<div class="available-discounts"><strong>✓ Ciclo completado</strong><div><span class="discount-chip">${escapeHtml(finalRewardLabel)} · hito ${max}/${max}</span></div><small>El descuento ya se aplicó en esta visita. El próximo ciclo comienza con tu siguiente visita.</small></div>`:lastApplied?`<div class="available-discounts"><strong>✓ Descuento aplicado</strong><div><span class="discount-chip">${escapeHtml(lastApplied.label)} · hito ${lastApplied.cut}</span></div><small>El beneficio de este hito quedó registrado. Tu progreso continúa hacia el próximo descuento.</small></div>`:'';
       appRoot.innerHTML=`<main class="customer-screen"><div class="customer-top">${brand}<button class="btn btn-danger btn-mini customer-logout" data-action="logout">↪ Salir</button></div><section class="customer-hero"><div class="customer-greeting">TU ESPACIO VIP ✦</div><h1>${greetingForNow()}, ${escapeHtml((c.fullName||'').split(' ')[0]||'bienvenido')} 👋</h1><p>Tu progreso y los beneficios de tu profesional.</p></section>${customerPushSettingsMarkup()}<div id="customer-attendance-live" aria-live="polite">${attendanceMarkup(b.schedule)}</div><div class="grid client-metrics">${metricCard('Visitas totales',Number(c.totalCuts||0),'✦','Visitas registradas')}${metricCard('Última visita',c.lastCutAt?`<span class="last-cut-relative" data-last-cut-at="${escapeHtml(dateIso(c.lastCutAt))}">${escapeHtml(last)}</span>`:'—','◷',escapeHtml(c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no registraste una visita'))}${metricCard('Ciclo actual',`${displayCount}/${max}`,'✦',finalApplied?'Hito alcanzado · descuento aplicado':paused?'Tenés un descuento disponible para la visita que tu profesional está por registrar':ready.length?'Tenés un descuento disponible para la visita que tu profesional está por registrar':left===1?`Falta 1 visita para ${next.label}`:`Faltan ${left} visitas para ${next.label}`)}</div><section class="reward-progress-card"><div class="reward-progress-top"><div><div class="eyebrow">${finalApplied?'CICLO COMPLETADO':'TU PRÓXIMO DESCUENTO'}</div><h2>${finalApplied?'¡Premio conseguido!':escapeHtml(next.label)}</h2><p>${finalApplied?`${escapeHtml(finalRewardLabel)} se aplicó en tu visita ${max}/${max}. El siguiente ciclo comienza con la próxima visita.`:ready.length?`Tenés ${escapeHtml(ready[0].label||`${ready[0].discount}% OFF`)} disponible para la visita que tu profesional está por registrar.`:left===1?`Te falta 1 visita para alcanzar ${escapeHtml(next.label)}; esa misma visita recibe el descuento.`:`Te faltan ${left} visitas para alcanzar ${escapeHtml(next.label)}.`}</p></div><div class="reward-large-icon">✦</div></div><div class="progress-track"><span style="width:${pct}%"></span></div><div class="progress-caption"><span>${finalApplied?'Hito máximo alcanzado · descuento aplicado':`${displayCount} de ${max} visitas del ciclo`}</span><strong>${Math.round(pct)}%</strong></div><div class="cycle-milestones">${milestones}</div>${readyMarkup}<button class="btn btn-primary customer-cta" data-action="book-turn">Agendar turno por WhatsApp ↗</button></section>${customerPromos?`<section class="customer-promotions"><h2>Promociones para vos</h2><div class="customer-promo-stack">${customerPromos}</div></section>`:''}<div class="customer-footer">BARBER VIP · Tu estilo, tu recompensa.</div>${customerNavigation()}${pipEnabled()?'<button class="pip-fab customer-pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}</main>`;
     }

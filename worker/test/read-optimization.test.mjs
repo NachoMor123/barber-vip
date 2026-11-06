@@ -70,5 +70,7 @@ test("client sorting includes chronological visit order and has no redundant rec
   assert.match(html, /case 'visit-order-desc'/);
   assert.doesNotMatch(html, /Última visita: más reciente/);
   assert.doesNotMatch(html, /customerRewardFilter/);
+  assert.doesNotMatch(html, /reminder/i);
+  assert.doesNotMatch(html, /PushManager|Notification\\.requestPermission|showNotification|notificationclick/i);
   assert.doesNotMatch(html, /Premio aplicado recientemente/);
 });

@@ -116,7 +116,6 @@ function cleanProfileForCustomer(source = {}) {
     theme: { accent: '#3478ff', density: source.theme?.density === 'compact' ? 'compact' : 'comfortable' },
     loyaltyPrograms: programs,
     defaultLoyaltyProgramId: cleanText(source.defaultLoyaltyProgramId || programs[0]?.id || 'program-general', 80),
-    promotionsUpdatedAt: source.promotionsUpdatedAt || null
   };
 }
 async function hashHex(value) {
@@ -162,7 +161,7 @@ export function createSparkApi({ firebaseConfig, state }) {
   let publicBarberCode = '';
 
   const db = () => {
-    if (!state.db) throw fail('Firebase todavía no está listo. Recargá Barber VIP.', 503);
+    if (!state.db) throw fail('La aplicación todavía está preparando tus datos. Volvé a intentarlo en unos segundos.', 503);
     return state.db;
   };
   const auth = () => {
@@ -200,58 +199,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw fail(message, response.status || 502);
     }
     return result;
-  }
-
-  async function notifyVisit(customerId, appliedReward) {
-    try {
-      const body = appliedReward
-        ? 'Tu visita quedó registrada y se aplicó ' + (appliedReward.label || labelReward(appliedReward.discount)) + '.'
-        : 'Tu tarjeta de Barber VIP ya tiene una visita nueva.';
-      await workerRequest('/api/push/send', {
-        method: 'POST',
-        body: { customerId, title: 'Visita registrada', body, tag: 'visit-' + customerId + '-' + Date.now() }
-      });
-    } catch (error) {
-      console.warn('[Barber VIP] No se pudo enviar la notificación de visita.', error?.message || error);
-    }
-  }
-
-  async function notifyPromotion(promotion) {
-    if (!promotion || promotion.active === false) return;
-    try {
-      const workerPromotion = {
-        ...promotion,
-        startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
-        endsAt: dateOf(promotion.endsAt)?.toISOString() || null
-      };
-      let cursor = '';
-      for (let pages = 0; pages < 100; pages++) {
-        const result = await workerRequest('/api/push/promotion', {
-          method: 'POST', body: { promotion: workerPromotion, cursor }
-        });
-        if (!result.nextCursor) break;
-        if (String(result.nextCursor) === cursor) break;
-        cursor = String(result.nextCursor);
-      }
-    } catch (error) {
-      console.warn('[Barber VIP] No se pudieron enviar todos los avisos de promoción.', error?.message || error);
-    }
-  }
-
-  async function syncPromotionPushSchedule(promotion) {
-    if (!promotion?.id) return;
-    try {
-      const workerPromotion = {
-        ...promotion,
-        startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
-        endsAt: dateOf(promotion.endsAt)?.toISOString() || null
-      };
-      await workerRequest('/api/push/schedule-promotion', {
-        method: 'POST', body: { promotion: workerPromotion }
-      });
-    } catch (error) {
-      console.warn('[Barber VIP] No se pudo programar el aviso de promoción.', error?.message || error);
-    }
   }
 
   async function writePublicBarberCode(barber) {
@@ -557,11 +504,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
     }
     await batch.commit();
-    try {
-      await workerRequest('/api/push/remove-customer', { method: 'POST', body: { customerId: id } });
-    } catch (error) {
-      console.warn('[Barber VIP] No se pudieron limpiar las suscripciones Push del cliente dado de baja.', error?.message || error);
-    }
     return { ok: true };
   }
 
@@ -637,90 +579,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.appliedReward) message = 'Visita registrada. ' + (outcome.appliedReward.label || labelReward(outcome.appliedReward.discount)) + ' se aplicó en esta visita.';
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
-    await notifyVisit(id, outcome.appliedReward);
     return { ok: true, customer: resultCustomer, message };
-  }
-
-  async function promotions(url, method, data) {
-    const isCustomer = state.role === 'customer';
-    const barberUid = isCustomer ? state.barberUid : currentUid();
-    const ref = collection(db(), 'barbers', barberUid, 'promotions');
-    if (method === 'GET') {
-      const snapshot = isCustomer
-        ? await getDocs(query(ref, where('active', '==', true), limit(100)))
-        : await getDocs(query(ref, limit(100)));
-      const raw = snapshot.docs.map(d => {
-        const promotion = { id: d.id, ...d.data() };
-        // Normalize Firestore Timestamp values before they reach local cache or UI.
-        return {
-          ...promotion,
-          startsAt: dateOf(promotion.startsAt)?.toISOString() || null,
-          endsAt: dateOf(promotion.endsAt)?.toISOString() || null,
-          createdAt: dateOf(promotion.createdAt)?.toISOString() || null,
-          updatedAt: dateOf(promotion.updatedAt)?.toISOString() || null
-        };
-      });
-      const now = Date.now();
-      const visible = isCustomer ? raw.filter(p => p.audience === 'all' || (p.audience === 'except' && !(p.customerIds || []).includes(currentUid())) || (p.audience === 'selected' && (p.customerIds || []).includes(currentUid()))) : raw;
-      const next = visible.filter(p => p.active !== false && p.startsAt && dateOf(p.startsAt)?.getTime() > now).sort((a,b)=>dateOf(a.startsAt)-dateOf(b.startsAt))[0]?.startsAt || null;
-      return { ok: true, promotions: visible, nextScheduledAt: next };
-    }
-    if (isCustomer) throw fail('No tenés permiso para modificar promociones.', 403);
-    if (method === 'POST') {
-      const id = crypto.randomUUID();
-      const now = serverTimestamp();
-      const payload = cleanPromotion(data, true);
-      await setDoc(doc(ref, id), { ...payload, createdAt: now, updatedAt: now });
-      await touchPromotionRevision(barberUid);
-      const savedPromotion = { ...payload, id };
-      if (promotionIsLive(payload)) await notifyPromotion(savedPromotion);
-      else await syncPromotionPushSchedule(savedPromotion);
-      return { ok: true, id };
-    }
-    const id = cleanText(data.id, 100);
-    if (!id) throw fail('Falta identificar la promoción.');
-    if (method === 'DELETE') {
-      await deleteDoc(doc(ref, id));
-      await syncPromotionPushSchedule({ id, active: false });
-      await touchPromotionRevision(barberUid);
-      return { ok: true, id };
-    }
-    if (method === 'PUT') {
-      const promotionRef = doc(ref, id);
-      const previousSnap = await getDoc(promotionRef);
-      if (!previousSnap.exists()) throw fail('No se encontró la promoción.', 404);
-      const wasLive = promotionIsLive(previousSnap.data());
-      const payload = cleanPromotion(data, false);
-      await updateDoc(promotionRef, { ...payload, updatedAt: serverTimestamp() });
-      await syncPromotionPushSchedule({ ...payload, id });
-      await touchPromotionRevision(barberUid);
-      const savedPromotion = { ...payload, id };
-      if (!wasLive && promotionIsLive(payload)) await notifyPromotion(savedPromotion);
-      return { ok: true, id };
-    }
-    throw fail('Método no permitido.', 405);
-  }
-
-  function cleanPromotion(data, creating) {
-    const title = cleanText(data.title, 80);
-    const description = cleanText(data.description, 300);
-    const conditions = cleanText(data.conditions, 300);
-    const audience = ['all', 'selected', 'except'].includes(data.audience) ? data.audience : 'all';
-    const customerIds = Array.isArray(data.customerIds) ? [...new Set(data.customerIds.map(v => cleanText(v, 100)).filter(Boolean))].slice(0, 250) : [];
-    if (!title) throw fail('Escribí un título para la promoción.');
-    if (audience !== 'all' && !customerIds.length) throw fail('Seleccioná al menos un cliente para la promoción.');
-    const startsAt = data.startsAt ? Timestamp.fromDate(new Date(data.startsAt)) : null;
-    const endsAt = data.endsAt ? Timestamp.fromDate(new Date(data.endsAt)) : null;
-    if (startsAt && Number.isNaN(startsAt.toDate().getTime())) throw fail('La fecha de inicio no es válida.');
-    if (endsAt && Number.isNaN(endsAt.toDate().getTime())) throw fail('La fecha de finalización no es válida.');
-    if (startsAt && endsAt && startsAt.toMillis() > endsAt.toMillis()) throw fail('La fecha de finalización debe ser posterior al inicio.');
-    return { title, description, conditions, audience, customerIds, startsAt, endsAt, active: data.active !== false };
-  }
-  async function touchPromotionRevision(barberUid) {
-    const revision = crypto.randomUUID();
-    await setDoc(doc(db(), 'barbers', barberUid, 'publicMeta', 'promotions'), {
-      revision, updatedAt: serverTimestamp()
-    }, { merge: true });
   }
 
   return async function api(url, options = {}) {
@@ -740,15 +599,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/customers' && method === 'PUT') return await updateCustomer(data);
       if (path === '/api/customers' && method === 'DELETE') return await disableCustomer(data);
       if (path === '/api/cuts' && method === 'POST') return await addCut(data);
-      if (path === '/api/promotions') return await promotions(parsed.href, method, data);
-      if (path === '/api/push' && method === 'GET') return await workerRequest('/api/push');
-      if (path === '/api/push' && method === 'DELETE') return await workerRequest('/api/push', { method: 'DELETE', body: data });
-      if (path === '/api/push' && method === 'POST') return await workerRequest('/api/push', { method: 'POST', body: data });
       if (path === '/api/create-preference' && method === 'POST') return await workerRequest('/api/create-preference', { method: 'POST', body: data });
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);
     } catch (error) {
       if (error?.code === 'permission-denied') {
-        throw fail('Firebase bloqueó esta operación por las reglas de seguridad. Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte.', 403);
+        throw fail('No pudimos validar esta operación. Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte.', 403);
       }
       if (error?.code === 'unavailable' || error?.code === 'deadline-exceeded' || error?.code === 'auth/network-request-failed') {
         throw Object.assign(fail('No se pudo conectar con Firebase. Revisá tu conexión y volvé a intentar.', 503), { retryable: true });
@@ -756,13 +611,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw error;
     }
   };
-
-  function promotionIsLive(promotion) {
-    const now = Date.now();
-    const start = dateOf(promotion?.startsAt)?.getTime() ?? 0;
-    const end = dateOf(promotion?.endsAt)?.getTime() ?? Infinity;
-    return promotion?.active !== false && start <= now && end >= now;
-  }
 
   async function saveProfile(data) {
     const uid = currentUid();

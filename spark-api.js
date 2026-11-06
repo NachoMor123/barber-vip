@@ -582,7 +582,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     return { ok: true, customer: resultCustomer, message };
   }
 
-  return async function api(url, options = {}) {
+  const apiRequest = async function api(url, options = {}) {
     if (navigator.onLine === false) throw Object.assign(fail('Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.'), { retryable: true });
     const parsed = new URL(url, window.location.origin);
     const path = parsed.pathname;
@@ -660,4 +660,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     }, { merge: true });
     return { ok: true, programs: [program], defaultLoyaltyProgramId: id };
   }
+
+  apiRequest.resetSessionCache = invalidate;
+  return apiRequest;
 }

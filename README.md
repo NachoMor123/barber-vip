@@ -1,55 +1,53 @@
 # Barber VIP — arquitectura híbrida gratuita
 
-Barber VIP se prepara para funcionar con **Firebase Spark + Cloudflare Workers Free**, sin Vercel Hobby, sin Firebase Blaze y sin Cloud Functions.
+Barber VIP es una PWA de fidelización para profesionales independientes. La plataforma usa **Firebase Spark + Cloudflare Workers Free**, sin Firebase Blaze ni Cloud Functions.
 
 ## Proyecto y enlaces
 
-- Proyecto Firebase existente: `barbervip-309dc`
-- Hosting de la aplicación previsto: `https://barbervip-309dc.web.app`
-- Hosting comercial previsto: `https://barber-vip-comercial-309dc.web.app`
-- Aplicación actual mientras se prueba la migración: `https://barber-vip-three.vercel.app/`
+- Firebase: `barbervip-309dc`
+- Hosting previsto para la app: `https://barbervip-309dc.web.app`
+- Hosting comercial: `https://barber-vip-comercial-309dc.web.app`
+- Frontend Vercel anterior: `https://barber-vip-three.vercel.app/`
 
-**Importante:** los enlaces Firebase son los destinos previstos. Esta rama todavía no está desplegada; mantener Vercel activo hasta terminar las pruebas.
+No crear otro proyecto Firebase ni otra base de datos. Las cuentas, perfiles, clientes, visitas y pagos existentes se conservan.
 
-No crear otra base de datos ni otro proyecto Firebase. Los usuarios y documentos actuales se deben conservar.
-
-## Qué hace cada servicio
+## Responsabilidades
 
 **Firebase Spark**
-- Aloja la aplicación PWA y la web comercial.
-- Firebase Authentication: cuentas de barberos y clientes.
-- Firestore: perfiles, clientes, visitas, hitos fijos 2/4/6, servicios, horarios y promociones.
+- Firebase Hosting para la PWA.
+- Authentication para cuentas de profesionales y clientes.
+- Firestore para perfiles, clientes, visitas, ciclos e hitos de beneficios, servicios y horarios.
 
 **Cloudflare Worker**
-- Crea preferencias de Checkout de Mercado Pago y recibe el webhook firmado para activar automáticamente 30 días una vez aprobado el pago.
-- Guarda suscripciones Web Push y envía avisos de visitas y promociones aunque la PWA esté cerrada.
-- Restablece la contraseña de un cliente cuando lo solicita el barbero dueño de esa cuenta.
+- Crea preferencias de Checkout de Mercado Pago y recibe el webhook firmado.
+- Atiende operaciones protegidas de alta de clientes y cambio de contraseña.
+- Verifica identidad, rol y pertenencia antes de actuar sobre datos.
 
-El Worker no aloja la aplicación ni reemplaza Firestore. Las claves privadas permanecen en Cloudflare Secrets, nunca en el navegador ni en GitHub.
+El Worker no aloja la PWA ni reemplaza Firestore. Las claves privadas permanecen en Cloudflare Secrets.
 
-## Funcionalidad que se conserva
+## Funciones del producto
 
-- Registro e inicio de sesión de barberos y clientes.
-- Alta de clientes desde el panel y autorregistro por código.
-- Tarjetas de fidelización, visitas y premios en los hitos 2, 4 y 6.
-- Servicios y precios, WhatsApp, Instagram, ubicación y horarios.
-- Promociones por audiencia y actualización dentro de la aplicación.
-- Notificaciones Push después de una visita y al publicar/activar una promoción.
-- Checkout de Mercado Pago, confirmación de pago por webhook y renovación automática del período de acceso.
-- Cambio de contraseña desde la edición del cliente.
+- Registro e inicio de sesión de profesionales y clientes.
+- Alta de clientes desde el panel y autorregistro mediante código y QR.
+- Tarjeta de fidelización y registro de visitas.
+- Beneficios en hitos 2, 4 y 6, con configuración editable.
+- Perfil profesional, servicios, WhatsApp, Instagram, ubicación y horarios.
+- Checkout de Mercado Pago y confirmación de pago mediante webhook firmado.
+- Ciclo de suscripción de ARS 8.000 por 30 días; prueba gratuita de 7 días sin gracia y 5 días de gracia únicamente después de una suscripción paga.
 
-Las notificaciones Push requieren que cada cliente conceda permiso en su dispositivo. Los avisos programados para promociones futuras no se envían antes de su fecha de inicio.
+La aplicación no incluye promociones comerciales ni notificaciones Push. El service worker se mantiene para instalación PWA y caché/offline.
 
-## Orden de despliegue
+## Validación y despliegue
 
-1. Preparar Cloudflare Worker y sus secretos siguiendo [worker/README.md](worker/README.md).
-2. Ejecutar pruebas y una compilación sin publicar: `cd worker && npm install && npm test && npx wrangler deploy --dry-run`.
-3. Desplegar el Worker, copiar su URL `workers.dev` en `worker-config.js`.
-4. Crear/confirmar los dos sitios de Firebase Hosting en el proyecto existente.
-5. Desplegar primero las reglas y la app de prueba; después desplegar la web comercial desde su repositorio.
-6. Ejecutar las pruebas funcionales de la guía antes de reemplazar enlaces o invitar clientes.
+Desde la carpeta `worker/`:
 
-Comandos para la app (sólo cuando la configuración anterior esté lista):
+```bash
+npm install
+npm test
+npx wrangler deploy --dry-run
+```
+
+Desde la raíz, para publicar reglas y Hosting en el proyecto existente:
 
 ```bash
 firebase login
@@ -57,21 +55,12 @@ firebase use barbervip-309dc
 firebase deploy --only firestore:rules,hosting:app
 ```
 
-La web comercial se despliega desde el repositorio independiente `barber-vip-web` con el target `commercial`.
+Antes de reemplazar el enlace de acceso, verificar el webhook de Mercado Pago, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. Mantener el frontend anterior disponible hasta validar el nuevo Hosting.
 
 ## Lecturas y cuotas
 
-La app evita listeners de presencia/última conexión y carga la lista de clientes al abrir la sección correspondiente. Las cuotas de Spark no son ilimitadas: revisar Firebase Console → Firestore → Usage durante las pruebas y el uso inicial.
+La app evita listeners de presencia/última conexión y carga los clientes bajo demanda al abrir la sección correspondiente. Firestore Spark tiene cuotas limitadas: revisar Firebase Console → Firestore → Usage durante las pruebas y el uso inicial. No se promete una capacidad fija de cuentas sin medir lecturas, escrituras, almacenamiento y transferencia reales.
 
-No hay una garantía de capacidad para un número fijo de barberos sin medir lecturas, escrituras, almacenamiento y transferencia reales.
+## Pruebas automáticas
 
-## Pagos manuales de contingencia
-
-Se mantiene `/billing-admin.html` como herramienta de recuperación para el propietario del proyecto si fuera necesario registrar un pago verificado manualmente. El flujo habitual debe utilizar Checkout de Mercado Pago y el webhook del Worker.
-
-## Estado de validación
-
-- Pruebas unitarias y sintaxis del Worker: automatizadas en GitHub Actions.
-- Compilación de Wrangler sin despliegue: automatizada.
-- Sintaxis de `spark-api.js` y módulos de `index.html`: automatizada.
-- Faltan pruebas de integración con las credenciales reales de Firebase, Cloudflare y Mercado Pago. No se ha desplegado en producción.
+GitHub Actions valida sintaxis de los módulos, flujo de pago, pruebas unitarias y compilación de Wrangler sin publicar el Worker. Las pruebas automáticas no reemplazan la verificación con credenciales reales de Firebase, Cloudflare y Mercado Pago.

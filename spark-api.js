@@ -178,10 +178,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw fail('El servidor auxiliar de Barber VIP todavía no está conectado. Falta terminar la configuración de Cloudflare.', 503);
     }
     const current = state.auth?.currentUser;
-    if (!current) throw fail('Tu sesión venció. Volvé a ingresar.', 401);
-    const token = await current.getIdToken();
+    const requiresAuth = options.auth !== false;
+    if (requiresAuth && !current) throw fail('Tu sesión venció. Volvé a ingresar.', 401);
+    const token = requiresAuth ? await current.getIdToken() : '';
     const method = String(options.method || 'GET').toUpperCase();
-    const headers = { authorization: 'Bearer ' + token, ...(options.headers || {}) };
+    const headers = { ...(token ? { authorization: 'Bearer ' + token } : {}), ...(options.headers || {}) };
     let body = options.body;
     if (body !== undefined && body !== null && typeof body !== 'string') {
       headers['content-type'] = 'application/json';
@@ -400,40 +401,15 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (password.length < 6 || password.length > 128) throw fail('La contraseña debe tener entre 6 y 128 caracteres.');
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
     if (!barberCode) throw fail('Completá el código de tu profesional.');
-    const barberCodeSnap = await getDoc(doc(db(), 'publicBarberCodes', barberCode));
-    if (!barberCodeSnap.exists()) throw fail('No encontramos ese código. Pedile a tu profesional que ingrese una vez a Barber VIP y volvé a intentar.', 404);
-    const barberUid = String(barberCodeSnap.data().barberUid || '');
-    if (!barberUid) throw fail('El código de tu profesional no es válido.', 404);
-    const barberSnap = await getDoc(doc(db(), 'barbers', barberUid));
-    if (!barberSnap.exists() || subscription(barberSnap.data()).status === 'suspended') {
-      throw fail('El acceso para nuevas cuentas está pausado porque el plan del profesional está vencido. Consultá con el profesional.', 402);
-    }
-    const loginId = await loginLookupId(barberUid, normalized);
-    const loginRef = doc(db(), 'customerLoginLookup', loginId);
-    const loginSnap = await getDoc(loginRef);
-    if (loginSnap.exists() && loginSnap.data().active !== false) throw fail('Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional.');
-    const loginEmail = 'cliente-' + crypto.randomUUID() + '@accounts.barbervip.app';
-    let credential = null;
-    try {
-      credential = await createUserWithEmailAndPassword(auth(), loginEmail, password);
-      await updateAuthProfile(credential.user, { displayName: fullName });
-      const uid = credential.user.uid;
-      const customer = customerDefaults({ uid, barberUid, fullName, usernameNormalized: normalized, loginEmail, whatsapp, signupSource: 'self' });
-      const batch = writeBatch(db());
-      batch.set(doc(db(), 'barbers', barberUid, 'customers', uid), customer);
-      batch.set(doc(db(), 'userProfiles', uid), { uid, role: 'customer', barberUid, createdAt: serverTimestamp() });
-      batch.set(loginRef, { uid, barberUid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      await batch.commit();
-      invalidate();
-      return { ok: true, email: loginEmail, barberCode };
-    } catch (error) {
-      if (credential?.user) {
-        await deleteUser(credential.user).catch(() => {});
-        await signOut(auth()).catch(() => {});
-      }
-      if (error?.code === 'auth/email-already-in-use') throw fail('No se pudo crear la cuenta en este momento. Probá nuevamente.', 409);
-      throw error;
-    }
+
+    // Public registration is created by the Worker with server credentials.
+    // The client must not read the private barber document or write into another
+    // barber's customer collection, which Firestore rules correctly prohibit.
+    return await workerRequest('/api/customer-register', {
+      method: 'POST',
+      auth: false,
+      body: { barberCode, fullName, password, whatsapp }
+    });
   }
 
   async function signInCustomerLookup(data) {

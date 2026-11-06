@@ -161,7 +161,7 @@ export function createSparkApi({ firebaseConfig, state }) {
   let publicBarberCode = '';
 
   const db = () => {
-    if (!state.db) throw fail('Firebase todavía no está listo. Recargá Barber VIP.', 503);
+    if (!state.db) throw fail('No se pudo conectar con el servicio. Recargá Barber VIP e intentá nuevamente.', 503);
     return state.db;
   };
   const auth = () => {
@@ -174,7 +174,7 @@ export function createSparkApi({ firebaseConfig, state }) {
   async function workerRequest(path, options = {}) {
     const base = String(WORKER_API_BASE || '').trim().replace(/\/+$/, '');
     if (!base || base.includes('<COMPLETAR')) {
-      throw fail('El servidor auxiliar de Barber VIP todavía no está conectado. Falta terminar la configuración de Cloudflare.', 503);
+      throw fail('El servicio no está disponible en este momento. Intentá nuevamente más tarde.', 503);
     }
     const current = state.auth?.currentUser;
     const requiresAuth = options.auth !== false;
@@ -603,10 +603,10 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);
     } catch (error) {
       if (error?.code === 'permission-denied') {
-        throw fail('Firebase bloqueó esta operación por las reglas de seguridad. Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte.', 403);
+        throw fail('No se pudo completar la acción. Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte.', 403);
       }
       if (error?.code === 'unavailable' || error?.code === 'deadline-exceeded' || error?.code === 'auth/network-request-failed') {
-        throw Object.assign(fail('No se pudo conectar con Firebase. Revisá tu conexión y volvé a intentar.', 503), { retryable: true });
+        throw Object.assign(fail('No se pudo conectar con el servicio. Revisá tu conexión y volvé a intentar.', 503), { retryable: true });
       }
       throw error;
     }

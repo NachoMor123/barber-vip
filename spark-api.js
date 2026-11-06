@@ -504,10 +504,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
     }
     await batch.commit();
-    try {
-    } catch (error) {
-      console.warn('[Barber VIP] No se pudieron limpiar las suscripciones Push del cliente dado de baja.', error?.message || error);
-    }
     return { ok: true };
   }
 

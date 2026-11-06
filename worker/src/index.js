@@ -270,17 +270,17 @@ async function sha256Hex(value) {
 }
 function normalizeCustomerSignupName(value) {
   return String(value || "").trim().slice(0, 100)
-    .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-    .toLowerCase().replace(/\\s+/g, " ");
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ");
 }
 function normalizeCustomerWhatsapp(value) {
-  let number = String(value || "").replace(/\\D/g, "").slice(0, 18);
+  let number = String(value || "").replace(/\D/g, "").slice(0, 18);
   if (number.startsWith("00")) number = number.slice(2);
   if (number.startsWith("549") && number.length === 13) return number;
   if (number.startsWith("54") && number.length === 12) return "549" + number.slice(2);
   if (number.startsWith("0")) number = number.replace(/^0+/, "");
   if (number.length === 12) {
-    const match = number.match(/^(\\d{2,4})15(\\d{6,8})$/);
+    const match = number.match(/^(\d{2,4})15(\d{6,8})$/);
     if (match) number = match[1] + match[2];
   }
   return number.length === 10 ? "549" + number : number;
@@ -300,7 +300,7 @@ async function registerCustomerAccount(request, env) {
   if (password.length < 6 || password.length > 128) {
     throw Object.assign(new Error("La contraseña debe tener entre 6 y 128 caracteres."), { status: 400 });
   }
-  if (!/^549\\d{10}$/.test(whatsapp) && !/^54\\d{10}$/.test(whatsapp)) {
+  if (!/^549\d{10}$/.test(whatsapp) && !/^54\d{10}$/.test(whatsapp)) {
     throw Object.assign(new Error("Ingresá un WhatsApp argentino válido, con característica y número completo."), { status: 400 });
   }
   if (!barberCode) throw Object.assign(new Error("Completá el código de tu profesional."), { status: 400 });

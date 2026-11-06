@@ -758,6 +758,7 @@
     const appRoot = $('#app'), modalRoot = $('#modal-root');
     const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null, customersUnsubscribe:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all',   unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
+    let observedAuthUid = '';
     let deferredInstallPrompt = null;
     let installHelpExpanded = false;
     let installPhase = 'prompt'; // prompt | waiting | installed | manual fallback
@@ -2209,7 +2210,7 @@
     if(firebaseConfigured()) {
       try {
         const fbApp=initializeApp(firebaseConfig);state.auth=getAuth(fbApp);state.db=getFirestore(fbApp);firebaseReady=true;
-        const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
+        const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;const nextUid=user?.uid||'';if(nextUid!==observedAuthUid){api.resetSessionCache();observedAuthUid=nextUid;if(state.user?.uid!==nextUid)cleanupContext();}if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
         // Prefer browser-local auth persistence so the installed app restores the session on reopen.
         void setPersistence(state.auth,browserLocalPersistence).catch(error=>console.warn('No se pudo confirmar la persistencia local de sesión:',error?.message||error)).finally(restoreAuthObserver);
       } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}

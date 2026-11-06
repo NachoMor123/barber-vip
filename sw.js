@@ -3,8 +3,7 @@ const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-19
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
-    // A temporary icon/cache fetch failure must not prevent the browser from
-    // installing the service worker and offering the PWA installation.
+    // A temporary icon/cache fetch failure must not prevent PWA installation.
     try {
       const cache = await caches.open(CACHE_NAME);
       const results = await Promise.allSettled(APP_SHELL.map(async path => {

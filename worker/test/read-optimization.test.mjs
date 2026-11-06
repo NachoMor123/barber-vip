@@ -65,6 +65,8 @@ test("Firebase identity changes invalidate the API cache and clear the previous 
 
 test("client sorting includes chronological visit order and has no redundant recent-reward filter", () => {
   assert.match(html, /Ordenar por orden de visitas/);
+  assert.match(html, /\.mobile-nav\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.doesNotMatch(html, /\.mobile-nav\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(html, /case 'visit-order-desc'/);
   assert.doesNotMatch(html, /customerRewardFilter/);
   assert.doesNotMatch(html, /Premio aplicado recientemente/);

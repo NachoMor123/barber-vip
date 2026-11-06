@@ -1,7 +1,6 @@
 const { admin } = require('../lib/admin');
 const { send, method, body, text } = require('../lib/http');
 const { requireBarber, subscription } = require('../lib/security');
-const { sendPushToCustomer } = require('../lib/push');
 
 function defaultProgram(barber) {
   const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];
@@ -120,14 +119,6 @@ module.exports = async function handler(req, res) {
       let message = 'Visita registrada correctamente.';
       if (outcome.appliedReward) { const label = outcome.appliedReward.label || String(outcome.appliedReward.discount) + '% OFF'; message = 'Visita registrada. ' + label + ' se aplicó en esta visita.'; }
       if (outcome.cycleReset) message += ' El siguiente ciclo comienza desde cero.';
-      const rewardLabel = outcome.appliedReward && String(outcome.appliedReward.label || (Number(outcome.appliedReward.discount)||0)+'% OFF');
-      const pushTitle = outcome.cycleReset ? '¡Ciclo completado!' : outcome.appliedReward ? '¡Premio alcanzado!' : 'Tu tarjeta se actualizó';
-      const pushBody = outcome.cycleReset
-        ? 'Completaste '+outcome.cycleMax+' de '+outcome.cycleMax+' visitas. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita. El próximo corte inicia otro ciclo.'
-        : outcome.appliedReward
-          ? 'Alcanzaste el hito '+outcome.cycleCut+'. '+(rewardLabel||'Tu beneficio')+' se aplicó en esta visita.'
-          : 'Tu ciclo va '+outcome.cycleCut+' de '+outcome.cycleMax+' visitas.';
-      await sendPushToCustomer({barberUid:ctx.uid,customerId,title:pushTitle,body:pushBody,tag:'barber-vip-visits-'+customerId+'-'+String(resultCustomer.totalCuts||Date.now()),url:'/'});
       return send(res, 200, { ok: true, customer: resultCustomer, appliedReward: outcome.appliedReward, message });
     }
 

@@ -18,11 +18,11 @@ No crear otra base de datos ni otro proyecto Firebase. Los usuarios y documentos
 **Firebase Spark**
 - Aloja la aplicación PWA y la web comercial.
 - Firebase Authentication: cuentas de barberos y clientes.
-- Firestore: perfiles, clientes, visitas, hitos fijos 2/4/6, servicios, horarios y promociones.
+- Firestore: perfiles, clientes, visitas, hitos fijos 2/4/6, servicios y horarios.
 
 **Cloudflare Worker**
 - Crea preferencias de Checkout de Mercado Pago y recibe el webhook firmado para activar automáticamente 30 días una vez aprobado el pago.
-- Guarda suscripciones Web Push y envía avisos de visitas y promociones aunque la PWA esté cerrada.
+- Mantiene las operaciones privadas de cuentas, clientes, visitas, contraseñas y suscripciones comerciales.
 - Restablece la contraseña de un cliente cuando lo solicita el barbero dueño de esa cuenta.
 
 El Worker no aloja la aplicación ni reemplaza Firestore. Las claves privadas permanecen en Cloudflare Secrets, nunca en el navegador ni en GitHub.
@@ -33,12 +33,10 @@ El Worker no aloja la aplicación ni reemplaza Firestore. Las claves privadas pe
 - Alta de clientes desde el panel y autorregistro por código.
 - Tarjetas de fidelización, visitas y premios en los hitos 2, 4 y 6.
 - Servicios y precios, WhatsApp, Instagram, ubicación y horarios.
-- Promociones por audiencia y actualización dentro de la aplicación.
-- Notificaciones Push después de una visita y al publicar/activar una promoción.
+- Tarjetas de fidelización, avance de hitos y consulta del historial de visitas.
+- Acceso de clientes por enlace, código y QR.
 - Checkout de Mercado Pago, confirmación de pago por webhook y renovación automática del período de acceso.
 - Cambio de contraseña desde la edición del cliente.
-
-Las notificaciones Push requieren que cada cliente conceda permiso en su dispositivo. Los avisos programados para promociones futuras no se envían antes de su fecha de inicio.
 
 ## Orden de despliegue
 

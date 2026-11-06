@@ -7,9 +7,7 @@
     "deploy": "wrangler deploy",
     "test": "node --test"
   },
-  "dependencies": {
-    "@block65/webcrypto-web-push": "2.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "wrangler": "^4.46.0"
   }

@@ -6,14 +6,17 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
-const [html, api, cutsApi, customersApi, profileApi, worker, serviceWorker] = await Promise.all([
+const [html, api, cutsApi, customersApi, profileApi, worker, serviceWorker, rules, wrangler, envExample] = await Promise.all([
   readFile(join(root, "index.html"), "utf8"),
   readFile(join(root, "spark-api.js"), "utf8"),
   readFile(join(root, "api", "cuts.js"), "utf8"),
   readFile(join(root, "api", "customers.js"), "utf8"),
   readFile(join(root, "api", "me.js"), "utf8"),
   readFile(join(root, "worker", "src", "index.js"), "utf8"),
-  readFile(join(root, "sw.js"), "utf8")
+  readFile(join(root, "sw.js"), "utf8"),
+  readFile(join(root, "firestore.rules"), "utf8"),
+  readFile(join(root, "worker", "wrangler.jsonc"), "utf8"),
+  readFile(join(root, "env.example"), "utf8")
 ]);
 
 function functionBody(source, name, nextName) {
@@ -40,6 +43,9 @@ test("legacy promotions and Push backends are removed from the repository", asyn
   assert.doesNotMatch(profileApi, /promotionsUpdatedAt|collection\(['"]promotions['"]\)/);
   assert.doesNotMatch(worker, /path === ["']\/api\/(push|promotions)/);
   assert.doesNotMatch(serviceWorker, /addEventListener\(["']push|addEventListener\(["']notificationclick/i);
+  assert.doesNotMatch(rules, /pushSubscriptions|match \/promotions\b/i);
+  assert.doesNotMatch(wrangler, /VAPID_|durable_objects\s*:/i);
+  assert.doesNotMatch(envExample, /VAPID_|APP_URL=https:\/\/barber-vip-three\.vercel\.app/i);
 });
 
 test("administrator customer cache is isolated by authenticated user and barber", () => {

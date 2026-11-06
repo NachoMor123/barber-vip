@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v67-firebase-migration';
+const CACHE_NAME = 'barber-vip-shell-v68-session-push';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
@@ -41,8 +41,7 @@ self.addEventListener('push', event => {
     tag,
     renotify: false,
     requireInteraction: false,
-    timestamp: Date.now(),
-    data: { url: payload.url || '/' }
+    timestamp: Date.now()
   }));
 });
 

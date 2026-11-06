@@ -22,11 +22,6 @@ function safeProgramRewards(input) {
   });
 }
 function publicBarberProfile(source) {
-  const dateIso = value => {
-    if (!value) return null;
-    const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  };
   const programs = (Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [])
     .filter(program => program && program.audience === 'all')
     .slice(0, 1)
@@ -67,7 +62,6 @@ function publicBarberProfile(source) {
     theme: { accent: '#3478ff', density: themeSource.density === 'compact' ? 'compact' : 'comfortable' },
     loyaltyPrograms: programs,
     defaultLoyaltyProgramId: cleanProgramId(source.defaultLoyaltyProgramId),
-    promotionsUpdatedAt: dateIso(source.promotionsUpdatedAt)
   };
 }
 

@@ -18,7 +18,6 @@ Seguir los pasos detallados en [worker/README.md](worker/README.md).
 El Worker necesita:
 - Cuenta de servicio dedicada en Google Cloud IAM, con `roles/datastore.user` y `roles/firebaseauth.admin` sobre el proyecto Firebase.
 - Secretos de Mercado Pago: Access Token y secreto de firma del webhook.
-- Clave pública VAPID y `VAPID_SUBJECT` ya están configurados en `worker/wrangler.jsonc`. La clave privada nueva fue entregada al propietario por separado y debe guardarse en Cloudflare como `VAPID_PRIVATE_KEY`; nunca subirla a GitHub ni pegarla en el chat.
 - Firebase Web API Key.
 
 No pegar credenciales en GitHub, en el código, ni en este chat. Guardarlas solamente con `wrangler secret put` dentro de Cloudflare.
@@ -69,18 +68,7 @@ La web comercial está en el repositorio separado `NachoMor123/barber-vip-web`. 
 
 Las credenciales productivas `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` permanecen exclusivamente como secretos del Worker. No reemplazarlas por credenciales de prueba en el Worker productivo.
 
-## 5. Notificaciones Push
-
-- Los clientes activan las notificaciones desde la pantalla de su tarjeta.
-- El Worker conserva las suscripciones en `pushSubscriptions`.
-- Después de guardar una visita, la app solicita al Worker enviar la notificación al cliente correspondiente.
-- Al crear o activar una promoción actualmente vigente, el Worker notifica a los destinatarios incluidos.
-- Al dar de baja un cliente, se eliminan sus suscripciones Push.
-- Si el proveedor responde 404/410, la suscripción se elimina.
-
-Esta migración utiliza un par VAPID nuevo preparado para Firebase Hosting. Al cambiar desde el dominio Vercel al dominio Firebase, cada cliente tendrá que activar las notificaciones en la nueva dirección; la autorización y la suscripción Push pertenecen al origen del sitio.
-
-## 6. Cambio de contraseña de cliente
+## 5. Cambio de contraseña de cliente
 
 Al guardar una nueva contraseña desde la edición de cliente:
 1. La app envía el Firebase ID token del barbero.
@@ -90,22 +78,21 @@ Al guardar una nueva contraseña desde la edición de cliente:
 
 No se guarda la contraseña en Firestore ni en logs.
 
-## 7. Pruebas obligatorias antes de reemplazar el enlace
+## 6. Pruebas obligatorias antes de reemplazar el enlace
 
 Usar un barbero de prueba y dos cuentas de cliente:
 1. Login de barbero y clientes con credenciales existentes.
 2. Alta de cliente, autorregistro por código y edición de datos.
 3. Visitas, hitos 2/4/6 y actualizaciones de la tarjeta.
-4. Crear promoción activa para todos, seleccionados y excluidos.
-5. Activar notificaciones en un cliente y recibir una visita con la app cerrada.
-6. Desactivar cliente y comprobar que ya no reciba promociones.
-7. Cambiar contraseña desde el panel del barbero y entrar con la contraseña nueva.
-8. Intentar que un barbero cambie la contraseña de un cliente perteneciente a otro barbero; debe rechazarse.
-9. Mercado Pago en modo de prueba: crear Checkout, aprobar el pago, recibir el webhook y comprobar 30 días añadidos.
-10. Reenviar el mismo webhook: no debe extender el período otra vez.
-11. Revisar Workers Analytics y Firebase Usage.
+4. Registrar visitas consecutivas y comprobar el avance de los hitos 2, 4 y 6.
+5. Cerrar sesión y verificar que otra cuenta no vea los datos del usuario anterior.
+6. Cambiar contraseña desde el panel del barbero y entrar con la contraseña nueva.
+7. Intentar que un barbero cambie la contraseña de un cliente perteneciente a otro barbero; debe rechazarse.
+8. Mercado Pago en modo de prueba: crear Checkout, aprobar el pago, recibir el webhook y comprobar 30 días añadidos.
+9. Reenviar el mismo webhook: no debe extender el período otra vez.
+10. Revisar el uso real del Worker y Firestore.
 
-## 8. Enlaces
+## 7. Enlaces
 
 - App actual, mientras migramos: `https://barber-vip-three.vercel.app/`.
 - App Firebase prevista (todavía no publicada): `https://barbervip-309dc.web.app/`.

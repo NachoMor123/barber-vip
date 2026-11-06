@@ -39,3 +39,8 @@ jobs:
           node --input-type=module --check < spark-api.js
           node worker/test/check-app-syntax.mjs
           node worker/test/check-payment-flow.mjs
+      - name: Test Firestore security rules in emulator
+        working-directory: .
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:rules

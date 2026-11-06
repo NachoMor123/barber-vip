@@ -92,18 +92,13 @@ try {
   }));
   console.log('PASS: subscription expiry is protected from the barber');
 
-  await assertSucceeds(setDoc(doc(barberDb, 'barbers', barberUid, 'promotions', 'promo-001'), {
-    title: 'Promo prueba', active: true, audience: 'all', customerIds: [],
+  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'promotions', 'promo-001'), {
+    title: 'No', active: true, audience: 'all', customerIds: [],
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   }));
-  const promos = await assertSucceeds(getDocs(query(
-    collection(customerDb, 'barbers', barberUid, 'promotions'), where('active', '==', true)
-  )));
-  if (promos.size !== 1) throw new Error('Expected one active promotion');
-  await assertFails(setDoc(doc(customerDb, 'barbers', barberUid, 'promotions', 'promo-forged'), {
-    title: 'No', active: true, audience: 'all', customerIds: []
-  }));
-  console.log('PASS: promotion access is scoped');
+  await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'publicMeta', 'promotions')));
+  await assertFails(getDocs(collection(customerDb, 'barbers', barberUid, 'promotions')));
+  console.log('PASS: promotion documents are no longer readable or writable');
 
   // A client can self-register with an active barber using only direct Firestore writes.
   const selfUid = 'self-customer-001';

@@ -56,6 +56,13 @@ test("customer sessions always resolve their own profile, barber and customer do
   assert.match(getMe, /doc\(db\(\), 'barbers', barberUid, 'customers', uid\)/);
 });
 
+test("Firebase identity changes invalidate the API cache and clear the previous account context", () => {
+  assert.match(api, /apiRequest\.resetSessionCache = invalidate/);
+  assert.match(html, /nextUid!==observedAuthUid/);
+  assert.match(html, /api\.resetSessionCache\(\)/);
+  assert.match(html, /if\(state\.user\?\.uid!==nextUid\)cleanupContext\(\)/);
+});
+
 test("client sorting includes chronological visit order and has no redundant recent-reward filter", () => {
   assert.match(html, /Ordenar por orden de visitas/);
   assert.match(html, /case 'visit-order-desc'/);

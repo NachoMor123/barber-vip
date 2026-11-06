@@ -897,7 +897,7 @@
       if(code==='auth/weak-password')return 'La contraseña no cumple con la longitud mínima requerida.';
       if(code==='auth/user-disabled')return 'Esta cuenta está deshabilitada. Consultá con tu profesional.';
       if(code==='permission-denied'||code==='7'||/missing or insufficient permissions|permission_denied|firestore permission-denied/i.test(message)){
-        return 'No se pudieron leer o guardar los datos. Revisá la conexión y las reglas de Firestore.';
+        return 'No se pudo completar la acción. Revisá los datos e intentá nuevamente.';
       }
       if(error?.status===429)return !technical&&message?message:'Hubo demasiadas solicitudes. Esperá un momento y volvé a intentar.';
       if(Number(error?.status)>=500)return !technical&&message?message:'El servidor tuvo un problema temporal. Probá nuevamente en unos minutos.';
@@ -1109,7 +1109,7 @@
           doc.setFont('helvetica','bold');doc.text((page+1)+' / '+pageCount,W-left,288,{align:'right'});
         }
         doc.save('PIP-Guia-de-estrategias-Barber-VIP.pdf');
-        toast('Guía de estrategias descargada. Se generó en tu dispositivo, sin consultar Firebase.','success');
+        toast('Guía de estrategias descargada en este dispositivo.','success');
       }catch(error){
         console.error('[Barber VIP] No se pudo generar la guía PIP.',error);
         toast('No se pudo generar el PDF. Revisá tu conexión e intentá nuevamente.','error');
@@ -1150,7 +1150,7 @@
         void maybeShowInstallPrompt();
         return;
       }
-      appRoot.innerHTML = `<main class="landing"><div class="landing-top">${logo}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Visitas · Beneficios · Fidelización</span></div><h1><span>Volvé a elegir.</span></h1></div><div class="choice-panel"><button class="role-choice" data-action="choose-role" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Barber</strong><small>Gestioná clientes, visitas y beneficios.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-role" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Cliente</strong><small>Consultá tus visitas y beneficios.</small></span><span class="role-arrow">↗</span></button>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>`:''}</div></section></main>`;
+      appRoot.innerHTML = `<main class="landing"><div class="landing-top">${logo}<span class="top-pill"><span class="live-dot"></span> Tu experiencia VIP</span></div><section class="hero"><div><div class="hero-kicker">✦ <span>Visitas · Beneficios · Fidelización</span></div><h1><span>Volvé a elegir.</span></h1></div><div class="choice-panel"><button class="role-choice" data-action="choose-role" data-mode="barber"><span class="role-symbol">◈</span><span><strong>Barber</strong><small>Gestioná clientes, visitas y beneficios.</small></span><span class="role-arrow">↗</span></button><button class="role-choice" data-action="choose-role" data-mode="customer"><span class="role-symbol">✦</span><span><strong>Cliente</strong><small>Consultá tus visitas y beneficios.</small></span><span class="role-arrow">↗</span></button>${!firebaseConfigured()?`<div class="notice" style="margin-top:14px">El acceso no está disponible en este momento. Intentá nuevamente más tarde.</div>`:''}</div></section></main>`;
       void maybeShowInstallPrompt();
     }
     function renderRoleMenu(mode='barber') {
@@ -1177,7 +1177,7 @@
             '<button class="entry-action-card" type="button" data-action="entry-login" data-mode="' + role + '">' +
             '<span class="entry-action-symbol" aria-hidden="true">↗</span><span class="entry-action-copy"><strong>' + loginLabel + '</strong><small>' + loginHint + '</small></span><span class="entry-action-arrow" aria-hidden="true">→</span></button>' +
           '</div>' +
-          (!firebaseConfigured() ? '<div class="notice" style="margin-top:14px">Antes de usarla, configurá Firebase en <b>index.html</b>.</div>' : '') +
+          (!firebaseConfigured() ? '<div class="notice" style="margin-top:14px">El acceso no está disponible en este momento. Intentá nuevamente más tarde.</div>' : '') +
         '</div>' +
         '</section></main>';
       void maybeShowInstallPrompt();
@@ -1450,7 +1450,7 @@
             <div class="barber-poster-code"><small>CÓDIGO DE ACCESO</small><strong>${escapeHtml(b.barberCode||'—')}</strong></div>
             ${b.instagramUrl?'<div class="barber-poster-instagram">@'+escapeHtml((()=>{try{return new URL(String(b.instagramUrl)).pathname.split('/').filter(Boolean)[0]||'Instagram'}catch(_){return 'Instagram'}})())+'</div>':''}
           </div>
-          <p class="field-hint barber-poster-help">El QR abre la app como el enlace habitual. El código impreso permite al cliente vincularse con vos. No agrega lecturas a Firebase.</p>
+          <p class="field-hint barber-poster-help">El QR abre la app como el enlace habitual. El código impreso permite al cliente vincularse con vos. </p>
           <button type="button" class="btn btn-primary btn-block" data-action="download-barber-poster">Descargar cartel en PDF ↓</button>
         </div>
         </section>
@@ -1497,7 +1497,7 @@
 
 
     function adminShell() {
-      return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="side-subscription"><div class="status-label">ESTADO DE CUENTA</div><strong>${escapeHtml(subStatus().label)}</strong><small>${subStatus().expiresAt?`Vence el ${escapeHtml(dateLabel(subStatus().expiresAt))}`:'Configurá la fecha de vencimiento desde Firebase.'}</small><button class="btn btn-soft btn-mini" style="width:100%;margin-top:12px" data-action="pay">Gestionar plan ↗</button></div><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
+      return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="side-subscription"><div class="status-label">ESTADO DE CUENTA</div><strong>${escapeHtml(subStatus().label)}</strong><small>${subStatus().expiresAt?`Vence el ${escapeHtml(dateLabel(subStatus().expiresAt))}`:'Contactá al soporte para revisar el estado de tu cuenta.'}</small><button class="btn btn-soft btn-mini" style="width:100%;margin-top:12px" data-action="pay">Gestionar plan ↗</button></div><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
     }
     function navItem(section,icon,label,badge='') { return `<button class="nav-btn ${state.section===section?'active':''}" data-action="nav" data-section="${section}"><span class="nav-ico">${icon}</span><span>${label}</span>${badge?`<span class="nav-badge">${badge}</span>`:''}</button>`; }
 
@@ -1580,7 +1580,7 @@
         }catch(error){
           console.error('customers one-time read',error);
           state.customersLoaded=false;
-          const failure=new Error('No se pudieron cargar los clientes. Revisá la conexión y las reglas de Firestore.');
+          const failure=new Error('No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
           failure.retryable=true;failure.cause=error;throw failure;
         }finally{
           state.customersLoading=false;
@@ -1601,7 +1601,7 @@
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
         // /api/me ya devuelve el programa de fidelización normalizado; no repetimos lecturas al iniciar.
         const barberRef=doc(state.db,'barbers',me.barberUid);
-        state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>notifyErrorOnce('barber-snapshot','No se pudieron sincronizar los datos del panel. Revisá la conexión y las reglas de Firestore.',err)));
+        state.unsubscribers.push(onSnapshot(barberRef,snap=>{if(snap.exists()){const fresh=snap.data();const currentById=new Map((state.barber?.loyaltyPrograms||[]).map(p=>[p.id,p.customerIds||[]]));const safePrograms=Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms.map(p=>({...p,customerIds:currentById.get(p.id)||[]})):state.barber?.loyaltyPrograms;state.barber={...fresh,loyaltyPrograms:safePrograms,subscription:state.barber?.subscription};applyTheme(state.barber.theme); if(state.role==='barber')renderApp();}},err=>notifyErrorOnce('barber-snapshot','No se pudieron sincronizar los datos del panel. Revisá tu conexión e intentá nuevamente.',err)));
         if(state.section==='clients'&&!state.customersLoaded)void ensureAdminCustomersLoaded().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
         renderApp();
       } else {
@@ -1618,7 +1618,7 @@
           const fresh=snap.data()||{};
           state.barber={...state.barber,displayName:fresh.displayName??state.barber?.displayName,barberName:fresh.barberName??state.barber?.barberName,whatsapp:fresh.whatsapp??state.barber?.whatsapp,instagramUrl:fresh.instagramUrl??state.barber?.instagramUrl,mapsUrl:fresh.mapsUrl??state.barber?.mapsUrl,schedule:fresh.schedule??state.barber?.schedule,services:Array.isArray(fresh.services)?fresh.services:state.barber?.services,showServices:fresh.showServices===true};
           renderApp();
-        },err=>notifyErrorOnce('professional-profile-snapshot','No se pudieron actualizar los datos del profesional. Revisá la conexión y las reglas de Firestore.',err)));
+        },err=>notifyErrorOnce('professional-profile-snapshot','No se pudieron actualizar los datos del profesional. Revisá tu conexión e intentá nuevamente.',err)));
 
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
@@ -1638,7 +1638,7 @@
           }
           state.customer=freshCustomer;
           renderApp();
-        },err=>notifyErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá la conexión y las reglas de Firestore.',err)));
+        },err=>notifyErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá tu conexión e intentá nuevamente.',err)));
 
         renderApp();
       }
@@ -1864,7 +1864,7 @@
       loyalty:'Los hitos son fijos: 2, 4 y 6 visitas. Configurá los descuentos del programa estándar; cada cliente puede tener porcentajes propios.',
       clients:'Creá una ficha por persona y compartile sus datos de acceso. Evitá duplicados: cada cliente tiene su propia tarjeta con vos.',
       visits:'Cuando termine una visita, tocá Registrar visita y elegí al cliente. Se actualizan su total y su ciclo; no hay que hacer nada más.',
-      'customer-view':'Probá la app entrando por Soy cliente con una cuenta de prueba. Revisá su tarjeta, visitas y beneficios antes de compartir el acceso.',
+      'customer-view':'Probá la app entrando desde Cliente con una cuenta de prueba. Revisá su tarjeta, visitas y beneficios antes de compartir el acceso.',
       trial:'En Configuración podés revisar el período de prueba, el estado de tu cuenta y su vencimiento.',
       final:'Listo. Si querés ocultar la guía rápida, entrá a Configuración, buscá “Botón Pip” y elegí “Ocultar botón Pip”. Para volver a verlo, elegí “Mostrar botón Pip”. La preferencia queda guardada en este dispositivo.',
       card:'Acá ves visitas totales, última visita y avance del ciclo. El tiempo de la última visita se calcula en tu dispositivo.',
@@ -2008,8 +2008,8 @@
           if(input){if(input.hasAttribute('data-mask-password')){const reveal=input.dataset.masked!=='false';input.style.webkitTextSecurity=reveal?'none':'disc';input.dataset.masked=reveal?'false':'true';button.textContent=reveal?'Ocultar':'Ver';button.setAttribute('aria-label',reveal?'Ocultar contraseña':'Mostrar contraseña');}else{const visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'Ocultar':'Ver';button.setAttribute('aria-label',visible?'Ocultar contraseña':'Mostrar contraseña');}}
         }
         else if(action==='choose-role'||action==='choose-login'){renderRoleMenu(button.dataset.mode);}
-        else if(action==='entry-create'){if(!firebaseConfigured()){toast('Primero configurá Firebase en index.html y volvé a cargar.','error');return;}if(button.dataset.mode==='customer')void renderCustomerSignup();else renderLogin('barber-signup');}
-        else if(action==='entry-login'){if(!firebaseConfigured()){toast('Primero configurá Firebase en index.html y volvé a cargar.','error');return;}renderLogin(button.dataset.mode==='customer'?'customer':'barber');}
+        else if(action==='entry-create'){if(!firebaseConfigured()){toast('El acceso no está disponible en este momento. Intentá nuevamente más tarde.','error');return;}if(button.dataset.mode==='customer')void renderCustomerSignup();else renderLogin('barber-signup');}
+        else if(action==='entry-login'){if(!firebaseConfigured()){toast('El acceso no está disponible en este momento. Intentá nuevamente más tarde.','error');return;}renderLogin(button.dataset.mode==='customer'?'customer':'barber');}
         else if(action==='go-role-menu'){renderRoleMenu(button.dataset.mode||state.entryRole);}
         else if(action==='start-customer-signup'){void renderCustomerSignup();}
         else if(action==='cancel-customer-signup'){renderRoleMenu('customer');}
@@ -2093,7 +2093,7 @@
       if(form.id==='loyaltySettingsForm'){event.preventDefault();await saveLoyaltyForm(form);return;}
       if(form.id==='customerSignupForm'){
         event.preventDefault();
-        if(!firebaseReady){toast('Firebase no está listo. Recargá la aplicación e intentá nuevamente.','error');return;}
+        if(!firebaseReady){toast('No se pudo conectar con el servicio. Recargá la aplicación e intentá nuevamente.','error');return;}
         const fd=new FormData(form),button=$('button[type="submit"]',form);
         const payload={action:'register',fullName:String($('#selfCustomerName',form)?.value||'').trim(),whatsapp:whatsappNumber(String($('#selfCustomerWhatsapp',form)?.value||'').trim()),password:String($('#selfCustomerPassword',form)?.value||''),barberCode:String($('#customerSignupBarberCode',form)?.value||'').trim()};
         if(payload.fullName.split(/\s+/).filter(Boolean).length<2){toast('Ingresá nombre y apellido.','error');return;}
@@ -2124,7 +2124,7 @@
         return;
       }
       if(form.id==='loginForm'){
-        event.preventDefault();if(!firebaseReady){toast('Firebase todavía no está configurado.','error');return;}
+        event.preventDefault();if(!firebaseReady){toast('El acceso no está disponible en este momento. Intentá nuevamente más tarde.','error');return;}
         const fd=new FormData(form),mode=form.dataset.mode,button=$('button[type="submit"]',form);button.disabled=true;button.textContent=mode==='barber-signup'?'Creando cuenta…':'Ingresando…';state.manualLogin=true;
         let createdCredential=null;
         try{
@@ -2132,7 +2132,7 @@
           if(mode==='barber-signup'){
             const displayName=String(fd.get('displayName')||'').trim(),email=String(fd.get('email')||'').trim().toLowerCase(),password=String(fd.get('barberNewPassword')||'');
             if(displayName.length<2)throw new Error('Ingresá tu nombre.');
-            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Ingresá un correo con formato válido. No hace falta verificarlo, pero Firebase necesita el formato correcto.');
+            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Ingresá un correo con formato válido. No hace falta verificarlo, pero El correo debe tener un formato válido.');
             if(password.length<8)throw new Error('Usá una contraseña de al menos 8 caracteres.');
             createdCredential=await createUserWithEmailAndPassword(state.auth,email,password);
             await updateProfile(createdCredential.user,{displayName});
@@ -2213,7 +2213,7 @@
         const restoreAuthObserver=()=>onAuthStateChanged(state.auth,user=>{state.authResolved=true;const nextUid=user?.uid||'';if(nextUid!==observedAuthUid){api.resetSessionCache();observedAuthUid=nextUid;if(state.user?.uid!==nextUid)cleanupContext();}if(state.manualLogin)return;if(user){try{localStorage.removeItem('barberVipStartSignup');const url=new URL(location.href);if(url.searchParams.has('signup')){url.searchParams.delete('signup');history.replaceState({},'',url.pathname+(url.search||'')+url.hash);}}catch(_){}renderLoading();resumeSession(user);}else{clearListeners();if(state.user)cleanupContext();renderLanding();}});
         // Prefer browser-local auth persistence so the installed app restores the session on reopen.
         void setPersistence(state.auth,browserLocalPersistence).catch(error=>console.warn('No se pudo confirmar la persistencia local de sesión:',error?.message||error)).finally(restoreAuthObserver);
-      } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar la conexión con Firebase. Revisá tu conexión y recargá Barber VIP.',error);}
+      } catch(error){firebaseReady=false;notifyErrorOnce('firebase-init','No se pudo iniciar Barber VIP. Revisá tu conexión y recargá la aplicación.',error);}
     }
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;void maybeShowInstallPrompt();});
     window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;installedPwaDetectionPromise=Promise.resolve(true);installPhase='installed';if(installVerificationTimer)window.clearTimeout(installVerificationTimer);renderInstallGate();});

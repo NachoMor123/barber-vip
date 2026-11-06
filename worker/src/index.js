@@ -1,6 +1,3 @@
-import { buildPushPayload } from "@block65/webcrypto-web-push";
-
-
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
 const GRACE_DAYS = 5;
@@ -137,69 +134,6 @@ async function fsSet(env, path, data) {
   if (!response.ok) throw new Error("Firestore no pudo guardar el documento (" + response.status + ").");
   return result;
 }
-async function fsDelete(env, path) {
-  const response = await fsRequest(env, path, { method: "DELETE" });
-  if (response.status === 404) return;
-  if (!response.ok) throw new Error("Firestore no pudo eliminar el documento (" + response.status + ").");
-}
-async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
-  const response = await fsRequest(env, ":runQuery", {
-    method: "POST",
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId }],
-        where: { fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } },
-        limit
-      }
-    })
-  });
-  const rows = await response.json().catch(() => []);
-  if (!response.ok) throw new Error("Firestore no pudo consultar " + collectionId + " (" + response.status + ").");
-  return (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
-    name: row.document.name,
-    path: row.document.name.split("/documents/")[1],
-    data: decodeFields(row.document.fields || {})
-  }));
-}
-
-function buildQueryPageRequest(collectionId, fieldPath, value, pageSize = 5, cursor = "") {
-  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
-  const structuredQuery = {
-    from: [{ collectionId }],
-    where: { fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } },
-    orderBy: [{ field: { fieldPath: "__name__" }, direction: "ASCENDING" }],
-    limit: pageLimit
-  };
-  if (cursor) structuredQuery.startAt = { values: [{ referenceValue: cursor }], before: false };
-  return { structuredQuery };
-}
-
-async function fsQueryPage(env, collectionId, fieldPath, value, pageSize = 5, cursor = "") {
-  const pageLimit = Math.max(1, Math.min(5, Math.floor(Number(pageSize) || 5)));
-  const response = await fsRequest(env, ":runQuery", {
-    method: "POST",
-    body: JSON.stringify(buildQueryPageRequest(collectionId, fieldPath, value, pageLimit, cursor))
-  });
-  const rows = await response.json().catch(() => []);
-  if (!response.ok) throw new Error("Firestore no pudo consultar " + collectionId + " (" + response.status + ").");
-  const documents = (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
-    name: row.document.name,
-    path: row.document.name.split("/documents/")[1],
-    data: decodeFields(row.document.fields || {})
-  }));
-  return {
-    documents,
-    nextCursor: documents.length === pageLimit ? documents[documents.length - 1].name : null
-  };
-}
-
-function filterCustomerSubscriptions(subscriptions, barberUid, customerId, enabledOnly = true) {
-  return subscriptions.filter(item =>
-    String(item.data.customerId || "") === String(customerId) &&
-    String(item.data.barberUid || "") === String(barberUid) &&
-    (!enabledOnly || item.data.enabled !== false)
-  );
-}
 async function fsCommit(env, writes) {
   const response = await fsRequest(env, ":commit", { method: "POST", body: JSON.stringify({ writes }) });
   const result = await response.json().catch(() => ({}));
@@ -227,15 +161,6 @@ async function requireBarber(env, request, checkPlan = true) {
   if (!barber) throw Object.assign(new Error("No se encontró el perfil profesional."), { status: 404 });
   if (checkPlan && !planCanOperate(barber.data)) throw Object.assign(new Error("Tu plan está vencido. Renovalo para continuar."), { status: 402 });
   return { uid: user.uid, profile: profile.data, barber: barber.data, barberUpdateTime: barber.updateTime };
-}
-async function requireCustomer(env, request) {
-  const user = await verifyFirebaseToken(env, request);
-  const profile = await fsGet(env, "userProfiles/" + user.uid);
-  if (!profile || profile.data.role !== "customer" || !profile.data.barberUid) throw Object.assign(new Error("Esta operación está disponible solamente para cuentas de cliente."), { status: 403 });
-  const barberUid = String(profile.data.barberUid);
-  const customer = await fsGet(env, "barbers/" + barberUid + "/customers/" + user.uid);
-  if (!customer || customer.data.active === false || customer.data.barberUid !== barberUid) throw Object.assign(new Error("La cuenta de cliente no está activa."), { status: 403 });
-  return { uid: user.uid, barberUid, customer: customer.data };
 }
 function toDate(value) {
   if (!value) return null;
@@ -616,304 +541,6 @@ async function handleMercadoPagoWebhook(request, env) {
   }
 }
 
-async function subscriptionsForCustomer(env, barberUid, customerId, enabledOnly = true) {
-  // customerId is the authenticated Firebase UID; query only this customer's devices.
-  // The barberUid check is retained as a second ownership boundary.
-  const subscriptions = await fsQuery(env, "pushSubscriptions", "customerId", customerId, 500);
-  return filterCustomerSubscriptions(subscriptions, barberUid, customerId, enabledOnly);
-}
-async function savePushSubscription(env, context, subscription) {
-  const endpoint = String(subscription?.endpoint || "").slice(0, 2048);
-  const keys = subscription?.keys;
-  let parsed;
-  try { parsed = new URL(endpoint); } catch (_) { throw Object.assign(new Error("La suscripción del navegador no es válida."), { status: 400 }); }
-  if (parsed.protocol !== "https:" || !keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") {
-    throw Object.assign(new Error("La suscripción del navegador no es válida."), { status: 400 });
-  }
-  const id = await sha256Hex(endpoint);
-  await fsSet(env, "pushSubscriptions/" + id, {
-    endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth },
-    barberUid: context.barberUid, customerId: context.uid,
-    enabled: true, updatedAt: new Date()
-  });
-  return { ok: true, enabled: true };
-}
-async function removePushSubscription(env, context, endpoint) {
-  const id = await sha256Hex(String(endpoint || ""));
-  const path = "pushSubscriptions/" + id;
-  const existing = await fsGet(env, path);
-  if (existing) {
-    if (existing.data.customerId !== context.uid || existing.data.barberUid !== context.barberUid) {
-      throw Object.assign(new Error("No podés modificar las notificaciones de otra cuenta."), { status: 403 });
-    }
-    await fsDelete(env, path);
-  }
-  return { ok: true, enabled: false };
-}
-async function removeCustomerPushSubscriptions(request, env) {
-  const barber = await requireBarber(env, request, false);
-  const data = await parseBody(request);
-  const customerId = String(data.customerId || "");
-  if (!customerId) throw Object.assign(new Error("Falta identificar al cliente."), { status: 400 });
-  const customer = await fsGet(env, "barbers/" + barber.uid + "/customers/" + customerId);
-  if (!customer || customer.data.barberUid !== barber.uid) {
-    throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
-  }
-  const targets = await subscriptionsForCustomer(env, barber.uid, customerId, false);
-  for (const item of targets) await fsDelete(env, item.path);
-  return { ok: true, removed: targets.length };
-}
-function cleanPushPayload(data) {
-  return {
-    title: String(data.title || "Barber VIP").slice(0, 90),
-    body: String(data.body || "Hay una novedad en tu tarjeta VIP.").slice(0, 220),
-    tag: String(data.tag || "barber-vip-update").replace(/[^a-zA-Z0-9:_-]/g, "-").slice(0, 120)
-  };
-}
-async function deliverPush(env, docs, payload) {
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
-    throw Object.assign(new Error("Las notificaciones no están configuradas."), { status: 503 });
-  }
-
-  const vapid = {
-    subject: String(env.VAPID_SUBJECT || "https://barbervip-309dc.web.app"),
-    publicKey: String(env.VAPID_PUBLIC_KEY),
-    privateKey: String(env.VAPID_PRIVATE_KEY)
-  };
-  let sent = 0;
-
-  // Small batches keep each free-tier Worker invocation within a conservative CPU/subrequest budget.
-  const batchSize = 5;
-  for (let offset = 0; offset < docs.length; offset += batchSize) {
-    const batch = docs.slice(offset, offset + batchSize);
-    const results = await Promise.all(batch.map(async doc => {
-      try {
-        const subscription = {
-          endpoint: String(doc.data.endpoint || ""),
-          expirationTime: doc.data.expirationTime ?? null,
-          keys: doc.data.keys
-        };
-        const requestInit = await buildPushPayload({
-          data: payload,
-          options: { ttl: 3600, urgency: "normal" }
-        }, subscription, vapid);
-        const response = await fetch(subscription.endpoint, requestInit);
-
-        if (response.status === 404 || response.status === 410) {
-          await fsDelete(env, doc.path).catch(() => {});
-          return false;
-        }
-        if (!response.ok) {
-          console.warn("[Barber VIP push] Delivery failed with status", response.status);
-          return false;
-        }
-        return true;
-      } catch (error) {
-        console.warn("[Barber VIP push] Delivery failed:", error?.message || "unknown error");
-        return false;
-      }
-    }));
-    sent += results.filter(Boolean).length;
-  }
-  return sent;
-}
-async function sendVisitPush(request, env) {
-  const barber = await requireBarber(env, request);
-  const data = await parseBody(request);
-  const customerId = String(data.customerId || "");
-  if (!customerId) throw Object.assign(new Error("Falta el cliente de la notificación."), { status: 400 });
-  const customer = await fsGet(env, "barbers/" + barber.uid + "/customers/" + customerId);
-  if (!customer || customer.data.barberUid !== barber.uid || customer.data.active === false) {
-    throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
-  }
-  const targets = await subscriptionsForCustomer(env, barber.uid, customerId, true);
-  const sent = await deliverPush(env, targets, cleanPushPayload(data));
-  return { ok: true, sent };
-}
-async function sendPromotionPushPage(env, barberUid, promotion, cursor = "", allowPastWindow = false) {
-  if (!promotion.active) return { ok: true, sent: 0, nextCursor: null };
-  const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
-  const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
-  const now = Date.now();
-  if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
-    throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
-  }
-  if (!allowPastWindow && (startsAt > now || endsAt < now)) {
-    return { ok: true, sent: 0, nextCursor: null };
-  }
-
-  const audience = ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all";
-  const ids = new Set(Array.isArray(promotion.customerIds) ? promotion.customerIds.map(String) : []);
-  const pageCursor = String(cursor || "");
-  const expectedPrefix = firestoreResourceName(env, "pushSubscriptions/");
-  if (pageCursor && !pageCursor.startsWith(expectedPrefix)) {
-    throw Object.assign(new Error("El cursor de notificaciones no es válido."), { status: 400 });
-  }
-
-  // Subscription documents are read once in small pages; no polling is needed.
-  const page = await fsQueryPage(env, "pushSubscriptions", "barberUid", barberUid, 5, pageCursor);
-  const matched = page.documents.filter(item => {
-    const customerId = String(item.data.customerId || "");
-    if (!customerId || item.data.enabled === false || item.data.barberUid !== barberUid) return false;
-    if (audience === "selected") return ids.has(customerId);
-    if (audience === "except") return !ids.has(customerId);
-    return true;
-  });
-  const payload = cleanPushPayload({
-    title: promotion.title || "Nueva promoción",
-    body: promotion.description || "Tu profesional publicó una promoción en Barber VIP.",
-    tag: "promotion-" + String(promotion.id || "update")
-  });
-  const sent = await deliverPush(env, matched, payload);
-  return { ok: true, sent, nextCursor: page.nextCursor };
-}
-
-async function sendPromotionPush(request, env) {
-  const barber = await requireBarber(env, request);
-  const data = await parseBody(request);
-  return sendPromotionPushPage(env, barber.uid, data.promotion || {}, String(data.cursor || ""));
-}
-
-async function schedulePromotionPush(request, env) {
-  const barber = await requireBarber(env, request);
-  const data = await parseBody(request);
-  const promotion = data.promotion || {};
-  const promotionId = String(promotion.id || "");
-  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(promotionId)) {
-    throw Object.assign(new Error("La promoción no tiene un identificador válido."), { status: 400 });
-  }
-
-  const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
-  const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
-  if ((promotion.startsAt && !Number.isFinite(startsAt)) || (promotion.endsAt && !Number.isFinite(endsAt))) {
-    throw Object.assign(new Error("Las fechas de la promoción no son válidas."), { status: 400 });
-  }
-  if (endsAt < startsAt) {
-    throw Object.assign(new Error("La fecha de finalización debe ser posterior al inicio."), { status: 400 });
-  }
-
-  const objectId = env.PROMOTION_PUSH_ALARMS.idFromName("promotion:" + barber.uid + ":" + promotionId);
-  const alarm = env.PROMOTION_PUSH_ALARMS.get(objectId);
-  if (promotion.active === false || !promotion.startsAt || startsAt <= Date.now()) {
-    const response = await alarm.fetch("https://promotion-push-alarm/cancel", { method: "DELETE" });
-    if (!response.ok) throw Object.assign(new Error("No se pudo actualizar la programación de la promoción."), { status: 502 });
-    return { ok: true, scheduled: false };
-  }
-
-  const cleanPromotion = {
-    id: promotionId,
-    title: String(promotion.title || "Nueva promoción").slice(0, 80),
-    description: String(promotion.description || "").slice(0, 300),
-    active: true,
-    startsAt: new Date(startsAt).toISOString(),
-    endsAt: promotion.endsAt ? new Date(endsAt).toISOString() : null,
-    audience: ["all", "selected", "except"].includes(promotion.audience) ? promotion.audience : "all",
-    customerIds: Array.isArray(promotion.customerIds)
-      ? [...new Set(promotion.customerIds.map(String))].slice(0, 250)
-      : []
-  };
-  const response = await alarm.fetch("https://promotion-push-alarm/schedule", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ barberUid: barber.uid, promotion: cleanPromotion })
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.ok !== true) {
-    throw Object.assign(new Error(result.error || "No se pudo programar la notificación de la promoción."), { status: 502 });
-  }
-  return { ok: true, scheduled: true, scheduledAt: result.scheduledAt };
-}
-
-export class PromotionPushAlarm {
-  constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
-  }
-
-  async fetch(request) {
-    if (request.method === "DELETE") {
-      await this.ctx.storage.delete("promotionPush");
-      await this.ctx.storage.deleteAlarm();
-      return json({ ok: true });
-    }
-    if (request.method !== "POST") return json({ ok: false, error: "Método no permitido." }, 405);
-
-    const data = await request.json().catch(() => null);
-    const barberUid = String(data?.barberUid || "");
-    const promotion = data?.promotion || {};
-    const promotionId = String(promotion.id || "");
-    const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : NaN;
-    if (!barberUid || !/^[a-zA-Z0-9_-]{1,120}$/.test(promotionId) || !Number.isFinite(startsAt)) {
-      return json({ ok: false, error: "Los datos de la programación no son válidos." }, 400);
-    }
-
-    await this.ctx.storage.put("promotionPush", {
-      barberUid, promotionId, promotion, started: false, cursor: "", sent: 0
-    });
-    await this.ctx.storage.setAlarm(startsAt);
-    return json({ ok: true, scheduledAt: new Date(startsAt).toISOString() });
-  }
-
-  async alarm() {
-    let pending = await this.ctx.storage.get("promotionPush");
-    if (!pending) return;
-
-    try {
-      let promotion = pending.promotion;
-      if (!pending.started) {
-        // Recheck Firestore once at start, then paginate push subscriptions from DO storage.
-        const stored = await fsGet(
-          this.env,
-          "barbers/" + pending.barberUid + "/promotions/" + pending.promotionId
-        );
-        if (!stored || stored.data.active === false) {
-          await this.ctx.storage.delete("promotionPush");
-          return;
-        }
-
-        promotion = { ...stored.data, id: pending.promotionId };
-        const startsAt = promotion.startsAt ? new Date(promotion.startsAt).getTime() : 0;
-        const endsAt = promotion.endsAt ? new Date(promotion.endsAt).getTime() : Infinity;
-        if ((promotion.startsAt && !Number.isFinite(startsAt)) ||
-            (promotion.endsAt && !Number.isFinite(endsAt))) {
-          await this.ctx.storage.delete("promotionPush");
-          return;
-        }
-        if (startsAt > Date.now()) {
-          await this.ctx.storage.put("promotionPush", { ...pending, promotion, started: false, cursor: "" });
-          await this.ctx.storage.setAlarm(startsAt);
-          return;
-        }
-        if (endsAt < Date.now()) {
-          await this.ctx.storage.delete("promotionPush");
-          return;
-        }
-
-        pending = { ...pending, promotion, started: true, cursor: "" };
-        await this.ctx.storage.put("promotionPush", pending);
-      }
-
-      const result = await sendPromotionPushPage(
-        this.env, pending.barberUid, promotion, pending.cursor || "", true
-      );
-      if (result.nextCursor) {
-        await this.ctx.storage.put("promotionPush", {
-          ...pending,
-          promotion,
-          cursor: result.nextCursor,
-          sent: Number(pending.sent || 0) + Number(result.sent || 0)
-        });
-        await this.ctx.storage.setAlarm(Date.now() + 1000);
-      } else {
-        await this.ctx.storage.delete("promotionPush");
-      }
-    } catch (error) {
-      console.error("[Barber VIP] Error al enviar una promoción programada:", error?.message || error);
-      throw error;
-    }
-  }
-}
-
 async function resetCustomerPassword(request, env) {
   const barber = await requireBarber(env, request);
   const data = await parseBody(request);
@@ -952,34 +579,16 @@ async function route(request, env) {
       configured: {
         firebase: Boolean(env.FIREBASE_SERVICE_ACCOUNT_JSON && env.FIREBASE_WEB_API_KEY),
         mercadoPago: Boolean(env.MP_ACCESS_TOKEN && env.MP_WEBHOOK_SECRET),
-        push: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY)
       }
     }, 200, corsHeaders(request, env));
   }
   if (path === "/api/mercadopago-webhook" && ["POST", "GET"].includes(request.method)) return handleMercadoPagoWebhook(request, env);
-  if (path === "/api/push" && request.method === "GET") {
-    return json({ ok: true, enabled: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY), publicKey: env.VAPID_PUBLIC_KEY || "" }, 200, corsHeaders(request, env));
-  }
   if (path === "/api/create-preference" && request.method === "POST") {
     return json(await createPaymentPreference(request, env), 200, corsHeaders(request, env));
   }
   if (path === "/api/customer-register" && request.method === "POST") {
     return json(await registerCustomerAccount(request, env), 200, corsHeaders(request, env));
   }
-  if (path === "/api/push" && request.method === "POST") {
-    const context = await requireCustomer(env, request);
-    const data = await parseBody(request);
-    return json(await savePushSubscription(env, context, data.subscription), 200, corsHeaders(request, env));
-  }
-  if (path === "/api/push" && request.method === "DELETE") {
-    const context = await requireCustomer(env, request);
-    const data = await parseBody(request);
-    return json(await removePushSubscription(env, context, data.endpoint), 200, corsHeaders(request, env));
-  }
-  if (path === "/api/push/send" && request.method === "POST") return json(await sendVisitPush(request, env), 200, corsHeaders(request, env));
-  if (path === "/api/push/promotion" && request.method === "POST") return json(await sendPromotionPush(request, env), 200, corsHeaders(request, env));
-  if (path === "/api/push/schedule-promotion" && request.method === "POST") return json(await schedulePromotionPush(request, env), 200, corsHeaders(request, env));
-  if (path === "/api/push/remove-customer" && request.method === "POST") return json(await removeCustomerPushSubscriptions(request, env), 200, corsHeaders(request, env));
   if (path === "/api/customers/reset-password" && request.method === "POST") return json(await resetCustomerPassword(request, env), 200, corsHeaders(request, env));
   return json({ ok: false, error: "Ruta no encontrada." }, 404, corsHeaders(request, env));
 }
@@ -1001,6 +610,5 @@ export {
   renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
   validMercadoPagoSignature, encodeValue, decodeValue,
   originAllowed, frontendReturnOrigin, isVercelPreviewOrigin,
-  buildQueryPageRequest, filterCustomerSubscriptions,
-  normalizeCustomerSignupName, normalizeCustomerWhatsapp, cleanPushPayload
+  normalizeCustomerSignupName, normalizeCustomerWhatsapp
 };

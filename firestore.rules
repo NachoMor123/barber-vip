@@ -204,24 +204,13 @@ service cloud.firestore {
       }
 
       match /publicMeta/{metaId} {
-        allow get: if metaId in ['professional', 'promotions']
+        allow get: if metaId == 'professional'
           && (isOwner(barberId) || activeCustomerOf(barberId));
         allow list: if false;
         allow create, update: if isOwner(barberId)
         && existsAfter(barberPath(barberId))
-        && metaId in ['professional', 'promotions'];
+        && metaId == 'professional';
         allow delete: if false;
-      }
-
-      match /promotions/{promotionId} {
-        allow get, list: if (
-            isOwner(barberId)
-            || (
-              activeCustomerOf(barberId)
-              && resource.data.active == true
-            )
-          );
-        allow create, update, delete: if barberCanOperate(barberId);
       }
 
       match /cuts/{cutId} {

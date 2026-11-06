@@ -45,6 +45,11 @@ jobs:
           print("Validated app and Firebase/Cloudflare configuration JSON.")
           PY
 
+      - name: Test Firestore security rules in emulator
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:rules
+
       - name: Build Worker without deploying
         working-directory: worker
         run: npx wrangler deploy --dry-run

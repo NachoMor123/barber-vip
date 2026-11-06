@@ -1,14 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
-const [html, api] = await Promise.all([
+const [html, api, cutsApi, customersApi, profileApi, worker, serviceWorker] = await Promise.all([
   readFile(join(root, "index.html"), "utf8"),
-  readFile(join(root, "spark-api.js"), "utf8")
+  readFile(join(root, "spark-api.js"), "utf8"),
+  readFile(join(root, "api", "cuts.js"), "utf8"),
+  readFile(join(root, "api", "customers.js"), "utf8"),
+  readFile(join(root, "api", "me.js"), "utf8"),
+  readFile(join(root, "worker", "src", "index.js"), "utf8"),
+  readFile(join(root, "sw.js"), "utf8")
 ]);
 
 function functionBody(source, name, nextName) {
@@ -18,6 +23,24 @@ function functionBody(source, name, nextName) {
   assert.notEqual(end, -1, `Missing boundary after: ${name}`);
   return source.slice(start, end);
 }
+
+test("legacy promotions and Push backends are removed from the repository", async () => {
+  for (const path of [
+    join(root, "api", "promotions.js"),
+    join(root, "api", "push.js"),
+    join(root, "lib", "push.js")
+  ]) {
+    await assert.rejects(access(path), error => error && error.code === "ENOENT");
+  }
+
+  for (const source of [cutsApi, customersApi, profileApi, worker, serviceWorker]) {
+    assert.doesNotMatch(source, /sendPushToCustomer|sendPushToBarberCustomers|removeCustomerPushSubscriptions/);
+    assert.doesNotMatch(source, /pushSubscriptions|PushManager|showNotification|notificationclick|VAPID_(PUBLIC|PRIVATE|SUBJECT)_KEY/i);
+  }
+  assert.doesNotMatch(profileApi, /promotionsUpdatedAt|collection\(['"]promotions['"]\)/);
+  assert.doesNotMatch(worker, /path === ["']\/api\/(push|promotions)/);
+  assert.doesNotMatch(serviceWorker, /addEventListener\(["']push|addEventListener\(["']notificationclick/i);
+});
 
 test("administrator customer cache is isolated by authenticated user and barber", () => {
   assert.match(html, /const ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
@@ -71,6 +94,6 @@ test("client sorting includes chronological visit order and has no redundant rec
   assert.doesNotMatch(html, /Última visita: más reciente/);
   assert.doesNotMatch(html, /customerRewardFilter/);
   assert.doesNotMatch(html, /reminder/i);
-  assert.doesNotMatch(html, /PushManager|Notification\\.requestPermission|showNotification|notificationclick/i);
+  assert.doesNotMatch(html, /PushManager|Notification\.requestPermission|showNotification|notificationclick/i);
   assert.doesNotMatch(html, /Premio aplicado recientemente/);
 });

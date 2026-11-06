@@ -976,16 +976,24 @@
       if(!storedPreference||Notification.permission!=='granted'){state.pushEnabled=false;return;}
       try{
         const registration=await navigator.serviceWorker.ready;
-        let subscription=await registration.pushManager.getSubscription();
+        const subscription=await registration.pushManager.getSubscription();
+        if(!subscription){
+          try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
+          state.pushEnabled=false;
+          return;
+        }
+        // The server already has this device from the explicit activation.
+        // A normal app reopen must not rewrite its Firestore subscription.
         const config=await api('/api/push');
         if(!config?.enabled||!config.publicKey)throw new Error('Las notificaciones todavía no están configuradas.');
-        if(subscription&&pushSubscriptionUsesKey(subscription,config.publicKey)===false){
+        if(pushSubscriptionUsesKey(subscription,config.publicKey)===false){
           try{await api('/api/push',{method:'DELETE',body:JSON.stringify({endpoint:subscription.endpoint})});}catch(_){}
           await subscription.unsubscribe().catch(()=>false);
-          subscription=null;
+          try{localStorage.removeItem(pushPreferenceKey());}catch(_){}
+          state.pushEnabled=false;
+          if(state.role==='customer'&&state.user)renderApp();
+          return;
         }
-        if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(config.publicKey)});
-        await api('/api/push',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
         state.pushEnabled=true;
         if(state.role==='customer'&&state.user)renderApp();
       }catch(error){state.pushEnabled=false;console.warn('[Barber VIP] No se pudo restaurar la suscripción push.',error?.message||error);}
@@ -2027,7 +2035,8 @@
       state.customersListenerStarted=false;
       if(typeof unsubscribe==='function'){try{unsubscribe();}catch(_){}}
     }
-    const ADMIN_CUSTOMERS_CACHE_TTL_MS=15*60*1000;
+    // Client list is cached locally for 24 hours; manual refresh remains available.
+    const ADMIN_CUSTOMERS_CACHE_TTL_MS=24*60*60*1000;
     function adminCustomersCacheKey(){return 'barberVipAdminCustomers:v1:'+String(state.user?.uid||'')+':'+String(state.barberUid||'');}
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded)return;
@@ -2189,7 +2198,30 @@
       }
     }
 
-    async function removeCustomerPushOnLogout(){ state.pushEnabled=false; }
+    async function removeCustomerPushOnLogout(){
+      if(state.role!=='customer'||!state.user){state.pushEnabled=false;return;}
+      const preferenceKey=pushPreferenceKey();
+      try{
+        const registration=await navigator.serviceWorker?.getRegistration();
+        const subscription=await registration?.pushManager?.getSubscription();
+        if(subscription){
+          // Delete the server record while the Firebase session is still valid.
+          try{
+            await api('/api/push',{method:'DELETE',body:{endpoint:subscription.endpoint}});
+          }catch(error){
+            console.warn('[Barber VIP] No se pudo borrar la suscripción Push del servidor al cerrar sesión.',error?.message||error);
+          }
+          // Unsubscribe locally even if the network is unavailable. The push endpoint
+          // becomes invalid and the Worker will clean up any stale server record.
+          await subscription.unsubscribe().catch(()=>false);
+        }
+      }catch(error){
+        console.warn('[Barber VIP] No se pudo cerrar la suscripción Push de este dispositivo.',error?.message||error);
+      }finally{
+        try{localStorage.removeItem(preferenceKey);}catch(_){}
+        state.pushEnabled=false;
+      }
+    }
 
 
     async function signOutAndReturn() {

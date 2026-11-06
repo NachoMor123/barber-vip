@@ -268,6 +268,160 @@ async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", enc.encode(String(value)));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
+function normalizeCustomerSignupName(value) {
+  return String(value || "").trim().slice(0, 100)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ");
+}
+function normalizeCustomerWhatsapp(value) {
+  let number = String(value || "").replace(/\D/g, "").slice(0, 18);
+  if (number.startsWith("00")) number = number.slice(2);
+  if (number.startsWith("549") && number.length === 13) return number;
+  if (number.startsWith("54") && number.length === 12) return "549" + number.slice(2);
+  if (number.startsWith("0")) number = number.replace(/^0+/, "");
+  if (number.length === 12) {
+    const match = number.match(/^(\d{2,4})15(\d{6,8})$/);
+    if (match) number = match[1] + match[2];
+  }
+  return number.length === 10 ? "549" + number : number;
+}
+
+async function registerCustomerAccount(request, env) {
+  const data = await parseBody(request);
+  const barberCode = String(data.barberCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+  const fullName = String(data.fullName || "").trim().slice(0, 100);
+  const normalizedName = normalizeCustomerSignupName(fullName);
+  const password = String(data.password || "");
+  const whatsapp = normalizeCustomerWhatsapp(data.whatsapp);
+
+  if (fullName.length < 3 || normalizedName.split(" ").filter(Boolean).length < 2) {
+    throw Object.assign(new Error("Ingresá tu nombre y apellido."), { status: 400 });
+  }
+  if (password.length < 6 || password.length > 128) {
+    throw Object.assign(new Error("La contraseña debe tener entre 6 y 128 caracteres."), { status: 400 });
+  }
+  if (!/^549\d{10}$/.test(whatsapp) && !/^54\d{10}$/.test(whatsapp)) {
+    throw Object.assign(new Error("Ingresá un WhatsApp argentino válido, con característica y número completo."), { status: 400 });
+  }
+  if (!barberCode) throw Object.assign(new Error("Completá el código de tu profesional."), { status: 400 });
+
+  const codeDoc = await fsGet(env, "publicBarberCodes/" + barberCode);
+  if (!codeDoc) throw Object.assign(new Error("No encontramos ese código. Revisalo con tu profesional y probá nuevamente."), { status: 404 });
+  const barberUid = String(codeDoc.data.barberUid || "");
+  if (!barberUid) throw Object.assign(new Error("El código de tu profesional no es válido."), { status: 404 });
+
+  // The Worker reads private plan data with server credentials. Firestore rules
+  // remain closed to customers; no private barber document is exposed to clients.
+  const barberDoc = await fsGet(env, "barbers/" + barberUid);
+  if (!barberDoc || !planCanOperate(barberDoc.data)) {
+    throw Object.assign(new Error("El acceso para nuevas cuentas está pausado porque el plan del profesional está vencido. Consultá con el profesional."), { status: 402 });
+  }
+
+  const loginId = barberUid + "_" + await sha256Hex(normalizedName);
+  const loginPath = "customerLoginLookup/" + loginId;
+  const existingLookup = await fsGet(env, loginPath);
+  if (existingLookup && existingLookup.data.active !== false) {
+    throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
+  }
+
+  if (!env.FIREBASE_WEB_API_KEY) throw new Error("FIREBASE_WEB_API_KEY no está configurada.");
+  const loginEmail = "cliente-" + crypto.randomUUID() + "@accounts.barbervip.app";
+  const authResponse = await fetch(
+    "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: loginEmail, password, returnSecureToken: true })
+    }
+  );
+  const authResult = await authResponse.json().catch(() => ({}));
+  if (!authResponse.ok || !authResult.localId || !authResult.idToken) {
+    const code = String(authResult.error?.message || "");
+    if (code.includes("EMAIL_EXISTS")) {
+      throw Object.assign(new Error("No se pudo crear la cuenta en este momento. Probá nuevamente."), { status: 409 });
+    }
+    if (code.includes("WEAK_PASSWORD")) {
+      throw Object.assign(new Error("La contraseña debe tener al menos 6 caracteres."), { status: 400 });
+    }
+    throw Object.assign(new Error("Firebase no pudo crear la cuenta de cliente. Probá nuevamente."), { status: 502 });
+  }
+
+  const customerUid = String(authResult.localId);
+  const now = new Date();
+  const customer = {
+    uid: customerUid,
+    barberUid,
+    fullName,
+    usernameNormalized: normalizedName,
+    loginEmail,
+    whatsapp,
+    signupSource: "self",
+    cutStyle: "",
+    conversationPreference: "",
+    loyaltyOverride: { mode: "standard", rewards: [] },
+    totalCuts: 0,
+    actualCutsRegistered: 0,
+    cycleCuts: 0,
+    cycleVersion: 2,
+    cyclePausedAtMax: false,
+    availableRewards: [],
+    rewardReady: false,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    lastCutAt: null
+  };
+  const lookupWrite = {
+    update: {
+      name: firestoreResourceName(env, loginPath),
+      fields: encodeFields({
+        uid: customerUid, barberUid, email: loginEmail, active: true, updatedAt: now
+      })
+    },
+    currentDocument: existingLookup?.updateTime
+      ? { updateTime: existingLookup.updateTime }
+      : { exists: false }
+  };
+  const writes = [
+    {
+      update: {
+        name: firestoreResourceName(env, "barbers/" + barberUid + "/customers/" + customerUid),
+        fields: encodeFields(customer)
+      },
+      currentDocument: { exists: false }
+    },
+    {
+      update: {
+        name: firestoreResourceName(env, "userProfiles/" + customerUid),
+        fields: encodeFields({ uid: customerUid, role: "customer", barberUid, createdAt: now })
+      },
+      currentDocument: { exists: false }
+    },
+    lookupWrite
+  ];
+
+  try {
+    // Commit the customer, profile and name index together, bypassing client rules
+    // only inside this authenticated server operation.
+    await fsCommit(env, writes);
+  } catch (error) {
+    await fetch(
+      "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=" + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idToken: authResult.idToken })
+      }
+    ).catch(() => null);
+    if (error?.conflict) {
+      throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
+    }
+    throw Object.assign(new Error("No se pudo guardar la cuenta del cliente. Probá nuevamente."), { status: 502 });
+  }
+
+  return { ok: true, email: loginEmail, barberCode };
+}
+
 async function hmacHex(secret, value) {
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, enc.encode(value));
@@ -509,17 +663,11 @@ async function removeCustomerPushSubscriptions(request, env) {
   for (const item of targets) await fsDelete(env, item.path);
   return { ok: true, removed: targets.length };
 }
-function cleanPushPayload(data, origin) {
-  let url = "/";
-  try {
-    const candidate = new URL(String(data.url || "/"), origin);
-    if (candidate.origin === origin) url = candidate.pathname + candidate.search + candidate.hash;
-  } catch (_) {}
+function cleanPushPayload(data) {
   return {
     title: String(data.title || "Barber VIP").slice(0, 90),
     body: String(data.body || "Hay una novedad en tu tarjeta VIP.").slice(0, 220),
-    tag: String(data.tag || "barber-vip-update").replace(/[^a-zA-Z0-9:_-]/g, "-").slice(0, 120),
-    url
+    tag: String(data.tag || "barber-vip-update").replace(/[^a-zA-Z0-9:_-]/g, "-").slice(0, 120)
   };
 }
 async function deliverPush(env, docs, payload) {
@@ -579,7 +727,7 @@ async function sendVisitPush(request, env) {
     throw Object.assign(new Error("El cliente no pertenece a este profesional."), { status: 403 });
   }
   const targets = await subscriptionsForCustomer(env, barber.uid, customerId, true);
-  const sent = await deliverPush(env, targets, cleanPushPayload(data, appOrigin(env)));
+  const sent = await deliverPush(env, targets, cleanPushPayload(data));
   return { ok: true, sent };
 }
 async function sendPromotionPushPage(env, barberUid, promotion, cursor = "", allowPastWindow = false) {
@@ -615,7 +763,7 @@ async function sendPromotionPushPage(env, barberUid, promotion, cursor = "", all
     title: promotion.title || "Nueva promoción",
     body: promotion.description || "Tu profesional publicó una promoción en Barber VIP.",
     tag: "promotion-" + String(promotion.id || "update")
-  }, appOrigin(env));
+  });
   const sent = await deliverPush(env, matched, payload);
   return { ok: true, sent, nextCursor: page.nextCursor };
 }
@@ -815,6 +963,9 @@ async function route(request, env) {
   if (path === "/api/create-preference" && request.method === "POST") {
     return json(await createPaymentPreference(request, env), 200, corsHeaders(request, env));
   }
+  if (path === "/api/customer-register" && request.method === "POST") {
+    return json(await registerCustomerAccount(request, env), 200, corsHeaders(request, env));
+  }
   if (path === "/api/push" && request.method === "POST") {
     const context = await requireCustomer(env, request);
     const data = await parseBody(request);
@@ -850,5 +1001,6 @@ export {
   renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
   validMercadoPagoSignature, encodeValue, decodeValue,
   originAllowed, frontendReturnOrigin, isVercelPreviewOrigin,
-  buildQueryPageRequest, filterCustomerSubscriptions
+  buildQueryPageRequest, filterCustomerSubscriptions,
+  normalizeCustomerSignupName, normalizeCustomerWhatsapp, cleanPushPayload
 };

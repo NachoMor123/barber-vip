@@ -103,3 +103,57 @@ test("client sorting includes chronological visit order and has no redundant rec
   assert.doesNotMatch(html, /PushManager|Notification\.requestPermission|showNotification|notificationclick/i);
   assert.doesNotMatch(html, /Premio aplicado recientemente/);
 });
+
+
+test("subscription status and countdown live only in Settings, not Home or the sidebar", () => {
+  const dashboard = functionBody(html, "function dashboardView()", "function clientRow");
+  const shell = functionBody(html, "function adminShell()", "function navItem");
+  const settings = functionBody(html, "function renderSettings()", "function adminShell");
+  const plan = functionBody(html, "function openPlanInfo()", "async function paySubscription");
+  assert.doesNotMatch(dashboard, /subscriptionBanner|subscription-settings-card|data-action="pay"/);
+  assert.doesNotMatch(shell, /side-subscription|ESTADO DE CUENTA|Gestionar plan/);
+  assert.match(settings, /subscription-settings-card/);
+  assert.match(settings, /Tiempo restante/);
+  assert.match(settings, /subscriptionTimeLabel\(s\)/);
+  assert.match(plan, /remainingDaysText\(status\.daysRemaining\)/);
+  assert.match(plan, /trialEnded/);
+  assert.match(plan, /no hay débitos automáticos/i);
+});
+
+test("customer list reads have a bounded retry circuit breaker and preserve stale cached data", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
+  assert.match(loader, /state\.customersLoadPromise/);
+  assert.match(loader, /state\.customersRetryAfter/);
+  assert.match(loader, /Math\.min\(300000,10000\*Math\.pow\(2/);
+  assert.match(loader, /const hadLoaded=state\.customersLoaded/);
+  assert.match(loader, /state\.customersLoaded=hadLoaded/);
+  assert.match(loader, /Seguimos mostrando la última copia guardada/);
+});
+
+test("barber session does not open a redundant profile listener; customer listeners remain scoped", () => {
+  const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.doesNotMatch(load, /onSnapshot\(barberRef/);
+  assert.match(load, /onSnapshot\(professionalMetaRef/);
+  assert.match(load, /onSnapshot\(customerRef/);
+  assert.match(load, /state\.barberUid===barberUid/);
+});
+
+test("legacy cycle display uses the same actual-visit basis as visit registration", () => {
+  const cycle = functionBody(html, "function cycleCount(c)", "function progress(c)");
+  assert.match(cycle, /actualCutsRegistered/);
+  assert.match(cycle, /referralCreditsReceived/);
+  assert.match(cycle, /cycleVersion>=2/);
+});
+
+test("client deletion confirmation is concise while the stored customer record remains a soft deletion", () => {
+  assert.match(html, /confirm\(c\?\.fullName\?/);
+  assert.match(html, /¿Eliminar cliente\?/);
+  assert.match(api, /active: false, disabledAt: serverTimestamp\(\)/);
+  assert.doesNotMatch(api, /async function disableCustomer[\s\S]*?deleteDoc\(customerRef/);
+});
+
+test("Mercado Pago Checkout Pro keeps all eligible payment methods available by default", () => {
+  const preference = functionBody(worker, "async function createPaymentPreference", "async function handleMercadoPagoWebhook");
+  assert.match(preference, /Leave payment_methods unrestricted/);
+  assert.doesNotMatch(preference, /excluded_payment_types|excluded_payment_methods/);
+});

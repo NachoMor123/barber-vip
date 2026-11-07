@@ -1,4 +1,4 @@
-import { appendCustomerRosterChange } from "../../customer-roster.mjs";
+import { appendCustomerRosterChange } from "./customer-roster.mjs";
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
 const GRACE_DAYS = 5;

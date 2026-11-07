@@ -223,6 +223,8 @@ test("customer directory queries only active records and caps each page", () => 
 test("legacy customer login-index migration is resumable and bounds each read/write block", () => {
   const migration = functionBody(api, "async function migrateCustomerLoginIndexForBarber", "async function migrateCustomerLoginIndex");
   assert.match(migration, /const pageSize = 250/);
+  assert.match(migration, /where\('active', '==', true\)/);
+  assert.doesNotMatch(migration, /while\s*\(true\)/);
   assert.match(migration, /orderBy\(documentId\(\)\)/);
   assert.match(migration, /startAfter\(cursorId\)/);
   assert.match(migration, /batch\.update\(barberRef, \{/);
@@ -264,6 +266,8 @@ test("customer search and visit picker are bounded to 25 remote matches", () => 
 
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {
   assert.match(worker, /appendCustomerRosterChange/);
+  assert.match(worker, /from "\.\/customer-roster\.mjs"/);
+  assert.doesNotMatch(worker, /from "\.\.\/\.\.\/customer-roster\.mjs"/);
   const signup = functionBody(worker, "async function registerCustomerAccount", "async function hmacHex");
   assert.match(signup, /customerRoster\/state/);
   assert.match(signup, /currentDocument: currentRoster\?\.updateTime/);

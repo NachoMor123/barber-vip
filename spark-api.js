@@ -377,53 +377,57 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false, cursorId: '' };
     const customersRef = collection(db(), 'barbers', uid, 'customers');
     const pageSize = 250;
-    let cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
-    let indexed = 0;
-    let processed = 0;
+    const cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
+    const pageQuery = cursorId
+      ? query(customersRef, where('active', '==', true), orderBy(documentId()), startAfter(cursorId), limit(pageSize))
+      : query(customersRef, where('active', '==', true), orderBy(documentId()), limit(pageSize));
+    const snapshot = await getDocs(pageQuery);
 
-    while (true) {
-      const pageQuery = cursorId
-        ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
-        : query(customersRef, orderBy(documentId()), limit(pageSize));
-      const snapshot = await getDocs(pageQuery);
-      if (snapshot.empty) break;
-
-      const batch = writeBatch(db());
-      for (const customerDoc of snapshot.docs) {
-        const customer = customerDoc.data() || {};
-        if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
-        const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
-        if (!normalized) continue;
-        const lookupId = await loginLookupId(uid, normalized);
-        batch.set(doc(db(), 'customerLoginLookup', lookupId), {
-          uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
-          active: true, updatedAt: serverTimestamp()
-        }, { merge: true });
-        indexed++;
-      }
-
-      cursorId = snapshot.docs[snapshot.docs.length - 1].id;
-      processed += snapshot.size;
-      // Save progress atomically with each block of index writes. A quota/network
-      // interruption resumes after this document instead of replaying old pages.
-      batch.update(barberRef, {
-        sparkLoginIndexMigrationCursor: cursorId,
+    if (snapshot.empty) {
+      await updateDoc(barberRef, {
+        sparkLoginIndexMigratedAt: serverTimestamp(),
+        sparkLoginIndexMigrationCursor: null,
         updatedAt: serverTimestamp()
       });
-      await batch.commit();
-      if (snapshot.size < pageSize) break;
+      if (cachedMe?.profile) cachedMe = {
+        ...cachedMe,
+        profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
+      };
+      return { ok: true, migrated: true, indexed: 0, processed: 0, cursorId: '' };
     }
 
-    await updateDoc(barberRef, {
-      sparkLoginIndexMigratedAt: serverTimestamp(),
-      sparkLoginIndexMigrationCursor: null,
+    const batch = writeBatch(db());
+    let indexed = 0;
+    for (const customerDoc of snapshot.docs) {
+      const customer = customerDoc.data() || {};
+      if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
+      const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
+      if (!normalized) continue;
+      const lookupId = await loginLookupId(uid, normalized);
+      batch.set(doc(db(), 'customerLoginLookup', lookupId), {
+        uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
+        active: true, updatedAt: serverTimestamp()
+      }, { merge: true });
+      indexed++;
+    }
+
+    const nextCursorId = snapshot.docs[snapshot.docs.length - 1].id;
+    const completed = snapshot.size < pageSize;
+    batch.update(barberRef, {
+      sparkLoginIndexMigrationCursor: completed ? null : nextCursorId,
+      ...(completed ? { sparkLoginIndexMigratedAt: serverTimestamp() } : {}),
       updatedAt: serverTimestamp()
     });
-    if (cachedMe?.profile) cachedMe = {
+    await batch.commit();
+
+    if (completed && cachedMe?.profile) cachedMe = {
       ...cachedMe,
       profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
     };
-    return { ok: true, migrated: true, indexed, processed, cursorId: '' };
+    return {
+      ok: true, migrated: completed, indexed, processed: snapshot.size,
+      cursorId: completed ? '' : nextCursorId
+    };
   }
 
   async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {

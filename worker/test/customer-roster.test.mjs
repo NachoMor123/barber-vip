@@ -61,3 +61,18 @@ test("roster disable events remove a cached record without touching visit fields
   ]);
   assert.deepEqual(changed, [{ ...original, fullName: "Actualizado" }]);
 });
+
+
+test("a cold barber session replays the latest bounded roster events without a cache timestamp", () => {
+  let roster = { version: 0, changes: [] };
+  for (let i = 1; i <= CUSTOMER_ROSTER_MAX_EVENTS; i++) {
+    roster = appendCustomerRosterChange(
+      roster, "created", { uid: "cold-" + i, active: true },
+      new Date(1_800_000_000_000 + i)
+    );
+  }
+  const delta = customerRosterDelta(roster, 0, 0);
+  assert.equal(delta.requiresReload, false);
+  assert.equal(delta.changes.length, CUSTOMER_ROSTER_MAX_EVENTS);
+  assert.equal(applyCustomerRosterChanges([], delta.changes).length, CUSTOMER_ROSTER_MAX_EVENTS);
+});

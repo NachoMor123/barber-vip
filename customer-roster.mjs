@@ -45,7 +45,7 @@ export function customerRosterDelta(roster, lastVersion = 0, cacheSavedAt = 0) {
     const contiguous = pending.length === currentVersion - lastVersion
       && Number(pending[0]?.version) === lastVersion + 1
       && Number(pending[pending.length - 1]?.version) === currentVersion;
-    return { version: currentVersion, changes: contiguous ? pending : [], requiresReload: !contiguous };
+    return { version: currentVersion, changes: pending, requiresReload: !contiguous };
   }
 
   const savedAt = Number(cacheSavedAt);
@@ -53,7 +53,7 @@ export function customerRosterDelta(roster, lastVersion = 0, cacheSavedAt = 0) {
     return { version: currentVersion, changes: [], requiresReload: false };
   }
   const oldestMillis = changes.length ? asMillis(changes[0].changedAt) : 0;
-  const possibleOverflow = changes.length >= CUSTOMER_ROSTER_MAX_EVENTS && oldestMillis > savedAt;
+  const possibleOverflow = savedAt > 0 && changes.length >= CUSTOMER_ROSTER_MAX_EVENTS && oldestMillis > savedAt;
   if (possibleOverflow) return { version: currentVersion, changes: [], requiresReload: true };
 
   const pending = changes.filter(item => asMillis(item.changedAt) > savedAt);
@@ -69,7 +69,7 @@ export function applyCustomerRosterChanges(customers, changes) {
       byId.delete(id);
       continue;
     }
-    if (event.customer && typeof event.customer === "object") {
+    if (event.customer && typeof event.customer === "object" && (event.action === "created" || byId.has(id))) {
       byId.set(id, { ...byId.get(id), ...event.customer, uid: id });
     }
   }

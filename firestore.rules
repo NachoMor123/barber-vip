@@ -131,7 +131,7 @@ service cloud.firestore {
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
-          'sparkLoginIndexMigratedAt', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
+          'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
         ])
         && request.resource.data.get('subscriptionExpiresAt', null) == resource.data.get('subscriptionExpiresAt', null)
         && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)
@@ -207,6 +207,13 @@ service cloud.firestore {
         && existsAfter(barberPath(barberId))
         && metaId == 'professional';
         allow delete: if false;
+      }
+
+      match /customerRoster/{rosterId} {
+        // The roster is a private, compact synchronization feed for its owner.
+        // Only the Worker service account may write it.
+        allow get: if rosterId == 'state' && isOwner(barberId);
+        allow list, create, update, delete: if false;
       }
 
       match /cuts/{cutId} {

@@ -73,6 +73,25 @@ try {
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerLoginLookup', 'name-hash-001')));
   console.log('PASS: customer privacy and exact public lookups');
 
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'barbers', barberUid, 'customerRoster', 'state'), {
+      version: 1,
+      changes: [{
+        version: 1, action: 'created', customerId: customerUid,
+        customer: { uid: customerUid, barberUid, fullName: 'Franco Prueba', active: true },
+        changedAt: Timestamp.fromMillis(Date.now())
+      }],
+      updatedAt: serverTimestamp()
+    });
+  });
+  await assertSucceeds(getDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state')));
+  await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state')));
+  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
+    version: 2, changes: [], updatedAt: serverTimestamp()
+  }));
+  await assertFails(getDocs(collection(barberDb, 'barbers', barberUid, 'customerRoster')));
+  console.log('PASS: compact customer roster feed is readable only by the barber and not client-writable');
+
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
   if (listed.size !== 1) throw new Error('Expected exactly one customer');
   await assertFails(updateDoc(doc(customerDb, 'barbers', barberUid, 'customers', customerUid), {
@@ -82,6 +101,11 @@ try {
     totalCuts: 1, actualCutsRegistered: 1, cycleCuts: 1, cycleVersion: 2, updatedAt: serverTimestamp()
   }));
   console.log('PASS: customer cannot forge visits; barber can register visits');
+
+  await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
+    sparkLoginIndexMigrationCursor: 'CUSTOMER-250', updatedAt: serverTimestamp()
+  }));
+  console.log('PASS: barber can persist only the resumable login-index migration cursor');
 
   await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
     displayName: 'Nombre actualizado', updatedAt: serverTimestamp()

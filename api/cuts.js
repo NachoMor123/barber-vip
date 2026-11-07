@@ -7,7 +7,7 @@ function defaultProgram(barber) {
   const selected=programs.find(p=>p.id===barber.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];
   return selected||{id:'program-246',name:'Ciclo clásico',rewards:[{cut:2,discount:10,label:'10% OFF'},{cut:4,discount:20,label:'20% OFF'},{cut:6,discount:30,label:'30% OFF'}]};
 }
-function programForCustomer(customer,barber){if(customer?.loyaltyOverride?.mode==='custom'&&Array.isArray(customer.loyaltyOverride.rewards)&&customer.loyaltyOverride.rewards.length)return {id:'customer-override',name:'Programa personalizado',rewards:customer.loyaltyOverride.rewards};const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return programs.find(p=>p.id===customer.loyaltyProgramId)||defaultProgram(barber);}
+function programForCustomer(customer,barber){if(customer?.loyaltyOverride?.mode==='custom'&&Array.isArray(customer.loyaltyOverride.rewards)&&customer.loyaltyOverride.rewards.length)return {id:'customer-override',name:'Programa personalizado',rewards:customer.loyaltyOverride.rewards};const programs=Array.isArray(barber.loyaltyPrograms)?barber.loyaltyPrograms:[];return defaultProgram(barber);}
 function normalizeRewards(program){
   const raw=Array.isArray(program.rewards)?program.rewards:[];
   const normalized=raw.map(r=>({cut:Number(r.cut),discount:Number(r.discount)}))

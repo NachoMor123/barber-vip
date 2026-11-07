@@ -62,15 +62,24 @@ test("administrator customer cache is isolated by authenticated user and barber"
   assert.match(restore, /ADMIN_CUSTOMERS_CACHE_TTL_MS/);
 });
 
-test("customer collection is fetched on demand, with in-flight request deduplication", () => {
-  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
+test("customer directory loads one bounded page on demand and deduplicates requests", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
   assert.match(loader, /document\.visibilityState!=='visible'/);
   assert.match(loader, /state\.customersLoadPromise/);
-  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
-  assert.match(loader, /getDocs\(activeCustomersQuery\)/);
+  assert.match(loader, /\/api\/customers\/list/);
+  assert.match(loader, /pageSize:ADMIN_CUSTOMERS_PAGE_SIZE/);
   assert.match(loader, /saveAdminCustomersCache\(\)/);
   assert.match(loader, /state\.barberUid!==barberUid/);
-  assert.doesNotMatch(loader, /onSnapshot\s*\(/);
+  assert.doesNotMatch(loader, /getDocs\s*\(/);
+
+  const apiList = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  assert.match(apiList, /limit\(pageSize\)/);
+  assert.match(apiList, /startAfter\(/);
+  assert.match(apiList, /getCountFromServer/);
+
+  const cutModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
+  assert.doesNotMatch(cutModal, /ensureAdminCustomersLoaded|collection\(state\.db/);
+  assert.match(cutModal, /runCustomerSearch\(term,'cut'\)/);
 });
 
 test("customer sessions always resolve their own profile, barber and customer document", () => {
@@ -195,22 +204,34 @@ test("Instagram profile editor persists a validated canonical URL for customer c
   assert.match(html, /normalizeInstagramProfileUrl\(rawInstagram\)/);
   assert.match(html, /instagramUrl,mapsUrl/);
   assert.match(api, /normalizeInstagramProfileUrl\(rawInstagram\)/);
-  assert.match(api, /query\(collection\(db\(\), 'barbers', uid, 'customers'\), where\('active', '==', true\)\)/);
+  assert.match(api, /customerDirectoryFilters\(ref, source\)/);
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 });
 
-test("active client roster query excludes soft-deleted records from repeated reads", () => {
-  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
-  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
-  assert.doesNotMatch(loader, /getDocs\(clientsRef\)/);
+test("customer directory queries only active records and caps each page", () => {
+  const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  assert.match(list, /customerDirectoryFilters\(ref, source\)/);
+  assert.match(list, /limit\(pageSize\)/);
+  assert.match(list, /Math\.min\(100, Number\(data\.pageSize\) \|\| 50\)/);
+  assert.match(list, /getCountFromServer/);
+  assert.match(api, /where\('active', '==', true\)/);
+  assert.match(html, /ADMIN_CUSTOMERS_PAGE_SIZE=50/);
+  assert.match(html, /loadMoreAdminCustomers/);
   assert.match(html, /ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
 });
 
-test("customer login index migration batches do not overlap or skip customer records", () => {
-  const migration = functionBody(api, "async function migrateCustomerLoginIndex", "const apiRequest");
-  assert.match(migration, /offset \+= 350/);
-  assert.match(migration, /active\.slice\(offset, offset \+ 350\)/);
-  assert.doesNotMatch(migration, /offset \+= 200|offset \+ 400/);
+test("legacy customer login-index migration is resumable and bounds each read/write block", () => {
+  const migration = functionBody(api, "async function migrateCustomerLoginIndexForBarber", "async function migrateCustomerLoginIndex");
+  assert.match(migration, /const pageSize = 250/);
+  assert.match(migration, /orderBy\(documentId\(\)\)/);
+  assert.match(migration, /startAfter\(cursorId\)/);
+  assert.match(migration, /batch\.update\(barberRef, \{/);
+  assert.match(migration, /sparkLoginIndexMigrationCursor: cursorId/);
+  assert.match(migration, /sparkLoginIndexMigratedAt: serverTimestamp\(\)/);
+  assert.doesNotMatch(migration, /getDocs\(collection\(db\(\), 'barbers', uid, 'customers'\)\)/);
+  const getMe = functionBody(api, "async function getMe()", "async function ensureBarberProfile");
+  assert.match(getMe, /migrateCustomerLoginIndexForBarber\(barber\)/);
+  assert.doesNotMatch(getMe, /getDocs\(activeCustomersQuery\)/);
 });
 
 test("home quick actions have restrained portrait spacing and height", () => {
@@ -232,3 +253,129 @@ test("payment webhook verifies signatures, approves exact amount and guards dupl
   assert.match(webhook, /Mercado Pago puede reintentar/);
 });
 
+test("customer search and visit picker are bounded to 25 remote matches", () => {
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(search, /limit\(25\)/);
+  assert.match(search, /where\(field, '>='/);
+  assert.match(search, /where\(field, '<='/);
+  assert.match(html, /runCustomerSearch\(term,'cut'\)/);
+  assert.match(html, /cutSearchResults/);
+});
+
+test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {
+  assert.match(worker, /appendCustomerRosterChange/);
+  const signup = functionBody(worker, "async function registerCustomerAccount", "async function hmacHex");
+  assert.match(signup, /customerRoster\/state/);
+  assert.match(signup, /currentDocument: currentRoster\?\.updateTime/);
+  assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, rosterWrite\]\)/);
+  const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(load, /onSnapshot\(rosterRef/);
+  assert.match(html, /applyCustomerRosterChanges/);
+  assert.doesNotMatch(load, /onSnapshot\(collection\(.*customers/);
+});
+
+test("customer cards receive updated standard loyalty settings without refreshing the app", () => {
+  const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(load, /loyaltyPrograms:Array\.isArray\(fresh\.loyaltyPrograms\)/);
+  assert.match(load, /defaultLoyaltyProgramId:fresh\.defaultLoyaltyProgramId/);
+  const save = functionBody(api, "async function saveLoyalty(data)", "apiRequest.resetSessionCache");
+  assert.match(save, /publicMeta/);
+  assert.match(save, /loyaltyPrograms: \[program\]/);
+});
+
+test("customer detail keeps standard and custom rewards isolated by customer", () => {
+  const program = functionBody(html, "function programForCustomer(c", "function rewardsForCustomer(c");
+  assert.match(program, /loyaltyOverride\?\.mode==='custom'/);
+  assert.match(program, /loyaltyPrograms\(barber\)/);
+  const update = functionBody(api, "async function updateCustomer(data)", "async function disableCustomer");
+  assert.match(update, /normalizeOverride\(data\.loyaltyMode, data\.loyaltyRewards, state\.barber \|\| \{\}\)/);
+  assert.doesNotMatch(update, /totalCuts|actualCutsRegistered|cycleCuts|cycleVersion|availableRewards|rewardReady/);
+});
+
+test("customer local state and cache are scoped to the authenticated identity", () => {
+  assert.match(html, /barberVipAdminCustomers:v2:/);
+  assert.match(html, /state\.user\?\.uid/);
+  assert.match(html, /cleanupContext\(\)/);
+  assert.match(html, /browserLocalPersistence/);
+  assert.match(html, /state\.customersTotalCount/);
+});
+
+test("service worker and release package contain the customer roster module and Firestore indexes", () => {
+  assert.match(serviceWorker, /customer-roster\.js/);
+  assert.match(serviceWorker, /v71-customer-roster-scale/);
+  assert.match(rules, /match \/customerRoster/);
+});
+
+test("release bundle includes indexed pagination and native ESM roster module", async () => {
+  const packageWorkflow = await readFile(join(root, ".github", "workflows", "package-app.yml"), "utf8");
+  const firebase = await readFile(join(root, "firebase.json"), "utf8");
+  const indexes = JSON.parse(await readFile(join(root, "firestore.indexes.json"), "utf8"));
+  assert.match(packageWorkflow, /firestore\.indexes\.json/);
+  assert.match(packageWorkflow, /customer-roster\.mjs/);
+  assert.match(firebase, /firestore\.indexes\.json/);
+  assert.ok(indexes.indexes.length >= 10);
+  assert.match(worker, /customer-roster\.mjs/);
+  assert.match(serviceWorker, /customer-roster\.js/);
+});
+
+test("client search and visit picker never load a full customer collection", () => {
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(search, /limit\(25\)/);
+  assert.match(search, /where\(field, '>='/);
+  const modal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
+  assert.doesNotMatch(modal, /ensureAdminCustomersLoaded|collection\(state\.db/);
+  assert.match(modal, /runCustomerSearch\(term,'cut'\)/);
+  assert.match(html, /action==='open-cut-modal'\)\{openCutModal\(\);/);
+});
+
+test("customer query failure keeps the previous page visible until resync succeeds", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
+  assert.match(loader, /Keep the previous page visible/);
+  assert.doesNotMatch(loader, /state\.customers=\[\];state\.customersLoaded=false/);
+});
+
+test("direct signup roster replay and own-customer updates remain bounded", () => {
+  const roster = functionBody(html, "async function applyCustomerRosterSnapshot", "async function ensureAdminCustomersLoaded");
+  assert.match(roster, /customerRosterDelta/);
+  assert.match(roster, /applyCustomerRosterChanges/);
+  const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(load, /onSnapshot\(rosterRef/);
+  assert.match(load, /onSnapshot\(customerRef/);
+  assert.match(load, /loyaltyPrograms:Array\.isArray\(fresh\.loyaltyPrograms\)/);
+});
+test("standard customers always inherit the current barber program, while custom discounts stay per customer", () => {
+  const visit = functionBody(api, "async function addCut(data)", "function customerListSort");
+  assert.match(visit, /customer\.loyaltyOverride\?\.mode === 'custom'/);
+  assert.match(visit, /programs\.find\(p => p\.id === freshBarber\.defaultLoyaltyProgramId\)/);
+  assert.doesNotMatch(visit, /programs\.find\(p => p\.id === customer\.loyaltyProgramId\)/);
+  const program = functionBody(html, "function programForCustomer(c", "function rewardsForCustomer(c");
+  assert.match(program, /loyaltyOverride\?\.mode==='custom'/);
+  assert.match(program, /loyaltyPrograms\(barber\)/);
+});
+
+
+test("standard loyalty semantics match the legacy visit endpoint and never follow stale customer program ids", () => {
+  assert.doesNotMatch(cutsApi, /programs\.find\(p=>p\.id===customer\.loyaltyProgramId\)/);
+  const visit = functionBody(api, "async function addCut(data)", "function customerListSort");
+  assert.doesNotMatch(visit, /programs\.find\(p => p\.id === customer\.loyaltyProgramId\)/);
+  assert.match(visit, /customer\.loyaltyOverride\?\.mode === 'custom'/);
+});
+
+test("pending searches, pagination requests and customer listeners are isolated by account uid", () => {
+  const search = functionBody(html, "async function runCustomerSearch", "function sectionPreferenceKey");
+  assert.match(search, /const accountUid=state\.user\?\.uid/);
+  assert.match(search, /state\.user\?\.uid!==accountUid/);
+  const loadMore = functionBody(html, "async function loadMoreAdminCustomers", "async function runCustomerSearch");
+  assert.match(loadMore, /const accountUid=state\.user\?\.uid/);
+  assert.match(loadMore, /state\.barberUid!==barberUid/);
+  const listeners = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(listeners, /customerSessionUid/);
+  assert.match(listeners, /state\.user\?\.uid!==customerSessionUid/);
+  assert.match(html, /state\.cutSearchSeq\+\+/);
+});
+
+
+test("migration cursor is permitted only as a barber-owned technical field", () => {
+  const barberRules = rules.slice(rules.indexOf("match /barbers/{barberId}"), rules.indexOf("match /customers/{customerId}"));
+  assert.match(barberRules, /sparkLoginIndexMigrationCursor/);
+});

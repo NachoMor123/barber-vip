@@ -1596,7 +1596,7 @@
         state.customers=cached.customers.filter(c=>c&&typeof c.uid==='string'&&(!c.barberUid||c.barberUid===state.barberUid));
         state.customersLoaded=true;
         state.customersCacheSavedAt=savedAt;
-        state.customersTotalCount=Number.isFinite(Number(cached.totalCount))?Number(cached.totalCount):null;
+        state.customersTotalCount=cached.totalCount===null||cached.totalCount===undefined?null:(Number.isFinite(Number(cached.totalCount))?Number(cached.totalCount):null);
         state.customersHasMore=cached.hasMore===true;
         state.customersCursorId=String(cached.cursorId||'');
         state.customersCursorValue=cached.cursorValue??null;
@@ -1685,7 +1685,7 @@
           state.customersHasMore=page.hasMore===true;
           state.customersCursorId=String(page.cursorId||'');
           state.customersCursorValue=page.cursorValue??null;
-          state.customersTotalCount=Number.isFinite(Number(page.totalCount))?Number(page.totalCount):null;
+          state.customersTotalCount=page.totalCount===null||page.totalCount===undefined?null:(Number.isFinite(Number(page.totalCount))?Number(page.totalCount):null);
           state.customersQueryKey=queryKey;
           state.customersRosterNeedsReload=false;
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();
@@ -1957,7 +1957,7 @@
           else{
             const alreadyKnown=state.customers.some(c=>c.uid===saved.uid);
             if(!alreadyKnown&&state.customers.length<ADMIN_CUSTOMERS_PAGE_SIZE)state.customers=[...state.customers,saved];
-            if(!alreadyKnown&&Number.isFinite(Number(state.customersTotalCount)))state.customersTotalCount++;
+            if(!alreadyKnown&&state.customersTotalCount!==null&&state.customersTotalCount!==undefined&&Number.isFinite(Number(state.customersTotalCount)))state.customersTotalCount++;
           }
           saveAdminCustomersCache();
         }
@@ -2276,7 +2276,7 @@
               const wasLoaded=state.customers.some(x=>x.uid===id);
               state.customers=state.customers.filter(x=>x.uid!==id);
               if(state.customerSearchResults)state.customerSearchResults=state.customerSearchResults.filter(x=>x.uid!==id);
-              if(wasLoaded&&Number.isFinite(Number(state.customersTotalCount)))state.customersTotalCount=Math.max(0,state.customersTotalCount-1);
+              if(wasLoaded&&state.customersTotalCount!==null&&state.customersTotalCount!==undefined&&Number.isFinite(Number(state.customersTotalCount)))state.customersTotalCount=Math.max(0,state.customersTotalCount-1);
               saveAdminCustomersCache();modalRoot.innerHTML='';renderApp();
               toast('Cliente dado de baja. El historial de visitas se conservó.','success');
             }catch(error){toast(userFacingError(error,'No se pudo dar de baja al cliente. Revisá la conexión.'),'error');if(button?.isConnected)button.disabled=false;}

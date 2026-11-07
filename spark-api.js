@@ -537,7 +537,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const programs = Array.isArray(freshBarber.loyaltyPrograms) ? freshBarber.loyaltyPrograms : [];
       const program = customer.loyaltyOverride?.mode === 'custom'
         ? { id: 'customer-override', rewards: customer.loyaltyOverride.rewards }
-        : programs.find(p => p.id === customer.loyaltyProgramId) || programs.find(p => p.id === freshBarber.defaultLoyaltyProgramId) || programs.find(p => p.audience === 'all') || { rewards: DEFAULT_REWARDS };
+        : programs.find(p => p.id === freshBarber.defaultLoyaltyProgramId) || programs.find(p => p.audience === 'all') || { rewards: DEFAULT_REWARDS };
       const rewards = safeRewards(program.rewards);
       const cycleMax = Math.max(1, ...rewards.map(r => Number(r.cut) || 1));
       const legacyNonVisitCredits = Math.max(0, Number(customer.referralCreditsReceived || 0));

@@ -66,7 +66,8 @@ test("customer collection is fetched on demand, with in-flight request deduplica
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
   assert.match(loader, /document\.visibilityState!=='visible'/);
   assert.match(loader, /state\.customersLoadPromise/);
-  assert.match(loader, /getDocs\(clientsRef\)/);
+  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
+  assert.match(loader, /getDocs\(activeCustomersQuery\)/);
   assert.match(loader, /saveAdminCustomersCache\(\)/);
   assert.match(loader, /state\.barberUid!==barberUid/);
   assert.doesNotMatch(loader, /onSnapshot\s*\(/);

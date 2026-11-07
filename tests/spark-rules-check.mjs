@@ -103,6 +103,11 @@ try {
   console.log('PASS: customer cannot forge visits; barber can register visits');
 
   await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
+    sparkLoginIndexMigrationCursor: 'CUSTOMER-250', updatedAt: serverTimestamp()
+  }));
+  console.log('PASS: barber can persist only the resumable login-index migration cursor');
+
+  await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
     displayName: 'Nombre actualizado', updatedAt: serverTimestamp()
   }));
   await assertFails(updateDoc(doc(barberDb, 'barbers', barberUid), {

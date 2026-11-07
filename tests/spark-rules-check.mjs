@@ -73,6 +73,25 @@ try {
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerLoginLookup', 'name-hash-001')));
   console.log('PASS: customer privacy and exact public lookups');
 
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'barbers', barberUid, 'customerRoster', 'state'), {
+      version: 1,
+      changes: [{
+        version: 1, action: 'created', customerId: customerUid,
+        customer: { uid: customerUid, barberUid, fullName: 'Franco Prueba', active: true },
+        changedAt: serverTimestamp()
+      }],
+      updatedAt: serverTimestamp()
+    });
+  });
+  await assertSucceeds(getDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state')));
+  await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state')));
+  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
+    version: 2, changes: [], updatedAt: serverTimestamp()
+  }));
+  await assertFails(getDocs(collection(barberDb, 'barbers', barberUid, 'customerRoster')));
+  console.log('PASS: compact customer roster feed is readable only by the barber and not client-writable');
+
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
   if (listed.size !== 1) throw new Error('Expected exactly one customer');
   await assertFails(updateDoc(doc(customerDb, 'barbers', barberUid, 'customers', customerUid), {

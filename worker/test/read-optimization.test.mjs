@@ -66,7 +66,8 @@ test("customer collection is fetched on demand, with in-flight request deduplica
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
   assert.match(loader, /document\.visibilityState!=='visible'/);
   assert.match(loader, /state\.customersLoadPromise/);
-  assert.match(loader, /getDocs\(clientsRef\)/);
+  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
+  assert.match(loader, /getDocs\(activeCustomersQuery\)/);
   assert.match(loader, /saveAdminCustomersCache\(\)/);
   assert.match(loader, /state\.barberUid!==barberUid/);
   assert.doesNotMatch(loader, /onSnapshot\s*\(/);
@@ -189,3 +190,45 @@ test("customer query cooldown persists locally and is isolated by barber identit
   assert.match(html, /state\.user\?\.uid/);
   assert.match(html, /state\.barberUid/);
 });
+
+test("Instagram profile editor persists a validated canonical URL for customer cards", () => {
+  assert.match(html, /normalizeInstagramProfileUrl\(rawInstagram\)/);
+  assert.match(html, /instagramUrl,mapsUrl/);
+  assert.match(api, /normalizeInstagramProfileUrl\(rawInstagram\)/);
+  assert.match(api, /query\(collection\(db\(\), 'barbers', uid, 'customers'\), where\('active', '==', true\)\)/);
+  assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+});
+
+test("active client roster query excludes soft-deleted records from repeated reads", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
+  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
+  assert.doesNotMatch(loader, /getDocs\(clientsRef\)/);
+  assert.match(html, /ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
+});
+
+test("customer login index migration batches do not overlap or skip customer records", () => {
+  const migration = functionBody(api, "async function migrateCustomerLoginIndex", "const apiRequest");
+  assert.match(migration, /offset \+= 350/);
+  assert.match(migration, /active\.slice\(offset, offset \+ 350\)/);
+  assert.doesNotMatch(migration, /offset \+= 200|offset \+ 400/);
+});
+
+test("home quick actions have restrained portrait spacing and height", () => {
+  const style = functionBody(html, '<style id="barbervip-home-spacing-v2">', '</style>');
+  assert.match(style, /margin-top:15px/);
+  assert.match(style, /row-gap:15px/);
+  assert.match(style, /min-height:158px/);
+});
+
+test("payment webhook verifies signatures, approves exact amount and guards duplicate processing", () => {
+  const webhook = functionBody(worker, "async function handleMercadoPagoWebhook", "async function resetCustomerPassword");
+  assert.match(webhook, /validMercadoPagoSignature/);
+  assert.match(webhook, /payment\.status !== "approved"/);
+  assert.match(webhook, /transaction_amount\) !== amount/);
+  assert.match(webhook, /currency_id !== "ARS"/);
+  assert.match(webhook, /preference\.data\.processedAt/);
+  assert.match(webhook, /currentDocument: \{ exists: false \}/);
+  assert.match(webhook, /currentDocument: \{ updateTime: preference\.updateTime \}/);
+  assert.match(webhook, /Mercado Pago puede reintentar/);
+});
+

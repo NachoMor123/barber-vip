@@ -1,5 +1,5 @@
-const CACHE_NAME = 'barber-vip-shell-v69-visits-only';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
+const CACHE_NAME = 'barber-vip-shell-v70-instagram-home-read-guardrails';
+const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

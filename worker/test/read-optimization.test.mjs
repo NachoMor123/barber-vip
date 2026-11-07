@@ -127,6 +127,7 @@ test("customer list reads have a bounded retry circuit breaker and preserve stal
   assert.match(loader, /state\.customersRetryAfter/);
   assert.match(loader, /Math\.min\(300000,10000\*Math\.pow\(2/);
   assert.match(loader, /const hadLoaded=state\.customersLoaded/);
+  assert.match(loader, /if\(state\.role!=='barber'\|\|state\.barberUid!==barberUid\)return/);
   assert.match(loader, /state\.customersLoaded=hadLoaded/);
   assert.match(loader, /Seguimos mostrando la última copia guardada/);
 });

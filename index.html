@@ -1777,10 +1777,6 @@
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
-    function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
-    function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
-    function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
-
     async function loadContext(me) {
       clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false;state.customersLoadingMore=false;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersTotalCount=null;state.customersQueryKey='';state.customersRosterVersion=0;state.customersRosterData=null;state.customersRosterNeedsReload=false;state.customerSearchResults=null;state.customerSearchTerm='';state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {

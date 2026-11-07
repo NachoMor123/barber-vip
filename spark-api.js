@@ -656,8 +656,8 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (term.length < 2) return { ok: true, customers: [] };
     const ref = collection(db(), 'barbers', uid, 'customers');
     const filters = customerDirectoryFilters(ref, data.source);
-    const rawDigits = term.replace(/\\D/g, '');
-    const phoneSearch = rawDigits.length >= 3 && /^[+\\d\\s().-]+$/.test(term);
+    const rawDigits = term.replace(/\D/g, '');
+    const phoneSearch = rawDigits.length >= 3 && /^[+\d\s().-]+$/.test(term);
     const field = phoneSearch ? 'whatsapp' : 'usernameNormalized';
     const prefix = phoneSearch
       ? (rawDigits.startsWith('549') || rawDigits.startsWith('54') ? rawDigits : '549' + rawDigits)
@@ -667,7 +667,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       ref,
       ...filters,
       where(field, '>=', prefix),
-      where(field, '<=', prefix + '\\uf8ff'),
+      where(field, '<=', prefix + '\uf8ff'),
       orderBy(field, 'asc'),
       orderBy(documentId(), 'asc'),
       limit(25)

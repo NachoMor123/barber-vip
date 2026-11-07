@@ -346,3 +346,23 @@ test("standard customers always inherit the current barber program, while custom
   assert.match(program, /loyaltyPrograms\(barber\)/);
 });
 
+
+test("standard loyalty semantics match the legacy visit endpoint and never follow stale customer program ids", () => {
+  assert.doesNotMatch(cutsApi, /programs\.find\(p=>p\.id===customer\.loyaltyProgramId\)/);
+  const visit = functionBody(api, "async function addCut(data)", "function customerListSort");
+  assert.doesNotMatch(visit, /programs\.find\(p => p\.id === customer\.loyaltyProgramId\)/);
+  assert.match(visit, /customer\.loyaltyOverride\?\.mode === 'custom'/);
+});
+
+test("pending searches, pagination requests and customer listeners are isolated by account uid", () => {
+  const search = functionBody(html, "async function runCustomerSearch", "function sectionPreferenceKey");
+  assert.match(search, /const accountUid=state\.user\?\.uid/);
+  assert.match(search, /state\.user\?\.uid!==accountUid/);
+  const loadMore = functionBody(html, "async function loadMoreAdminCustomers", "async function runCustomerSearch");
+  assert.match(loadMore, /const accountUid=state\.user\?\.uid/);
+  assert.match(loadMore, /state\.barberUid!==barberUid/);
+  const listeners = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(listeners, /customerSessionUid/);
+  assert.match(listeners, /state\.user\?\.uid!==customerSessionUid/);
+  assert.match(html, /state\.cutSearchSeq\+\+/);
+});

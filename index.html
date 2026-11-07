@@ -1624,7 +1624,7 @@
         else if(delta.changes.length){
           const previousIds=new Set(state.customers.map(c=>c.uid));
           state.customers=applyCustomerRosterChanges(state.customers,delta.changes);
-          if(Number.isFinite(Number(state.customersTotalCount))){
+          if(state.customersTotalCount!==null&&state.customersTotalCount!==undefined&&Number.isFinite(Number(state.customersTotalCount))) {
             for(const event of delta.changes){
               const id=String(event.customerId||event.customer?.uid||'');
               if(event.action==='created'&&!previousIds.has(id))state.customersTotalCount++;

@@ -157,3 +157,24 @@ test("Mercado Pago Checkout Pro keeps all eligible payment methods available by 
   assert.match(preference, /Leave payment_methods unrestricted/);
   assert.doesNotMatch(preference, /excluded_payment_types|excluded_payment_methods/);
 });
+
+
+test("customer detail exposes the effective standard or custom milestone configuration", () => {
+  const detail = functionBody(html, "function openClientView(id)", "function openCutModal()");
+  const program = functionBody(html, "function programForCustomer(c", "function rewardsForCustomer(c");
+  assert.match(detail, /programMode/);
+  assert.match(detail, /rewardConfig\.map/);
+  assert.match(detail, /Programa de fidelización/);
+  assert.match(program, /loyaltyOverride\?\.mode==='custom'/);
+  assert.match(program, /loyaltyPrograms\(barber\)/);
+});
+
+test("editing customer identity or preferences cannot overwrite visit history or cycle counters", () => {
+  const update = functionBody(api, "async function updateCustomer(data)", "async function disableCustomer(data)");
+  assert.doesNotMatch(update, /totalCuts|actualCutsRegistered|cycleCuts|cycleVersion|availableRewards|rewardReady/);
+  const visit = functionBody(api, "async function addCut(data)", "const apiRequest");
+  assert.match(visit, /runTransaction\(db\(\)/);
+  assert.match(visit, /transaction\.get\(customerRef\)/);
+  assert.match(visit, /transaction\.get\(barberRef\)/);
+  assert.match(visit, /totalCuts, actualCutsRegistered, cycleCuts: cycleNext/);
+});

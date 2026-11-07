@@ -269,7 +269,7 @@ test("customer login falls back to a bounded exact lookup while legacy indexes m
   assert.match(lookup, /customerLoginLookup/);
   assert.match(lookup, /fsQueryCustomerField\(env, barberUid, "usernameNormalized", normalizedName, 2\)/);
   assert.match(worker, /path === "\/api\/customer-login"/);
-  assert.match(api, /workerRequest\('\/api\/customer-login'/);
+  assert.ok(api.includes("workerRequest('/api/customer-login'"));
 });
 
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {

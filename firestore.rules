@@ -210,10 +210,17 @@ service cloud.firestore {
       }
 
       match /customerRoster/{rosterId} {
-        // The roster is a private, compact synchronization feed for its owner.
-        // Only the Worker service account may write it.
+        // Private bounded change feed. Only the owning professional may update it.
         allow get: if rosterId == 'state' && isOwner(barberId);
-        allow list, create, update, delete: if false;
+        allow create, update: if rosterId == 'state'
+          && isOwner(barberId)
+          && request.resource.data.keys().hasAll(['version', 'changes', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['version', 'changes', 'updatedAt'])
+          && request.resource.data.version is int
+          && request.resource.data.changes is list
+          && request.resource.data.changes.size() <= 100
+          && request.resource.data.updatedAt is timestamp;
+        allow list, delete: if false;
       }
 
       match /cuts/{cutId} {

@@ -50,7 +50,7 @@ export function customerRosterDelta(roster, lastVersion = 0, cacheSavedAt = 0) {
 
   const savedAt = Number(cacheSavedAt);
   if (!Number.isFinite(savedAt) || savedAt <= 0) {
-    return { version: currentVersion, changes: [], requiresReload: false };
+    return { version: currentVersion, changes, requiresReload: false };
   }
   const oldestMillis = changes.length ? asMillis(changes[0].changedAt) : 0;
   const possibleOverflow = savedAt > 0 && changes.length >= CUSTOMER_ROSTER_MAX_EVENTS && oldestMillis > savedAt;

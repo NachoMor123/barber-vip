@@ -131,7 +131,7 @@ service cloud.firestore {
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
-          'sparkLoginIndexMigratedAt', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
+          'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
         ])
         && request.resource.data.get('subscriptionExpiresAt', null) == resource.data.get('subscriptionExpiresAt', null)
         && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)

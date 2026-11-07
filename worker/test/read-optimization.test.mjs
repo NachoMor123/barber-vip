@@ -229,6 +229,9 @@ test("legacy customer login-index migration is resumable and bounds each read/wr
   assert.match(migration, /sparkLoginIndexMigrationCursor: cursorId/);
   assert.match(migration, /sparkLoginIndexMigratedAt: serverTimestamp\(\)/);
   assert.doesNotMatch(migration, /getDocs\(collection\(db\(\), 'barbers', uid, 'customers'\)\)/);
+  const getMe = functionBody(api, "async function getMe()", "async function ensureBarberProfile");
+  assert.match(getMe, /migrateCustomerLoginIndexForBarber\(barber\)/);
+  assert.doesNotMatch(getMe, /getDocs\(activeCustomersQuery\)/);
 });
 
 test("home quick actions have restrained portrait spacing and height", () => {

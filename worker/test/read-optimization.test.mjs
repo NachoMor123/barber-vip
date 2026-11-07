@@ -271,6 +271,8 @@ test("direct customer signup publishes a single-document roster event for instan
   const signup = functionBody(worker, "async function registerCustomerAccount", "async function hmacHex");
   assert.match(signup, /customerRoster\/state/);
   assert.match(signup, /currentDocument: currentRoster\?\.updateTime/);
+  assert.match(signup, /fsQueryCustomerField\(env, barberUid, "whatsapp", whatsapp/);
+  assert.match(worker, /async function fsQueryCustomerField/);
   assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, rosterWrite\]\)/);
   const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
   assert.match(load, /onSnapshot\(rosterRef/);

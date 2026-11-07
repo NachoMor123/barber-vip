@@ -160,6 +160,34 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
   }));
 }
 
+async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10) {
+  const token = await googleAccessToken(env);
+  const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: "customers" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath },
+            op: "EQUAL",
+            value: encodeValue(value)
+          }
+        },
+        limit
+      }
+    })
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) throw new Error("Firestore no pudo verificar la unicidad del cliente (" + response.status + ").");
+  return (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
+    name: row.document.name,
+    data: decodeFields(row.document.fields || {})
+  }));
+}
+
 async function fsCommit(env, writes) {
   const response = await fsRequest(env, ":commit", { method: "POST", body: JSON.stringify({ writes }) });
   const result = await response.json().catch(() => ({}));
@@ -282,6 +310,19 @@ async function registerCustomerAccount(request, env) {
   const existingLookup = await fsGet(env, loginPath);
   if (existingLookup && existingLookup.data.active !== false) {
     throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
+  }
+  // The deterministic name index protects current registrations. This bounded
+  // exact lookup also catches legacy customers while their index is migrated.
+  if (!existingLookup || existingLookup.data.active === false) {
+    const legacyNameMatches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2);
+    if (legacyNameMatches.some(row => row.data.active !== false)) {
+      throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
+    }
+  }
+  // Self-registration must enforce the same phone uniqueness as barber-created accounts.
+  const phoneMatches = await fsQueryCustomerField(env, barberUid, "whatsapp", whatsapp, 10);
+  if (phoneMatches.some(row => row.data.active !== false && normalizeCustomerWhatsapp(row.data.whatsapp) === whatsapp)) {
+    throw Object.assign(new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
 
   if (!env.FIREBASE_WEB_API_KEY) throw new Error("FIREBASE_WEB_API_KEY no está configurada.");

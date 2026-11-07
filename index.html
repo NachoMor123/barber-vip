@@ -1565,7 +1565,7 @@
     function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
     function restoreAdminCustomersRetryGuard(){
       if(!state.user||!state.barberUid)return;
-      try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');if(Number(saved?.retryAfter)>Date.now()){state.customersRetryAfter=Number(saved.retryAfter);state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}
+      try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');const retryAfter=Number(saved?.retryAfter);if(Number.isFinite(retryAfter)&&retryAfter>Date.now()&&retryAfter<=Date.now()+300000){state.customersRetryAfter=retryAfter;state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}
     }
     function saveAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.setItem(adminCustomersRetryKey(),JSON.stringify({retryAfter:state.customersRetryAfter,failures:state.customersLoadFailures}));}catch(_){}}
     function clearAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}

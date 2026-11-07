@@ -1718,9 +1718,9 @@
       const clean=String(term||'').trim();
       const isCut=target==='cut';
       const seq=isCut?++state.cutSearchSeq:++state.customerSearchSeq;
-      if(clean.length<2||(isCut&&/^[_+\\d\\s().-]+$/.test(clean)&&clean.replace(/\\D/g,'').length<3)){
+      if(clean.length<2||(isCut&&/^[+\d\s().-]+$/.test(clean)&&clean.replace(/\D/g,'').length<3)){
         if(isCut){state.cutSearchResults=[];state.cutSearchTerm='';}
-        else{state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;if(state.section==='clients')renderApp();}
+        else{state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;const holder=$('#customerResults');if(holder)holder.innerHTML=customerResultsMarkup(filteredCustomers());}
         return [];
       }
       if(!isCut){state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm=clean;}
@@ -1740,10 +1740,19 @@
         return state.customerSearchResults;
       }catch(error){
         if(isCut){const holder=$('.cut-picker-list',modalRoot);if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';}
-        else if(seq===state.customerSearchSeq&&state.query.trim()===clean){state.customerSearchResults=[];state.customerSearchTerm=clean;toast(userFacingError(error,'No se pudo buscar clientes.'),'error');}
+        else if(seq===state.customerSearchSeq&&state.query.trim()===clean){
+          state.customerSearchResults=[];state.customerSearchTerm=clean;
+          toast(userFacingError(error,'No se pudo buscar clientes.'),'error');
+        }
         return [];
       }finally{
-        if(!isCut&&seq===state.customerSearchSeq){state.customerSearchLoading=false;if(state.section==='clients')renderApp();}
+        if(!isCut&&seq===state.customerSearchSeq){
+          state.customerSearchLoading=false;
+          const holder=$('#customerResults');
+          if(holder&&state.section==='clients')holder.innerHTML=customerResultsMarkup(filteredCustomers());
+          const count=$('.result-count');
+          if(count)count.textContent=state.query.trim().length>=2?`${state.customerSearchResults?.length||0} coincidencias`:`${state.customers.length} de ${state.customersTotalCount??state.customers.length} clientes cargados`;
+        }
       }
     }
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}

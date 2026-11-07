@@ -37,7 +37,7 @@ test("a known version gap is detected and asks for one bounded resynchronization
   };
   const delta = customerRosterDelta(roster, 3, 0);
   assert.equal(delta.requiresReload, true);
-  assert.deepEqual(delta.changes, []);
+  assert.deepEqual(delta.changes.map(item => item.customerId), ["eight", "nine", "ten"]);
 });
 
 test("a legacy cache uses timestamps when it predates versioned roster metadata", () => {
@@ -75,4 +75,18 @@ test("a cold barber session replays the latest bounded roster events without a c
   assert.equal(delta.requiresReload, false);
   assert.equal(delta.changes.length, CUSTOMER_ROSTER_MAX_EVENTS);
   assert.equal(applyCustomerRosterChanges([], delta.changes).length, CUSTOMER_ROSTER_MAX_EVENTS);
+});
+
+
+test("a legacy cache with a full event window replays the bounded recent changes during its one-page resync", () => {
+  let roster = { version: 0, changes: [] };
+  for (let i = 1; i <= CUSTOMER_ROSTER_MAX_EVENTS; i++) {
+    roster = appendCustomerRosterChange(
+      roster, "created", { uid: "overflow-" + i, active: true },
+      new Date(2_000_000_000_000 + i)
+    );
+  }
+  const delta = customerRosterDelta(roster, 0, 1_900_000_000_000);
+  assert.equal(delta.requiresReload, true);
+  assert.equal(delta.changes.length, CUSTOMER_ROSTER_MAX_EVENTS);
 });

@@ -1667,6 +1667,7 @@
       const barberUid=state.barberUid;
       const hadLoaded=state.customersLoaded;
       const rosterVersionAtStart=state.customersRosterVersion;
+      const rosterNeedsReplay=state.customersRosterNeedsReload;
       const refreshStartedAt=Date.now();
       state.customersLoading=true;
       const promise=(async()=>{
@@ -1679,7 +1680,8 @@
           if(state.customersRosterData){
             const since=rosterVersionAtStart>0?state.customersCacheSavedAt:0;
             const delta=customerRosterDelta(state.customersRosterData,rosterVersionAtStart,since);
-            if(delta.changes.length)customers=applyCustomerRosterChanges(customers,delta.changes);
+            if(rosterNeedsReplay)customers=applyCustomerRosterChanges(customers,state.customersRosterData.changes);
+            else if(delta.changes.length)customers=applyCustomerRosterChanges(customers,delta.changes);
             if(delta.requiresReload)state.customersRosterNeedsReload=true;
             state.customersRosterVersion=Math.max(0,Number(state.customersRosterData.version)||0);
           }

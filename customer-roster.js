@@ -40,7 +40,7 @@ export function customerRosterDelta(roster, lastVersion = 0, cacheSavedAt = 0) {
     .sort((a, b) => Number(a.version) - Number(b.version));
 
   if (lastVersion > 0) {
-    if (currentVersion <= lastVersion) return { version: currentVersion, changes: [], requiresReload: false };
+    if (currentVersion <= lastVersion) return { version: currentVersion, changes, requiresReload: false };
     const pending = changes.filter(item => Number(item.version) > lastVersion);
     const contiguous = pending.length === currentVersion - lastVersion
       && Number(pending[0]?.version) === lastVersion + 1
@@ -54,7 +54,7 @@ export function customerRosterDelta(roster, lastVersion = 0, cacheSavedAt = 0) {
   }
   const oldestMillis = changes.length ? asMillis(changes[0].changedAt) : 0;
   const possibleOverflow = savedAt > 0 && changes.length >= CUSTOMER_ROSTER_MAX_EVENTS && oldestMillis > savedAt;
-  if (possibleOverflow) return { version: currentVersion, changes: [], requiresReload: true };
+  if (possibleOverflow) return { version: currentVersion, changes, requiresReload: true };
 
   const pending = changes.filter(item => asMillis(item.changedAt) > savedAt);
   return { version: currentVersion, changes: pending, requiresReload: false };

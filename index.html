@@ -859,6 +859,7 @@
     }
 
         const SUBSCRIPTION_PRICE_ARS = 8000; // Solo valor de respaldo si el servidor no devuelve el precio configurado.
+    function subscriptionPrice(){const configured=Number(state.subscriptionPrice);return Number.isFinite(configured)&&configured>0?configured:SUBSCRIPTION_PRICE_ARS;}
     // Always share the canonical production Firebase Hosting origin, even when an
     // administrator temporarily opens a preview or backup copy of the app.
     const CUSTOMER_APP_URL = 'https://barbervip-309dc.web.app/';

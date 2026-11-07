@@ -123,6 +123,7 @@ test("subscription status and countdown live only in Settings, not Home or the s
 test("customer list reads have a bounded retry circuit breaker and preserve stale cached data", () => {
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
   assert.match(loader, /state\.customersLoadPromise/);
+  assert.match(loader, /state\.barberUid===barberUid/);
   assert.match(loader, /state\.customersRetryAfter/);
   assert.match(loader, /Math\.min\(300000,10000\*Math\.pow\(2/);
   assert.match(loader, /const hadLoaded=state\.customersLoaded/);
@@ -135,7 +136,6 @@ test("barber session does not open a redundant profile listener; customer listen
   assert.doesNotMatch(load, /onSnapshot\(barberRef/);
   assert.match(load, /onSnapshot\(professionalMetaRef/);
   assert.match(load, /onSnapshot\(customerRef/);
-  assert.match(load, /state\.barberUid===barberUid/);
 });
 
 test("legacy cycle display uses the same actual-visit basis as visit registration", () => {

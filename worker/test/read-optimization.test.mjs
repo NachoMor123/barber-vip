@@ -208,10 +208,15 @@ test("Instagram profile editor persists a validated canonical URL for customer c
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 });
 
-test("active client roster query excludes soft-deleted records from repeated reads", () => {
-  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "function sectionPreferenceKey");
-  assert.match(loader, /query\(clientsRef,where\('active','==',true\)\)/);
-  assert.doesNotMatch(loader, /getDocs\(clientsRef\)/);
+test("customer directory queries only active records and caps each page", () => {
+  const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  assert.match(list, /customerDirectoryFilters\(ref, source\)/);
+  assert.match(list, /limit\(pageSize\)/);
+  assert.match(list, /Math\.min\(100, Number\(data\.pageSize\) \|\| 50\)/);
+  assert.match(list, /getCountFromServer/);
+  assert.match(api, /where\('active', '==', true\)/);
+  assert.match(html, /ADMIN_CUSTOMERS_PAGE_SIZE=50/);
+  assert.match(html, /loadMoreAdminCustomers/);
   assert.match(html, /ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
 });
 
@@ -294,3 +299,40 @@ test("service worker and release package contain the customer roster module and 
   assert.match(wrangler, /\{\s*"indexes"\s*:/);
 });
 
+test("release bundle includes indexed pagination and native ESM roster module", async () => {
+  const packageWorkflow = await readFile(join(root, ".github", "workflows", "package-app.yml"), "utf8");
+  const firebase = await readFile(join(root, "firebase.json"), "utf8");
+  const indexes = JSON.parse(await readFile(join(root, "firestore.indexes.json"), "utf8"));
+  assert.match(packageWorkflow, /firestore\.indexes\.json/);
+  assert.match(packageWorkflow, /customer-roster\.mjs/);
+  assert.match(firebase, /firestore\.indexes\.json/);
+  assert.ok(indexes.indexes.length >= 10);
+  assert.match(worker, /customer-roster\.mjs/);
+  assert.match(serviceWorker, /customer-roster\.js/);
+});
+
+test("client search and visit picker never load a full customer collection", () => {
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(search, /limit\(25\)/);
+  assert.match(search, /where\(field, '>='/);
+  const modal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
+  assert.doesNotMatch(modal, /ensureAdminCustomersLoaded|collection\(state\.db/);
+  assert.match(modal, /runCustomerSearch\(term,'cut'\)/);
+  assert.match(html, /action==='open-cut-modal'\)\{openCutModal\(\)\}/);
+});
+
+test("customer query failure keeps the previous page visible until resync succeeds", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
+  assert.match(loader, /Keep the previous page visible/);
+  assert.doesNotMatch(loader, /state\.customers=\[\];state\.customersLoaded=false/);
+});
+
+test("direct signup roster replay and own-customer updates remain bounded", () => {
+  const roster = functionBody(html, "async function applyCustomerRosterSnapshot", "async function ensureAdminCustomersLoaded");
+  assert.match(roster, /customerRosterDelta/);
+  assert.match(roster, /applyCustomerRosterChanges/);
+  const load = functionBody(html, "async function loadContext(me)", "function resumeSession");
+  assert.match(load, /onSnapshot\(rosterRef/);
+  assert.match(load, /onSnapshot\(customerRef/);
+  assert.match(load, /loyaltyPrograms:Array\.isArray\(fresh\.loyaltyPrograms\)/);
+});

@@ -1633,7 +1633,7 @@
               const eventCustomer=event.customer||previous||{};
               const sourceMatches=state.customerSourceFilter==='all'||eventCustomer.signupSource===state.customerSourceFilter;
               if(event.action==='created'&&!previous&&sourceMatches)state.customersTotalCount++;
-              if((event.action==='disabled'||event.action==='deleted'||event.customer?.active===false)&&previous&&sourceMatches)state.customersTotalCount=Math.max(0,state.customersTotalCount-1);
+              if((event.action==='disabled'||event.action==='deleted'||event.customer?.active===false)&&sourceMatches)state.customersTotalCount=Math.max(0,state.customersTotalCount-1);
             }
           }
           saveAdminCustomersCache();

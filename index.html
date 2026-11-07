@@ -1245,7 +1245,7 @@
     }
     function filteredCustomers() {
       const remoteReady=state.query.trim().length>=2&&state.customerSearchTerm===state.query.trim()&&Array.isArray(state.customerSearchResults);
-      let list=(remoteReady?state.customerSearchResults:state.customers).filter(c=>c.active!==false);
+      let list=(state.query.trim().length>=2?(remoteReady?state.customerSearchResults:[]):state.customers).filter(c=>c.active!==false);
       if(state.section==='clients'&&state.customerSourceFilter!=='all')list=list.filter(c=>state.customerSourceFilter==='admin'?c.signupSource==='admin':c.signupSource==='self');
       const q=normalizeName(state.query);if(q&&!remoteReady)list=list.filter(c=>normalizeName(c.fullName).includes(q)||String(c.whatsapp||'').replace(/\\D/g,'').includes(q.replace(/\\D/g,'')));
       switch(state.sort){case 'cuts-asc':list.sort((a,b)=>(Number(a.totalCuts)||0)-(Number(b.totalCuts)||0));break;case 'last-cut-desc':case 'visit-order-desc':list.sort((a,b)=>(asDate(b.lastCutAt)?.getTime()||0)-(asDate(a.lastCutAt)?.getTime()||0));break;case 'last-cut-asc':list.sort((a,b)=>(asDate(a.lastCutAt)?.getTime()||0)-(asDate(b.lastCutAt)?.getTime()||0));break;case 'name-asc':list.sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));break;default:list.sort((a,b)=>(Number(b.totalCuts)||0)-(Number(a.totalCuts)||0));}
@@ -1716,11 +1716,17 @@
     }
     async function runCustomerSearch(term,target='clients'){
       const clean=String(term||'').trim();
-      if(clean.length<2)return [];
-      const seq=target==='cut'?++state.cutSearchSeq:++state.customerSearchSeq;
+      const isCut=target==='cut';
+      const seq=isCut?++state.cutSearchSeq:++state.customerSearchSeq;
+      if(clean.length<2||(isCut&&/^[_+\\d\\s().-]+$/.test(clean)&&clean.replace(/\\D/g,'').length<3)){
+        if(isCut){state.cutSearchResults=[];state.cutSearchTerm='';}
+        else{state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;if(state.section==='clients')renderApp();}
+        return [];
+      }
+      if(!isCut){state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm=clean;}
       try{
-        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:target==='cut'?'all':state.customerSourceFilter}});
-        if(target==='cut'){
+        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:isCut?'all':state.customerSourceFilter}});
+        if(isCut){
           if(seq!==state.cutSearchSeq||!$('#cutSearch',modalRoot))return [];
           state.cutSearchResults=Array.isArray(result.customers)?result.customers:[];
           state.cutSearchTerm=clean;
@@ -1731,12 +1737,13 @@
         if(seq!==state.customerSearchSeq||state.query.trim()!==clean)return [];
         state.customerSearchResults=Array.isArray(result.customers)?result.customers:[];
         state.customerSearchTerm=clean;
-        if(state.section==='clients')renderApp();
         return state.customerSearchResults;
       }catch(error){
-        if(target==='cut'){const holder=$('.cut-picker-list',modalRoot);if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';}
-        else if(state.section==='clients')toast(userFacingError(error,'No se pudo buscar clientes.'),'error');
+        if(isCut){const holder=$('.cut-picker-list',modalRoot);if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';}
+        else if(seq===state.customerSearchSeq&&state.query.trim()===clean){state.customerSearchResults=[];state.customerSearchTerm=clean;toast(userFacingError(error,'No se pudo buscar clientes.'),'error');}
         return [];
+      }finally{
+        if(!isCut&&seq===state.customerSearchSeq){state.customerSearchLoading=false;if(state.section==='clients')renderApp();}
       }
     }
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
@@ -2194,7 +2201,7 @@
           if(!startClientsRefreshCooldown())return;
           updateClientsRefreshControl();
           try{
-            await ensureAdminCustomersLoaded({force:true});
+            await ensureAdminCustomersLoaded({force:true,reset:true});
             if(state.role==='barber'&&state.section==='clients')renderApp();
             toast('Lista de clientes actualizada.','success');
           }catch(error){
@@ -2203,6 +2210,7 @@
             toast(userFacingError(error,'No se pudo actualizar la lista. Revisá tu conexión e intentá de nuevo.'),'error');
           }finally{updateClientsRefreshControl();}
         }
+        else if(action==='load-more-clients'){await loadMoreAdminCustomers();}
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}
         else if(action==='view-client'){openClientView(button.dataset.id);}
@@ -2221,7 +2229,7 @@
           const row=button.closest('[data-service-row]');const list=$('.service-editor-list',modalRoot);row?.remove();
           if(list&&!$('[data-service-row]',list))list.innerHTML='<div class="service-empty" data-services-empty><strong>Todavía no agregaste servicios</strong><p>Agregá los que ofrecés y el precio que querés mostrar a tus clientes.</p></div>';
         }
-        else if(action==='open-cut-modal'){const pending=ensureAdminCustomersLoaded();openCutModal();await pending;if($('#cutSearch',modalRoot))openCutModal();}
+        else if(action==='open-cut-modal'){openCutModal();}
         else if(action==='add-cut'){await addCut(button.dataset.id,button);}
         else if(action==='edit-profile'){openProfileModal();}
         else if(action==='pay'){openPlanInfo();}
@@ -2354,14 +2362,32 @@
         const raw=String(target.value||'').replace(/\D/g,'');
         if((raw.startsWith('549')&&raw.length===13)||(raw.startsWith('54')&&raw.length===12)||(raw.startsWith('0')&&raw.length===13&&/^0\d{2,4}15\d{6,8}$/.test(raw)))target.value=argentinaLocalNumber(raw);
       }
-      if(target.id==='clientSearch'){state.query=target.value;const list=filteredCustomers();const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup(list);const count=$('.result-count');if(count)count.textContent=`${list.length} clientes`;
+      if(target.id==='clientSearch'){
+        state.query=target.value;
+        state.customerSearchSeq++;
+        if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);
+        const term=String(state.query||'').trim();
+        if(term.length>=2){
+          state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm='';
+          const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup([]);
+          state.customerSearchTimer=setTimeout(()=>{void runCustomerSearch(term,'clients');},350);
+        }else{
+          state.customerSearchLoading=false;state.customerSearchResults=null;state.customerSearchTerm='';
+          const list=filteredCustomers();const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup(list);
+          const count=$('.result-count');if(count)count.textContent=`${state.customers.length} de ${state.customersTotalCount??state.customers.length} clientes cargados`;
+        }
       }
       else if(['settingDisplayName','settingWhatsapp','settingInstagram','settingMaps'].includes(target.id)||target.matches('[data-schedule-enabled], [data-day-mode], [data-start1], [data-end1], [data-start2], [data-end2]')){const root=target.closest('#profileEditForm')||modalRoot;const bar=$('.profile-progress span',root);const pct=profileCompletion({...state.barber,displayName:$('#settingDisplayName',root)?.value,whatsapp:argentinaLocalNumber($('#settingWhatsapp',root)?.value),instagramUsername:$('#settingInstagram',root)?.value,mapsUrl:$('#settingMaps',root)?.value,schedule:collectSchedule(root)});const pctLabel=$('.profile-completion > strong',root);if(bar)bar.style.width=pct+'%';if(pctLabel)pctLabel.textContent=pct+'%';}
     });
     document.addEventListener('change',event=>{
       const target=event.target;
-      if(target.id==='sortSelect'){state.sort=['cuts-desc','cuts-asc','visit-order-desc','last-cut-desc','last-cut-asc','name-asc'].includes(target.value)?target.value:'cuts-desc';renderApp();}
-      if(target.id==='customerSourceFilter'){state.customerSourceFilter=target.value;renderApp();}
+      if(target.id==='sortSelect'||target.id==='customerSourceFilter'){
+        if(target.id==='sortSelect')state.sort=['cuts-desc','cuts-asc','visit-order-desc','last-cut-desc','last-cut-asc','name-asc'].includes(target.value)?target.value:'cuts-desc';
+        else state.customerSourceFilter=['all','admin','self'].includes(target.value)?target.value:'all';
+        state.query='';state.customerSearchSeq++;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customersQueryKey='';
+        void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>toast(userFacingError(error,'No se pudo actualizar la lista.'),'error'));
+        renderApp();
+      }
       
       if(target.id==='clientLoyaltyMode'){const box=$('#clientLoyaltyConfig',modalRoot);if(box){box.classList.toggle('hidden',target.value!=='custom');$$('input',box).forEach(input=>input.disabled=target.value!=='custom');}}
       if(target.id==='settingPipVisible'){try{localStorage.setItem('barberVipPipVisible',target.value==='on'?'true':'false');}catch(_){}renderApp();toast(target.value==='on'?'Guía rápida Pip activada.':'Guía rápida Pip oculta.','success');}

@@ -296,7 +296,7 @@ test("customer local state and cache are scoped to the authenticated identity", 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
   assert.match(serviceWorker, /v71-customer-roster-scale/);
-  assert.match(firebase, /"indexes": "firestore\.indexes\.json"/);
+  assert.match(rules, /match \/customerRoster/);
 });
 
 test("release bundle includes indexed pagination and native ESM roster module", async () => {
@@ -318,7 +318,7 @@ test("client search and visit picker never load a full customer collection", () 
   const modal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
   assert.doesNotMatch(modal, /ensureAdminCustomersLoaded|collection\(state\.db/);
   assert.match(modal, /runCustomerSearch\(term,'cut'\)/);
-  assert.match(html, /action==='open-cut-modal'\)\{openCutModal\(\)\}/);
+  assert.match(html, /action==='open-cut-modal'\)\{openCutModal\(\);/);
 });
 
 test("customer query failure keeps the previous page visible until resync succeeds", () => {

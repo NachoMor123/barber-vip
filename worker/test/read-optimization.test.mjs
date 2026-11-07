@@ -178,3 +178,13 @@ test("editing customer identity or preferences cannot overwrite visit history or
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /totalCuts, actualCutsRegistered, cycleCuts: cycleNext/);
 });
+
+
+test("customer query cooldown persists locally and is isolated by barber identity", () => {
+  assert.match(html, /barberVipCustomersRetry:v1:/);
+  assert.match(html, /restoreAdminCustomersRetryGuard\(\)/);
+  assert.match(html, /saveAdminCustomersRetryGuard\(\)/);
+  assert.match(html, /clearAdminCustomersRetryGuard\(\)/);
+  assert.match(html, /state\.user\?\.uid/);
+  assert.match(html, /state\.barberUid/);
+});

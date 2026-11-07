@@ -256,7 +256,8 @@ export function createSparkApi({ firebaseConfig, state }) {
       const barber = { ...barberSnap.data(), uid };
       if (!barber.sparkLoginIndexMigratedAt) {
         try {
-          const customerSnapshot = await getDocs(collection(db(), 'barbers', uid, 'customers'));
+          const activeCustomersQuery = query(collection(db(), 'barbers', uid, 'customers'), where('active', '==', true));
+          const customerSnapshot = await getDocs(activeCustomersQuery);
           state.customers = customerSnapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
           state.customersLoaded = true;
           await migrateCustomerLoginIndex(state.customers, barber);

@@ -1217,11 +1217,11 @@
       if(state.barber?.hasPaidSubscription===true&&graceRemaining>0)return {status:'grace',label:'Período de gracia',daysRemaining:Math.ceil(graceRemaining/86400000),expiresAt:expiry.toISOString(),isTrial:false};
       return {status:'suspended',label:'Cuenta vencida',daysRemaining:days,expiresAt:expiry.toISOString(),isTrial:false,trialEnded:false};
     }
+    function remainingDaysText(value){const n=Math.max(0,Number(value)||0);return n===0?'menos de un día':`${n} día${n===1?'':'s'}`;}
     function subscriptionTimeLabel(s){
-      const plural=n=>`${n} día${n===1?'':'s'}`;
-      if(s.status==='active')return `Quedan ${plural(Math.max(0,Number(s.daysRemaining)||0))} ${s.isTrial?'de prueba gratuita':'de plan'}`;
-      if(s.status==='grace')return `Quedan ${plural(Math.max(0,Number(s.daysRemaining)||0))} de gracia`;
-      if(s.expiresAt){const expiredAt=asDate(s.expiresAt);if(expiredAt){const elapsed=Math.max(1,Math.ceil((Date.now()-expiredAt.getTime())/86400000));return `Vencida hace ${plural(elapsed)}`;}}
+      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':`Quedan ${remainingDaysText(s.daysRemaining)} ${s.isTrial?'de prueba gratuita':'de plan'}`;
+      if(s.status==='grace')return `Quedan ${remainingDaysText(s.daysRemaining)} de gracia`;
+      if(s.expiresAt){const expiredAt=asDate(s.expiresAt);if(expiredAt){const elapsed=Math.max(1,Math.ceil((Date.now()-expiredAt.getTime())/86400000));return `${s.trialEnded?'Prueba finalizada':'Vencida'} hace ${elapsed} día${elapsed===1?'':'s'}`;}}
       return 'Sin fecha de vencimiento';
     }
     function filteredCustomers() {
@@ -1595,12 +1595,12 @@
           const failure=new Error(hadLoaded?'No se pudo actualizar la lista. Seguimos mostrando la última copia guardada.':'No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
           failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;throw failure;
         }finally{
-          state.customersLoading=false;
+          if(state.barberUid===barberUid)state.customersLoading=false;
         }
       })();
       state.customersLoadPromise=promise;
       try{await promise;}
-      finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;state.customersLoading=false;}
+      finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;if(state.barberUid===barberUid)state.customersLoading=false;}
     }
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
@@ -1827,11 +1827,11 @@
       const canCheckout=trial||grace||expired;
       const title=trial?'Tu prueba gratuita está activa':trialEnded?'Tu prueba gratuita terminó':grace?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
       const statusText=trial
-        ? `Te quedan ${Math.max(0,status.daysRemaining||0)} día${status.daysRemaining===1?'':'s'} de prueba gratuita. Si activás ahora, los 30 días pagos comienzan cuando Mercado Pago confirme el pago.`
+        ? `Te quedan ${remainingDaysText(status.daysRemaining)} de prueba gratuita. Si activás ahora, los 30 días pagos comienzan cuando Mercado Pago confirme el pago.`
         : trialEnded
           ? 'Tu prueba gratuita terminó y el acceso quedó pausado. La prueba no tiene días de gracia.'
           : grace
-            ? `Tu plan ya venció. Te quedan ${Math.max(0,status.daysRemaining||0)} día${status.daysRemaining===1?'':'s'} de gracia para renovar antes de que se pause el acceso.`
+            ? `Tu plan ya venció. Te quedan ${remainingDaysText(status.daysRemaining)} de gracia para renovar antes de que se pause el acceso.`
             : expired
               ? 'Tu cuenta está pausada. Renovala para volver a registrar visitas y administrar clientes.'
               : 'Tu suscripción está activa. No se realizan débitos automáticos.';

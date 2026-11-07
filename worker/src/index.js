@@ -475,6 +475,7 @@ async function createPaymentPreference(request, env) {
   }
   const origin = frontendReturnOrigin(request, env);
   const workerOrigin = new URL(request.url).origin;
+  // Leave payment_methods unrestricted: Checkout Pro keeps all eligible methods available, including account money.
   const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "POST",
     headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN, "content-type": "application/json" },

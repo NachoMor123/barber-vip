@@ -25,10 +25,6 @@ service cloud.firestore {
       return /databases/$(database)/documents/barbers/$(barberId)/customers/$(customerId);
     }
 
-    function publicCodePath(code) {
-      return /databases/$(database)/documents/publicBarberCodes/$(code);
-    }
-
     function userProfilePath(uid) {
       return /databases/$(database)/documents/userProfiles/$(uid);
     }

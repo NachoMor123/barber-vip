@@ -1595,6 +1595,7 @@
           state.customersUnsubscribe=null;
           if(state.role==='barber'&&state.section==='clients'&&document.visibilityState==='visible')renderApp();
         }catch(error){
+          if(state.role!=='barber'||state.barberUid!==barberUid)return;
           console.error('customers one-time read',error);
           state.customersLoaded=hadLoaded;
           state.customersLoadFailures=Math.min(6,(Number(state.customersLoadFailures)||0)+1);

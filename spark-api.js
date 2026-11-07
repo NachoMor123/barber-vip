@@ -256,14 +256,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       const barber = { ...barberSnap.data(), uid };
       if (!barber.sparkLoginIndexMigratedAt) {
         try {
-          const activeCustomersQuery = query(collection(db(), 'barbers', uid, 'customers'), where('active', '==', true));
-          const customerSnapshot = await getDocs(activeCustomersQuery);
-          state.customers = customerSnapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
-          state.customersLoaded = true;
-          await migrateCustomerLoginIndex(state.customers, barber);
-          barber.sparkLoginIndexMigratedAt = true;
+          const migration = await migrateCustomerLoginIndexForBarber(barber);
+          if (migration.migrated) barber.sparkLoginIndexMigratedAt = true;
+          if (migration.cursorId) barber.sparkLoginIndexMigrationCursor = migration.cursorId;
         } catch (error) {
-          console.warn('[Barber VIP] No se pudo preparar el acceso de clientes para Spark.', error?.message || error);
+          console.warn('[Barber VIP] La preparación de accesos continuará desde el último bloque guardado.', error?.message || error);
         }
       }
       if (!barber.sparkPublicCodeReadyAt || !barber.sparkPublicMetaReadyAt) {
@@ -374,26 +371,65 @@ export function createSparkApi({ firebaseConfig, state }) {
     return { ok: true, email: String(loginSnap.data().email || '') };
   }
 
-  async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {
+  async function migrateCustomerLoginIndexForBarber(barberData = state.barber || {}) {
     const uid = currentUid();
     const barberRef = doc(db(), 'barbers', uid);
-    if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false };
-    const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 350) {
+    if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false, cursorId: '' };
+    const customersRef = collection(db(), 'barbers', uid, 'customers');
+    const pageSize = 250;
+    let cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
+    let indexed = 0;
+    let processed = 0;
+
+    while (true) {
+      const pageQuery = cursorId
+        ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
+        : query(customersRef, orderBy(documentId()), limit(pageSize));
+      const snapshot = await getDocs(pageQuery);
+      if (snapshot.empty) break;
+
       const batch = writeBatch(db());
-      for (const c of active.slice(offset, offset + 350)) {
-        const normalized = cleanText(c.usernameNormalized || normalizeName(c.fullName), 100);
+      for (const customerDoc of snapshot.docs) {
+        const customer = customerDoc.data() || {};
+        if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
+        const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
         if (!normalized) continue;
-        const id = await loginLookupId(uid, normalized);
-        batch.set(doc(db(), 'customerLoginLookup', id), {
-          uid: c.uid, barberUid: uid, email: c.loginEmail, active: true, updatedAt: serverTimestamp()
+        const lookupId = await loginLookupId(uid, normalized);
+        batch.set(doc(db(), 'customerLoginLookup', lookupId), {
+          uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
+          active: true, updatedAt: serverTimestamp()
         }, { merge: true });
+        indexed++;
       }
+
+      cursorId = snapshot.docs[snapshot.docs.length - 1].id;
+      processed += snapshot.size;
+      // Save progress atomically with each block of index writes. A quota/network
+      // interruption resumes after this document instead of replaying old pages.
+      batch.update(barberRef, {
+        sparkLoginIndexMigrationCursor: cursorId,
+        updatedAt: serverTimestamp()
+      });
       await batch.commit();
+      if (snapshot.size < pageSize) break;
     }
-    await updateDoc(barberRef, { sparkLoginIndexMigratedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    if (cachedMe?.profile) cachedMe = { ...cachedMe, profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true } };
-    return { ok: true, migrated: true, indexed: active.length };
+
+    await updateDoc(barberRef, {
+      sparkLoginIndexMigratedAt: serverTimestamp(),
+      sparkLoginIndexMigrationCursor: null,
+      updatedAt: serverTimestamp()
+    });
+    if (cachedMe?.profile) cachedMe = {
+      ...cachedMe,
+      profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
+    };
+    return { ok: true, migrated: true, indexed, processed, cursorId: '' };
+  }
+
+  async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {
+    // Backwards-compatible API route: use the resumable server-side pagination
+    // rather than trusting a caller-supplied in-memory copy of the full roster.
+    return await migrateCustomerLoginIndexForBarber(barberData);
   }
 
   async function createCustomerForBarber(data) {

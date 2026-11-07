@@ -756,6 +756,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
     import { createSparkApi } from './spark-api.js';
+    import { customerRosterDelta, applyCustomerRosterChanges } from './customer-roster.js';
     import { normalizeInstagramProfileUrl } from './profile-utils.js';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
     import { getFirestore, doc, collection, getDoc, getDocs, query, where, onSnapshot, disableNetwork, enableNetwork } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
@@ -773,7 +774,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersListenerStarted:false, customersLoadPromise:null,customersLoadFailures:0,customersRetryAfter:0, customersUnsubscribe:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all',   unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersTotalCount:null, customersQueryKey:'', customersRosterVersion:0, customersRosterData:null, customersRosterNeedsReload:false, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1558,21 +1559,33 @@
     }
     // Client list is cached locally for 24 hours; manual refresh remains available.
     const ADMIN_CUSTOMERS_CACHE_TTL_MS=24*60*60*1000;
-    function adminCustomersCacheKey(){return 'barberVipAdminCustomers:v1:'+String(state.user?.uid||'')+':'+String(state.barberUid||'');}
+    const ADMIN_CUSTOMERS_PAGE_SIZE=50;
+    function adminCustomersCacheKey(){return 'barberVipAdminCustomers:v2:'+String(state.user?.uid||'')+':'+String(state.barberUid||'');}
+    function customerDirectoryQueryKey(){return String(state.sort||'cuts-desc')+'|'+String(state.customerSourceFilter||'all');}
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded)return;
       const savedAt=Date.now();state.customersCacheSavedAt=savedAt;
-      try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({savedAt,customers:state.customers}));}catch(_){}
+      try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({
+        savedAt,customers:state.customers,totalCount:state.customersTotalCount,
+        hasMore:state.customersHasMore,cursorId:state.customersCursorId,cursorValue:state.customersCursorValue,
+        queryKey:state.customersQueryKey,rosterVersion:state.customersRosterVersion
+      }));}catch(_){}
     }
     function restoreAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid)return false;
       try{
         const cached=JSON.parse(localStorage.getItem(adminCustomersCacheKey())||'null');
         const savedAt=Number(cached?.savedAt||0);
-        if(!Array.isArray(cached?.customers)||!Number.isFinite(savedAt)||savedAt>Date.now()+60000||Date.now()-savedAt>ADMIN_CUSTOMERS_CACHE_TTL_MS)return false;
+        if(!Array.isArray(cached?.customers)||!Number.isFinite(savedAt)||savedAt>Date.now()+60000||Date.now()-savedAt>ADMIN_CUSTOMERS_CACHE_TTL_MS||cached.queryKey!==customerDirectoryQueryKey())return false;
         state.customers=cached.customers.filter(c=>c&&typeof c.uid==='string'&&(!c.barberUid||c.barberUid===state.barberUid));
         state.customersLoaded=true;
         state.customersCacheSavedAt=savedAt;
+        state.customersTotalCount=Number.isFinite(Number(cached.totalCount))?Number(cached.totalCount):null;
+        state.customersHasMore=cached.hasMore===true;
+        state.customersCursorId=String(cached.cursorId||'');
+        state.customersCursorValue=cached.cursorValue??null;
+        state.customersQueryKey=cached.queryKey;
+        state.customersRosterVersion=Math.max(0,Number(cached.rosterVersion)||0);
         return true;
       }catch(_){return false;}
     }
@@ -1587,9 +1600,43 @@
     }
     function saveAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.setItem(adminCustomersRetryKey(),JSON.stringify({retryAfter:state.customersRetryAfter,failures:state.customersLoadFailures}));}catch(_){}}
     function clearAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
-    async function ensureAdminCustomersLoaded({force=false}={}){
+    async function applyCustomerRosterSnapshot(snapshot){
+      if(state.role!=='barber'||state.barberUid!==state.user?.uid||!snapshot?.exists())return;
+      const roster=snapshot.data()||{};
+      state.customersRosterData=roster;
+      const version=Math.max(0,Number(roster.version)||0);
+      if(state.customersLoaded){
+        const delta=customerRosterDelta(roster,state.customersRosterVersion,state.customersCacheSavedAt);
+        if(delta.requiresReload)state.customersRosterNeedsReload=true;
+        else if(delta.changes.length){
+          const previousIds=new Set(state.customers.map(c=>c.uid));
+          state.customers=applyCustomerRosterChanges(state.customers,delta.changes);
+          if(Number.isFinite(Number(state.customersTotalCount))){
+            for(const event of delta.changes){
+              const id=String(event.customerId||event.customer?.uid||'');
+              if(event.action==='created'&&!previousIds.has(id))state.customersTotalCount++;
+              if((event.action==='disabled'||event.action==='deleted')&&previousIds.has(id))state.customersTotalCount=Math.max(0,state.customersTotalCount-1);
+            }
+          }
+          saveAdminCustomersCache();
+          if(state.section==='clients')renderApp();
+        }
+      }
+      state.customersRosterVersion=version;
+      if(state.customersRosterNeedsReload&&state.section==='clients'&&!state.customersLoading){
+        void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>showErrorOnce('customer-roster-resync','No se pudo actualizar la lista de clientes. Seguimos mostrando la última copia disponible.',error));
+      }
+    }
+    async function ensureAdminCustomersLoaded({force=false,reset=false}={}){
       if(state.role!=='barber'||document.visibilityState!=='visible')return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
+      const queryKey=customerDirectoryQueryKey();
+      const queryChanged=!!state.customersQueryKey&&state.customersQueryKey!==queryKey;
+      if(reset||queryChanged||state.customersRosterNeedsReload){
+        state.customers=[];state.customersLoaded=false;state.customersHasMore=false;
+        state.customersCursorId='';state.customersCursorValue=null;state.customersTotalCount=null;
+        state.customersQueryKey=queryKey;force=true;
+      }
       if(state.customersLoaded&&!force&&Date.now()-Number(state.customersCacheSavedAt||0)<ADMIN_CUSTOMERS_CACHE_TTL_MS)return;
       if(Date.now()<Number(state.customersRetryAfter||0)){
         if(state.customersLoaded)return;
@@ -1598,24 +1645,37 @@
       }
       const barberUid=state.barberUid;
       const hadLoaded=state.customersLoaded;
+      const rosterVersionAtStart=state.customersRosterVersion;
+      const refreshStartedAt=Date.now();
       state.customersLoading=true;
       const promise=(async()=>{
         try{
-          const clientsRef=collection(state.db,'barbers',barberUid,'customers');
-          const activeCustomersQuery=query(clientsRef,where('active','==',true));
-          const snap=await getDocs(activeCustomersQuery);
+          const page=await api('/api/customers/list',{method:'POST',body:{
+            sort:state.sort,source:state.customerSourceFilter,pageSize:ADMIN_CUSTOMERS_PAGE_SIZE,includeCount:true
+          }});
           if(state.role!=='barber'||state.barberUid!==barberUid)return;
-          state.customers=snap.docs.map(d=>{const customer={uid:d.id,...d.data()};delete customer.isOnline;delete customer.lastSeenAt;delete customer.lastConnectedAt;return customer;});
+          let customers=Array.isArray(page.customers)?page.customers:[];
+          if(state.customersRosterData){
+            const since=rosterVersionAtStart>0?state.customersCacheSavedAt:refreshStartedAt;
+            const delta=customerRosterDelta(state.customersRosterData,rosterVersionAtStart,since);
+            if(delta.requiresReload)state.customersRosterNeedsReload=true;
+            else customers=applyCustomerRosterChanges(customers,delta.changes);
+            state.customersRosterVersion=Math.max(0,Number(state.customersRosterData.version)||0);
+          }
+          state.customers=customers;
           state.customersLoaded=true;
-          state.customersCacheSavedAt=Date.now();
+          state.customersHasMore=page.hasMore===true;
+          state.customersCursorId=String(page.cursorId||'');
+          state.customersCursorValue=page.cursorValue??null;
+          state.customersTotalCount=Number.isFinite(Number(page.totalCount))?Number(page.totalCount):null;
+          state.customersQueryKey=queryKey;
+          state.customersRosterNeedsReload=false;
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();
           saveAdminCustomersCache();
-          state.customersListenerStarted=false;
-          state.customersUnsubscribe=null;
-          if(state.role==='barber'&&state.section==='clients'&&document.visibilityState==='visible')renderApp();
+          if(state.section==='clients'&&document.visibilityState==='visible')renderApp();
         }catch(error){
           if(state.role!=='barber'||state.barberUid!==barberUid)return;
-          console.error('customers one-time read',error);
+          console.error('customers paginated read',error);
           state.customersLoaded=hadLoaded;
           state.customersLoadFailures=Math.min(6,(Number(state.customersLoadFailures)||0)+1);
           state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));saveAdminCustomersRetryGuard();
@@ -1629,6 +1689,55 @@
       try{await promise;}
       finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;if(state.barberUid===barberUid)state.customersLoading=false;}
     }
+    async function loadMoreAdminCustomers(){
+      if(state.role!=='barber'||state.customersLoadingMore||!state.customersHasMore||!state.customersCursorId)return;
+      state.customersLoadingMore=true;
+      try{
+        const page=await api('/api/customers/list',{method:'POST',body:{
+          sort:state.sort,source:state.customerSourceFilter,pageSize:ADMIN_CUSTOMERS_PAGE_SIZE,
+          includeCount:false,cursorId:state.customersCursorId,cursorValue:state.customersCursorValue
+        }});
+        if(state.role!=='barber')return;
+        const seen=new Set(state.customers.map(c=>c.uid));
+        state.customers=[...state.customers,...(Array.isArray(page.customers)?page.customers:[]).filter(c=>!seen.has(c.uid))];
+        state.customersHasMore=page.hasMore===true;
+        state.customersCursorId=String(page.cursorId||state.customersCursorId);
+        state.customersCursorValue=page.cursorValue??state.customersCursorValue;
+        saveAdminCustomersCache();
+        if(state.section==='clients')renderApp();
+      }catch(error){
+        toast(userFacingError(error,'No se pudieron cargar más clientes. Revisá tu conexión e intentá nuevamente.'),'error');
+      }finally{state.customersLoadingMore=false;}
+    }
+    async function runCustomerSearch(term,target='clients'){
+      const clean=String(term||'').trim();
+      if(clean.length<2)return [];
+      const seq=target==='cut'?++state.cutSearchSeq:++state.customerSearchSeq;
+      try{
+        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:state.customerSourceFilter}});
+        if(target==='cut'){
+          if(seq!==state.cutSearchSeq||!$('#cutSearch',modalRoot))return [];
+          state.cutSearchResults=Array.isArray(result.customers)?result.customers:[];
+          state.cutSearchTerm=clean;
+          const holder=$('.cut-picker-list',modalRoot);
+          if(holder)holder.innerHTML=cutPickerResultsMarkup(state.cutSearchResults,subStatus().status==='suspended');
+          return state.cutSearchResults;
+        }
+        if(seq!==state.customerSearchSeq||state.query.trim()!==clean)return [];
+        state.customerSearchResults=Array.isArray(result.customers)?result.customers:[];
+        state.customerSearchTerm=clean;
+        if(state.section==='clients')renderApp();
+        return state.customerSearchResults;
+      }catch(error){
+        if(target==='cut'){const holder=$('.cut-picker-list',modalRoot);if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';}
+        else if(state.section==='clients')toast(userFacingError(error,'No se pudo buscar clientes.'),'error');
+        return [];
+      }
+    }
+    function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
+    function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
+    function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
+
     function sectionPreferenceKey(role,uid){return `barberVip:lastSection:v1:${role}:${String(uid||'')}`;}
     function readSectionPreference(role,uid,allowed,fallback){try{const saved=localStorage.getItem(sectionPreferenceKey(role,uid));return allowed.includes(saved)?saved:fallback;}catch(_){return fallback;}}
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}

@@ -1,5 +1,6 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { WORKER_API_BASE } from './worker-config.js';
+import { normalizeInstagramProfileUrl } from './profile-utils.js';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -216,7 +217,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberSnap = await getDoc(barberRef);
     if (!barberSnap.exists() || barberSnap.data().sparkLoginIndexMigratedAt) return;
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 400) {
+    for (let offset = 0; offset < active.length; offset += 350) {
       const batch = writeBatch(db());
       const group = active.slice(offset, offset + 350);
       for (const c of group) {
@@ -377,9 +378,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberRef = doc(db(), 'barbers', uid);
     if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false };
     const active = (Array.isArray(customers) ? customers : []).filter(c => c && c.active !== false && c.loginEmail && c.fullName);
-    for (let offset = 0; offset < active.length; offset += 200) {
+    for (let offset = 0; offset < active.length; offset += 350) {
       const batch = writeBatch(db());
-      for (const c of active.slice(offset, offset + 400)) {
+      for (const c of active.slice(offset, offset + 350)) {
         const normalized = cleanText(c.usernameNormalized || normalizeName(c.fullName), 100);
         if (!normalized) continue;
         const id = await loginLookupId(uid, normalized);
@@ -623,7 +624,9 @@ export function createSparkApi({ firebaseConfig, state }) {
       price: s.price === null || s.price === undefined || s.price === '' ? null : Math.max(0, Math.min(10000000, Number(s.price) || 0)),
       active: s.active !== false
     })).filter(s => s.name) : [];
-    const instagram = cleanText(data.instagramUrl, 500);
+    const rawInstagram = cleanText(data.instagramUrl ?? data.instagramUsername, 500);
+    const instagram = normalizeInstagramProfileUrl(rawInstagram);
+    if (rawInstagram && !instagram) throw fail('Pegá un usuario o enlace de perfil válido de Instagram.');
     const maps = cleanText(data.mapsUrl, 1000);
     const profile = {
       displayName: cleanText(data.displayName, 80),

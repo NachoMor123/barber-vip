@@ -1219,8 +1219,8 @@
     }
     function remainingDaysText(value){const n=Math.max(0,Number(value)||0);return n===0?'menos de un día':`${n} día${n===1?'':'s'}`;}
     function subscriptionTimeLabel(s){
-      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':`Quedan ${remainingDaysText(s.daysRemaining)} ${s.isTrial?'de prueba gratuita':'de plan'}`;
-      if(s.status==='grace')return `Quedan ${remainingDaysText(s.daysRemaining)} de gracia`;
+      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':`${s.daysRemaining===1?'Queda':'Quedan'} ${remainingDaysText(s.daysRemaining)} ${s.isTrial?'de prueba gratuita':'de plan'}`;
+      if(s.status==='grace')return `${s.daysRemaining===1?'Queda':'Quedan'} ${remainingDaysText(s.daysRemaining)} de gracia`;
       if(s.expiresAt){const expiredAt=asDate(s.expiresAt);if(expiredAt){const elapsed=Math.max(1,Math.ceil((Date.now()-expiredAt.getTime())/86400000));return `${s.trialEnded?'Prueba finalizada':'Vencida'} hace ${elapsed} día${elapsed===1?'':'s'}`;}}
       return 'Sin fecha de vencimiento';
     }
@@ -1460,7 +1460,7 @@
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Los beneficios se aplican automáticamente según las visitas registradas.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
-        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Tiempo restante</span><strong>${escapeHtml(subscriptionTimeLabel(s))}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):`Ver instrucciones para renovar`}</button></div>
+        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Tiempo restante</span><strong>${escapeHtml(subscriptionTimeLabel(s))}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):'Renovar plan'}</button></div>
 <div class="subscription-extra-actions">
   <div class="subscription-resource">
     <div><strong>Guía PIP · Estrategias de uso</strong><small>13 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
@@ -1835,11 +1835,11 @@
       const canCheckout=trial||grace||expired;
       const title=trial?'Tu prueba gratuita está activa':trialEnded?'Tu prueba gratuita terminó':grace?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
       const statusText=trial
-        ? `Te quedan ${remainingDaysText(status.daysRemaining)} de prueba gratuita. Si activás ahora, los 30 días pagos comienzan cuando Mercado Pago confirme el pago.`
+        ? `Te ${status.daysRemaining===1?'queda':'quedan'} ${remainingDaysText(status.daysRemaining)} de prueba gratuita. Si activás ahora, los 30 días pagos comienzan cuando Mercado Pago confirme el pago.`
         : trialEnded
           ? 'Tu prueba gratuita terminó y el acceso quedó pausado. La prueba no tiene días de gracia.'
           : grace
-            ? `Tu plan ya venció. Te quedan ${remainingDaysText(status.daysRemaining)} de gracia para renovar antes de que se pause el acceso.`
+            ? `Tu plan ya venció. Te ${status.daysRemaining===1?'queda':'quedan'} ${remainingDaysText(status.daysRemaining)} de gracia para renovar antes de que se pause el acceso.`
             : expired
               ? 'Tu cuenta está pausada. Renovala para volver a registrar visitas y administrar clientes.'
               : 'Tu suscripción está activa. No se realizan débitos automáticos.';

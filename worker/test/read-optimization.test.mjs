@@ -194,6 +194,7 @@ test("Instagram profile editor persists a validated canonical URL for customer c
   assert.match(html, /normalizeInstagramProfileUrl\(rawInstagram\)/);
   assert.match(html, /instagramUrl,mapsUrl/);
   assert.match(api, /normalizeInstagramProfileUrl\(rawInstagram\)/);
+  assert.match(api, /query\(collection\(db\(\), 'barbers', uid, 'customers'\), where\('active', '==', true\)\)/);
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 });
 

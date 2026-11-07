@@ -6,7 +6,7 @@ import {
   deleteUser, signOut, setPersistence, inMemoryPersistence
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {
-  collection, doc, getDoc, getDocs, query, where, limit, setDoc, updateDoc,
+  collection, doc, getDoc, getDocs, getCountFromServer, query, where, orderBy, documentId, startAfter, limit, setDoc, updateDoc,
   deleteDoc, writeBatch, runTransaction, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
@@ -584,6 +584,105 @@ export function createSparkApi({ firebaseConfig, state }) {
     return { ok: true, customer: resultCustomer, message };
   }
 
+  function customerListSort(value) {
+    switch (value) {
+      case 'cuts-asc': return { field: 'totalCuts', direction: 'asc' };
+      case 'visit-order-desc': case 'last-cut-desc': return { field: 'lastCutAt', direction: 'desc' };
+      case 'last-cut-asc': return { field: 'lastCutAt', direction: 'asc' };
+      case 'name-asc': return { field: 'fullName', direction: 'asc' };
+      default: return { field: 'totalCuts', direction: 'desc' };
+    }
+  }
+
+  function customerDirectoryFilters(ref, source) {
+    const filters = [where('active', '==', true)];
+    if (source === 'admin' || source === 'self') filters.push(where('signupSource', '==', source));
+    return filters;
+  }
+
+  async function listCustomers(data = {}) {
+    const uid = currentUid();
+    const ref = collection(db(), 'barbers', uid, 'customers');
+    const source = data.source === 'admin' || data.source === 'self' ? data.source : 'all';
+    const sort = customerListSort(data.sort);
+    const pageSize = Math.max(20, Math.min(100, Number(data.pageSize) || 50));
+    const filters = customerDirectoryFilters(ref, source);
+    const constraints = [...filters, orderBy(sort.field, sort.direction), orderBy(documentId(), sort.direction)];
+
+    if (data.cursorId) {
+      let cursorValue = data.cursorValue;
+      if (sort.field === 'lastCutAt' && cursorValue) {
+        const parsed = dateOf(cursorValue);
+        cursorValue = parsed ? Timestamp.fromDate(parsed) : null;
+      }
+      if (cursorValue === undefined) throw fail('No se pudo continuar la lista. Actualizala para seguir.', 400);
+      constraints.push(startAfter(cursorValue, String(data.cursorId)));
+    }
+    constraints.push(limit(pageSize));
+    const snap = await getDocs(query(ref, ...constraints));
+    const customers = snap.docs.map(item => {
+      const customer = { uid: item.id, ...item.data() };
+      delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
+      return customer;
+    });
+
+    let totalCount = null;
+    if (data.includeCount !== false) {
+      try {
+        const count = await getCountFromServer(query(ref, ...filters));
+        totalCount = Number(count.data().count) || 0;
+      } catch (error) {
+        console.warn('[Barber VIP] No se pudo calcular el total de clientes.', error?.message || error);
+      }
+    }
+    const last = snap.docs.at(-1);
+    const lastData = last?.data() || {};
+    const cursorValue = last
+      ? (sort.field === 'lastCutAt' ? (dateOf(lastData[sort.field])?.toISOString() || null) : lastData[sort.field])
+      : (data.cursorValue ?? null);
+    return {
+      ok: true, customers, totalCount,
+      hasMore: snap.docs.length === pageSize,
+      cursorId: last?.id || String(data.cursorId || ''),
+      cursorValue,
+      sort: data.sort || 'cuts-desc',
+      source
+    };
+  }
+
+  async function searchCustomers(data = {}) {
+    const uid = currentUid();
+    const term = cleanText(data.search, 100);
+    if (term.length < 2) return { ok: true, customers: [] };
+    const ref = collection(db(), 'barbers', uid, 'customers');
+    const filters = customerDirectoryFilters(ref, data.source);
+    const rawDigits = term.replace(/\\D/g, '');
+    const phoneSearch = rawDigits.length >= 3 && /^[+\\d\\s().-]+$/.test(term);
+    const field = phoneSearch ? 'whatsapp' : 'usernameNormalized';
+    const prefix = phoneSearch
+      ? (rawDigits.startsWith('549') || rawDigits.startsWith('54') ? rawDigits : '549' + rawDigits)
+      : normalizeName(term);
+    if (!prefix) return { ok: true, customers: [] };
+    const q = query(
+      ref,
+      ...filters,
+      where(field, '>=', prefix),
+      where(field, '<=', prefix + '\\uf8ff'),
+      orderBy(field, 'asc'),
+      orderBy(documentId(), 'asc'),
+      limit(25)
+    );
+    const snap = await getDocs(q);
+    return {
+      ok: true,
+      customers: snap.docs.map(item => {
+        const customer = { uid: item.id, ...item.data() };
+        delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
+        return customer;
+      })
+    };
+  }
+
   const apiRequest = async function api(url, options = {}) {
     if (navigator.onLine === false) throw Object.assign(fail('Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.'), { retryable: true });
     const parsed = new URL(url, window.location.origin);
@@ -600,6 +699,8 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/customers' && method === 'POST') return await createCustomerForBarber(data);
       if (path === '/api/customers' && method === 'PUT') return await updateCustomer(data);
       if (path === '/api/customers' && method === 'DELETE') return await disableCustomer(data);
+      if (path === '/api/customers/list' && method === 'POST') return await listCustomers(data);
+      if (path === '/api/customers/search' && method === 'POST') return await searchCustomers(data);
       if (path === '/api/cuts' && method === 'POST') return await addCut(data);
       if (path === '/api/create-preference' && method === 'POST') return await workerRequest('/api/create-preference', { method: 'POST', body: data });
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);

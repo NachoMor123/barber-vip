@@ -1646,8 +1646,10 @@
       const queryKey=customerDirectoryQueryKey();
       const queryChanged=!!state.customersQueryKey&&state.customersQueryKey!==queryKey;
       if(reset||queryChanged||state.customersRosterNeedsReload){
-        state.customers=[];state.customersLoaded=false;state.customersHasMore=false;
-        state.customersCursorId='';state.customersCursorValue=null;state.customersTotalCount=null;
+        // Keep the previous page visible until the replacement page succeeds.
+        // A temporary network failure must not make a populated customer list disappear.
+        state.customersHasMore=false;
+        state.customersCursorId='';state.customersCursorValue=null;
         state.customersQueryKey=queryKey;force=true;
       }
       if(state.customersLoaded&&!force&&Date.now()-Number(state.customersCacheSavedAt||0)<ADMIN_CUSTOMERS_CACHE_TTL_MS)return;

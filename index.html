@@ -1148,7 +1148,7 @@
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
-    const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadPromise=null;state.customersRosterData=null;state.customersRosterVersion=0;state.customersRosterNeedsReload=false;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.cutSearchResults=[];state.cutSearchTerm=''; };
+    const clearListeners = () => { const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadPromise=null;state.customersRosterData=null;state.customersRosterVersion=0;state.customersRosterNeedsReload=false;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.cutSearchResults=[];state.cutSearchTerm=''; };
     const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
@@ -1404,6 +1404,8 @@
     async function addCut(id, button) {
       state.cutSaving=state.cutSaving||{};
       if(state.cutSaving[id])return;
+      const accountUid=state.user?.uid||'';
+      const barberUid=state.barberUid||'';
       state.cutSaving[id]=true;
       const originalLabel=button?.textContent||'＋ Sumar visita';
       if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Registrando…';}
@@ -1412,6 +1414,7 @@
         if(!c){toast('No se encontró al cliente seleccionado. Volvé a buscarlo y probá de nuevo.','error');return;}
         const searchTerm=$('#cutSearch',modalRoot)?.value||'';
         const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id}});
+        if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         if(result.customer){
           state.customers=state.customers.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
           state.cutSearchResults=state.cutSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
@@ -1706,13 +1709,15 @@
     }
     async function loadMoreAdminCustomers(){
       if(state.role!=='barber'||state.customersLoadingMore||!state.customersHasMore||!state.customersCursorId)return;
+      const accountUid=state.user?.uid||'';
+      const barberUid=state.barberUid||'';
       state.customersLoadingMore=true;
       try{
         const page=await api('/api/customers/list',{method:'POST',body:{
           sort:state.sort,source:state.customerSourceFilter,pageSize:ADMIN_CUSTOMERS_PAGE_SIZE,
           includeCount:false,cursorId:state.customersCursorId,cursorValue:state.customersCursorValue
         }});
-        if(state.role!=='barber')return;
+        if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         const seen=new Set(state.customers.map(c=>c.uid));
         state.customers=[...state.customers,...(Array.isArray(page.customers)?page.customers:[]).filter(c=>!seen.has(c.uid))];
         state.customersHasMore=page.hasMore===true;
@@ -1728,6 +1733,8 @@
       const clean=String(term||'').trim();
       const isCut=target==='cut';
       const seq=isCut?++state.cutSearchSeq:++state.customerSearchSeq;
+      const accountUid=state.user?.uid||'';
+      const barberUid=state.barberUid||'';
       if(clean.length<2||(isCut&&/^[+\d\s().-]+$/.test(clean)&&clean.replace(/\D/g,'').length<3)){
         if(isCut){state.cutSearchResults=[];state.cutSearchTerm='';}
         else{state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;const holder=$('#customerResults');if(holder)holder.innerHTML=customerResultsMarkup(filteredCustomers());}
@@ -1736,6 +1743,7 @@
       if(!isCut){state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm=clean;}
       try{
         const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:isCut?'all':state.customerSourceFilter}});
+        if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return [];
         if(isCut){
           if(seq!==state.cutSearchSeq||!$('#cutSearch',modalRoot))return [];
           state.cutSearchResults=Array.isArray(result.customers)?result.customers:[];
@@ -1928,6 +1936,8 @@
     }
     async function saveCustomerForm(form) {
       const fd=new FormData(form),id=form.dataset.id;
+      const accountUid=state.user?.uid||'';
+      const barberUid=state.barberUid||'';
       const loyaltyMode=$('#clientLoyaltyMode',form)?.value||'standard';
       const rewardRows=$$('[data-client-reward-row]',form);
       const loyaltyRewards=[2,4,6].map((cut,i)=>({cut,discount:Number(rewardRows[i]?.querySelector('[data-client-reward-discount]')?.value)}));
@@ -1938,6 +1948,7 @@
       const submit=$('button[type="submit"]',form);if(submit){submit.disabled=true;submit.textContent='Guardando…';}
       try{
         const result=await api('/api/customers',{method:id?'PUT':'POST',body:JSON.stringify(id?{...payload,customerId:id}:payload)});
+        if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         const saved=result.customer?{...result.customer,uid:result.customer.uid||id}:null;
         if(state.customersLoaded&&saved){
           if(id)state.customers=state.customers.map(c=>c.uid===id?{...c,...saved}:c);
@@ -2254,10 +2265,12 @@
         else if(action==='customer-section'){state.customerSection=['home','barber'].includes(button.dataset.section)?button.dataset.section:'home';saveSectionPreference('customer',state.customerSection);state.query='';window.scrollTo(0,0);renderApp();window.scrollTo(0,0);}
         else if(action==='delete-client'){
           const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id)||state.customerSearchResults?.find(x=>x.uid===id);
+          const accountUid=state.user?.uid||'';const barberUid=state.barberUid||'';
           if(confirm(c?.fullName?`¿Eliminar a ${c.fullName}?`:'¿Eliminar cliente?')){
             button.disabled=true;
             try{
               await api('/api/customers',{method:'DELETE',body:{customerId:id}});
+              if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
               const wasLoaded=state.customers.some(x=>x.uid===id);
               state.customers=state.customers.filter(x=>x.uid!==id);
               if(state.customerSearchResults)state.customerSearchResults=state.customerSearchResults.filter(x=>x.uid!==id);

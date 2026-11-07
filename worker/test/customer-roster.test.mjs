@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   CUSTOMER_ROSTER_MAX_EVENTS, appendCustomerRosterChange,
   customerRosterDelta, applyCustomerRosterChanges
-} from "../../customer-roster.js";
+} from "../../customer-roster.mjs";
 
 test("roster mutations get monotonic versions and retain only the latest bounded event window", () => {
   let roster = { version: 0, changes: [] };

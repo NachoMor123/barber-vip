@@ -79,7 +79,7 @@ try {
       changes: [{
         version: 1, action: 'created', customerId: customerUid,
         customer: { uid: customerUid, barberUid, fullName: 'Franco Prueba', active: true },
-        changedAt: serverTimestamp()
+        changedAt: Timestamp.fromMillis(Date.now())
       }],
       updatedAt: serverTimestamp()
     });

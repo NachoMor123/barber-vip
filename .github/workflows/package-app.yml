@@ -61,7 +61,7 @@ jobs:
           DEST="$RUNNER_TEMP/barber-vip-hybrid"
           mkdir -p "$DEST"
           cp index.html manifest.webmanifest sw.js firebase.json .firebaserc firestore.rules \
-            spark-api.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
+            spark-api.js profile-utils.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
           cp -R assets worker "$DEST/"
           rm -rf "$DEST/worker/node_modules" "$DEST/worker/.wrangler" "$DEST/worker/.dev.vars"
           cd "$DEST"

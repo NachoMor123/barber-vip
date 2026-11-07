@@ -336,3 +336,13 @@ test("direct signup roster replay and own-customer updates remain bounded", () =
   assert.match(load, /onSnapshot\(customerRef/);
   assert.match(load, /loyaltyPrograms:Array\.isArray\(fresh\.loyaltyPrograms\)/);
 });
+test("standard customers always inherit the current barber program, while custom discounts stay per customer", () => {
+  const visit = functionBody(api, "async function addCut(data)", "function customerListSort");
+  assert.match(visit, /customer\.loyaltyOverride\?\.mode === 'custom'/);
+  assert.match(visit, /programs\.find\(p => p\.id === freshBarber\.defaultLoyaltyProgramId\)/);
+  assert.doesNotMatch(visit, /programs\.find\(p => p\.id === customer\.loyaltyProgramId\)/);
+  const program = functionBody(html, "function programForCustomer(c", "function rewardsForCustomer(c");
+  assert.match(program, /loyaltyOverride\?\.mode==='custom'/);
+  assert.match(program, /loyaltyPrograms\(barber\)/);
+});
+

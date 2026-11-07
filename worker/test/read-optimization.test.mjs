@@ -296,7 +296,7 @@ test("customer local state and cache are scoped to the authenticated identity", 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
   assert.match(serviceWorker, /v71-customer-roster-scale/);
-  assert.match(wrangler, /\{\s*"indexes"\s*:/);
+  assert.match(firebase, /"indexes": "firestore\.indexes\.json"/);
 });
 
 test("release bundle includes indexed pagination and native ESM roster module", async () => {

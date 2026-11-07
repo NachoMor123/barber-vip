@@ -1,3 +1,4 @@
+import { appendCustomerRosterChange } from "../../customer-roster.js";
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
 const GRACE_DAYS = 5;
@@ -330,18 +331,7 @@ async function registerCustomerAccount(request, env) {
     updatedAt: now,
     lastCutAt: null
   };
-  const lookupWrite = {
-    update: {
-      name: firestoreResourceName(env, loginPath),
-      fields: encodeFields({
-        uid: customerUid, barberUid, email: loginEmail, active: true, updatedAt: now
-      })
-    },
-    currentDocument: existingLookup?.updateTime
-      ? { updateTime: existingLookup.updateTime }
-      : { exists: false }
-  };
-  const writes = [
+  const customerWrites = [
     {
       update: {
         name: firestoreResourceName(env, "barbers/" + barberUid + "/customers/" + customerUid),
@@ -355,14 +345,55 @@ async function registerCustomerAccount(request, env) {
         fields: encodeFields({ uid: customerUid, role: "customer", barberUid, createdAt: now })
       },
       currentDocument: { exists: false }
-    },
-    lookupWrite
+    }
   ];
+  const rosterPath = "barbers/" + barberUid + "/customerRoster/state";
 
   try {
-    // Commit the customer, profile and name index together, bypassing client rules
-    // only inside this authenticated server operation.
-    await fsCommit(env, writes);
+    // The customer, profile, name index and one compact roster event are atomic.
+    // A barber online in the app receives only this one-document change instead
+    // of having to re-read the whole customer collection after a self-signup.
+    let committed = false;
+    for (let attempt = 0; attempt < 5 && !committed; attempt++) {
+      const currentRoster = await fsGet(env, rosterPath);
+      const latestLookup = attempt === 0 ? existingLookup : await fsGet(env, loginPath);
+      if (latestLookup && latestLookup.data.active !== false) {
+        throw Object.assign(
+          new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."),
+          { status: 409 }
+        );
+      }
+      const nextRoster = appendCustomerRosterChange(currentRoster?.data, "created", customer, now);
+      const rosterWrite = {
+        update: {
+          name: currentRoster?.name || firestoreResourceName(env, rosterPath),
+          fields: encodeFields(nextRoster)
+        },
+        updateMask: { fieldPaths: ["version", "changes", "updatedAt"] },
+        currentDocument: currentRoster?.updateTime
+          ? { updateTime: currentRoster.updateTime }
+          : { exists: false }
+      };
+      const lookupWrite = {
+        update: {
+          name: firestoreResourceName(env, loginPath),
+          fields: encodeFields({
+            uid: customerUid, barberUid, email: loginEmail, active: true, updatedAt: now
+          })
+        },
+        currentDocument: latestLookup?.updateTime
+          ? { updateTime: latestLookup.updateTime }
+          : { exists: false }
+      };
+      try {
+        await fsCommit(env, [...customerWrites, lookupWrite, rosterWrite]);
+        committed = true;
+      } catch (error) {
+        if (error?.conflict && attempt < 4) continue;
+        throw error;
+      }
+    }
+    if (!committed) throw new Error("No se pudo sincronizar el alta del cliente.");
   } catch (error) {
     await fetch(
       "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=" + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
@@ -372,9 +403,11 @@ async function registerCustomerAccount(request, env) {
         body: JSON.stringify({ idToken: authResult.idToken })
       }
     ).catch(() => null);
+    if (error?.status === 409) throw error;
     if (error?.conflict) {
       throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
     }
+    console.error("Customer registration commit failed:", error?.message || "");
     throw Object.assign(new Error("No se pudo guardar la cuenta del cliente. Probá nuevamente."), { status: 502 });
   }
 

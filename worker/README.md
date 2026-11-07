@@ -56,6 +56,12 @@ Worker productivo configurado: `https://barber-vip.barbervip.workers.dev`.
 
 Webhook de Mercado Pago: `https://barber-vip.barbervip.workers.dev/api/mercadopago-webhook`.
 
+## Escala y sincronización de clientes
+
+La lista del profesional se consulta por páginas de hasta 50 clientes y el total se obtiene con una consulta de conteo; no se leen historiales de visitas para construir la lista. Las búsquedas remotas están limitadas a 25 coincidencias. La migración heredada del índice de acceso procesa como máximo 250 clientes activos por inicio de sesión y guarda un cursor para continuar en otra sesión.
+
+El documento privado `customerRoster/state` conserva hasta 100 cambios recientes. El profesional puede leerlo y actualizarlo; el cliente no puede acceder a él. El Worker publica autorregistros y la app publica altas, ediciones y bajas creadas desde el panel. Así, las sesiones abiertas se sincronizan sin escuchar toda la colección de clientes.
+
 ## Pruebas funcionales obligatorias
 
 1. GET `/health` informa Firebase y Mercado Pago como configurados.

@@ -471,6 +471,8 @@ export function createSparkApi({ firebaseConfig, state }) {
         loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: data.cutStyle, conversationPreference: data.conversationPreference, loyaltyOverride: override
       });
+      // Do not put Firestore transform sentinels inside the roster's event array.
+      const rosterCustomer = { ...customer, createdAt: new Date(), updatedAt: new Date() };
       const customerRef = doc(db(), 'barbers', uid, 'customers', credential.user.uid);
       const profileRef = doc(db(), 'userProfiles', credential.user.uid);
       const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
@@ -478,7 +480,7 @@ export function createSparkApi({ firebaseConfig, state }) {
         const rosterSnap = await transaction.get(rosterRef);
         const nextRoster = appendCustomerRosterChange(
           rosterSnap.exists() ? rosterSnap.data() : null,
-          'created', customer, new Date()
+          'created', rosterCustomer, new Date()
         );
         transaction.set(customerRef, customer);
         transaction.set(profileRef, { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });

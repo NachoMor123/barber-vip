@@ -1562,6 +1562,13 @@
       if(!state.user||!state.barberUid)return;
       try{localStorage.removeItem(adminCustomersCacheKey());}catch(_){}
     }
+    function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
+    function restoreAdminCustomersRetryGuard(){
+      if(!state.user||!state.barberUid)return;
+      try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');if(Number(saved?.retryAfter)>Date.now()){state.customersRetryAfter=Number(saved.retryAfter);state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}
+    }
+    function saveAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.setItem(adminCustomersRetryKey(),JSON.stringify({retryAfter:state.customersRetryAfter,failures:state.customersLoadFailures}));}catch(_){}}
+    function clearAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
     async function ensureAdminCustomersLoaded({force=false}={}){
       if(state.role!=='barber'||document.visibilityState!=='visible')return;
       if(state.customersLoadPromise)return state.customersLoadPromise;
@@ -1582,7 +1589,7 @@
           state.customers=snap.docs.map(d=>{const customer={uid:d.id,...d.data()};delete customer.isOnline;delete customer.lastSeenAt;delete customer.lastConnectedAt;return customer;});
           state.customersLoaded=true;
           state.customersCacheSavedAt=Date.now();
-          state.customersLoadFailures=0;state.customersRetryAfter=0;
+          state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();
           saveAdminCustomersCache();
           state.customersListenerStarted=false;
           state.customersUnsubscribe=null;
@@ -1591,7 +1598,7 @@
           console.error('customers one-time read',error);
           state.customersLoaded=hadLoaded;
           state.customersLoadFailures=Math.min(6,(Number(state.customersLoadFailures)||0)+1);
-          state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));
+          state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));saveAdminCustomersRetryGuard();
           const failure=new Error(hadLoaded?'No se pudo actualizar la lista. Seguimos mostrando la última copia guardada.':'No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
           failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;throw failure;
         }finally{
@@ -1607,7 +1614,7 @@
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false; state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid; state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false; state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();

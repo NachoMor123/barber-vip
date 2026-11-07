@@ -410,8 +410,10 @@ export function createSparkApi({ firebaseConfig, state }) {
     const lookupId = await loginLookupId(uid, normalized);
     const lookupRef = doc(db(), 'customerLoginLookup', lookupId);
     const nameIndex = await getDoc(lookupRef);
-    const duplicate = state.customers?.some(c => c.active !== false && (c.usernameNormalized === normalized || c.whatsapp === whatsapp));
-    if (duplicate || (nameIndex.exists() && nameIndex.data().active !== false)) {
+    const duplicateName = state.customers?.some(c => c.active !== false && c.usernameNormalized === normalized);
+    const phoneMatches = await searchCustomers({ search: whatsapp, source: 'all' });
+    const duplicatePhone = (phoneMatches.customers || []).some(c => c.active !== false && normalizePhone(c.whatsapp) === whatsapp);
+    if (duplicateName || duplicatePhone || (nameIndex.exists() && nameIndex.data().active !== false)) {
       throw fail('Ya existe un cliente activo con ese nombre o WhatsApp en este espacio profesional.');
     }
     const override = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, barber);
@@ -464,7 +466,14 @@ export function createSparkApi({ firebaseConfig, state }) {
     }
     if (data.whatsapp !== undefined) {
       if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
-      updates.whatsapp = normalizePhone(data.whatsapp);
+      const nextWhatsapp = normalizePhone(data.whatsapp);
+      if (nextWhatsapp !== normalizePhone(existing.whatsapp)) {
+        const matches = await searchCustomers({ search: nextWhatsapp, source: 'all' });
+        if ((matches.customers || []).some(c => c.uid !== id && c.active !== false && normalizePhone(c.whatsapp) === nextWhatsapp)) {
+          throw fail('Ya existe otro cliente activo con ese WhatsApp en este espacio profesional.');
+        }
+      }
+      updates.whatsapp = nextWhatsapp;
     }
     if (data.cutStyle !== undefined) updates.cutStyle = cleanText(data.cutStyle, 100);
     if (data.conversationPreference !== undefined) updates.conversationPreference = ['conversar', 'tranquilo'].includes(data.conversationPreference) ? data.conversationPreference : '';
@@ -494,8 +503,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     const id = cleanText(data.customerId, 100);
     if (!id) throw fail('Falta identificar al cliente.');
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
-    const existing = state.customers?.find(c => c.uid === id);
-    const normalized = existing?.usernameNormalized || normalizeName(existing?.fullName);
+    const existing = state.customers?.find(c => c.uid === id) || (await getDoc(customerRef)).data();
+    if (!existing) throw fail('No se encontró ese cliente.', 404);
+    const normalized = existing.usernameNormalized || normalizeName(existing.fullName);
     const batch = writeBatch(db());
     batch.update(customerRef, {
       active: false, disabledAt: serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: serverTimestamp()

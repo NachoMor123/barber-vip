@@ -15,7 +15,15 @@ assert.ok(html.includes("api('/api/create-preference'"), "the app must request a
 assert.ok(html.includes("window.location.assign(checkoutUrl.href)"), "the app must redirect to the validated Mercado Pago URL");
 assert.ok(html.includes("Mercado Pago recibió tu pago"), "the app must explain webhook confirmation after returning from Checkout");
 assert.ok(html.includes("setPersistence(state.auth,browserLocalPersistence)"), "the app must persist the Firebase session across external Checkout navigation");
-assert.ok(html.includes("await user.getIdToken(true);\n            me=await api('/api/me');"), "session restoration must refresh the Firebase token and retry /api/me once after a transient return-from-Checkout failure");
+const resumeSessionStart = html.indexOf("async function resumeSession(user)");
+const resumeSessionEnd = html.indexOf("async function signOutAndReturn()", resumeSessionStart);
+assert.ok(resumeSessionStart >= 0 && resumeSessionEnd > resumeSessionStart, "the authenticated session restoration handler must exist");
+const resumeSession = html.slice(resumeSessionStart, resumeSessionEnd);
+assert.match(
+  resumeSession,
+  /else if\s*\(isRetryableError\(error\)\)\s*\{[\s\S]*?await user\.getIdToken\(true\);[\s\S]*?me=await api\('\/api\/me'\);/,
+  "session restoration must refresh the Firebase token and retry /api/me once after a transient return-from-Checkout failure"
+);
 assert.ok(html.includes("const payment=new URLSearchParams(location.search).get('payment')"), "the payment result query must be handled after the authenticated context is restored");
 assert.ok(!html.includes("el pago se coordina mediante un enlace de Mercado Pago enviado por el equipo"), "the previous manual-only payment message must be removed");
 assert.ok(worker.includes('path === "/api/create-preference"'), "the Worker must expose the preference endpoint");

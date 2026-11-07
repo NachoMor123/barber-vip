@@ -40,7 +40,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          for name in ("package.json", "manifest.webmanifest", "firebase.json", ".firebaserc", "worker/wrangler.jsonc"):
+          for name in ("package.json", "manifest.webmanifest", "firebase.json", "firestore.indexes.json", ".firebaserc", "worker/wrangler.jsonc"):
               json.loads(Path(name).read_text(encoding="utf-8"))
           print("Validated app and Firebase/Cloudflare configuration JSON.")
           PY
@@ -60,8 +60,8 @@ jobs:
           set -euo pipefail
           DEST="$RUNNER_TEMP/barber-vip-hybrid"
           mkdir -p "$DEST"
-          cp index.html manifest.webmanifest sw.js firebase.json .firebaserc firestore.rules \
-            spark-api.js profile-utils.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
+          cp index.html manifest.webmanifest sw.js firebase.json firebase.indexes.json .firebaserc firestore.rules \
+            spark-api.js profile-utils.js customer-roster.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
           cp -R assets worker "$DEST/"
           rm -rf "$DEST/worker/node_modules" "$DEST/worker/.wrangler" "$DEST/worker/.dev.vars"
           cd "$DEST"

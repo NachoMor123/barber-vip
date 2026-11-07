@@ -209,6 +209,13 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /customerRoster/{rosterId} {
+        // The roster is a private, compact synchronization feed for its owner.
+        // Only the Worker service account may write it.
+        allow get: if rosterId == 'state' && isOwner(barberId);
+        allow list, create, update, delete: if false;
+      }
+
       match /cuts/{cutId} {
         allow read, write: if false;
       }

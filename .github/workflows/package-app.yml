@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           DEST="$RUNNER_TEMP/barber-vip-hybrid"
           mkdir -p "$DEST"
-          cp index.html manifest.webmanifest sw.js firebase.json firebase.indexes.json .firebaserc firestore.rules \
+          cp index.html manifest.webmanifest sw.js firebase.json firestore.indexes.json .firebaserc firestore.rules \
             spark-api.js profile-utils.js customer-roster.js worker-config.js billing-admin.html README.md SPARK-SETUP.md package.json invitacion.html "$DEST/"
           cp -R assets worker "$DEST/"
           rm -rf "$DEST/worker/node_modules" "$DEST/worker/.wrangler" "$DEST/worker/.dev.vars"

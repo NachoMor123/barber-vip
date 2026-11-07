@@ -1719,7 +1719,7 @@
       if(clean.length<2)return [];
       const seq=target==='cut'?++state.cutSearchSeq:++state.customerSearchSeq;
       try{
-        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:state.customerSourceFilter}});
+        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:target==='cut'?'all':state.customerSourceFilter}});
         if(target==='cut'){
           if(seq!==state.cutSearchSeq||!$('#cutSearch',modalRoot))return [];
           state.cutSearchResults=Array.isArray(result.customers)?result.customers:[];
@@ -1869,43 +1869,36 @@
       const c=state.customers.find(x=>x.uid===id);if(!c)return;const program=programForCustomer(c),rewards=availableRewards(c),rewardConfig=rewardsForCustomer(c),programMode=c.loyaltyOverride?.mode==='custom'?'Personalizado para este cliente':'Estándar · hereda Configuración',last=c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no hay visitas';
       modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card client-detail-modal" role="dialog" aria-modal="true"><div class="modal-header"><div><span class="eyebrow">PERFIL DEL CLIENTE</span><h2>${escapeHtml(c.fullName)}</h2><p>Ficha de consulta · datos del vínculo actual.</p></div><button class="close-modal btn-back" data-action="close-modal">×</button></div><div class="client-detail-highlight"><div class="avatar">${escapeHtml(nameInitials(c.fullName))}</div><div><strong>${Number(c.totalCuts||0)} visitas totales</strong><small>Ciclo actual ${cycleCount(c)}/${cycleLength(c)} · ${escapeHtml(program.name||'Programa de premios')}</small></div><span class="detail-status">${clientStatus(c)[0]}</span></div><div class="client-detail-grid"><div class="detail-field"><span>Nombre y apellido</span><strong>${escapeHtml(c.fullName)}</strong></div><div class="detail-field"><span>WhatsApp</span><strong>${escapeHtml(c.whatsapp||'No informado')}</strong></div><div class="detail-field"><span>Última visita</span><strong>${escapeHtml(last)}</strong></div><div class="detail-field detail-wide"><span>Programa de fidelización</span><strong>${escapeHtml(programMode)}</strong><small>${escapeHtml(rewardConfig.map(r=>`Visita ${r.cut}: ${r.label||`${r.discount}% OFF`}`).join(" · "))}</small></div><div class="detail-field"><span>Preferencia habitual</span><strong>${escapeHtml(c.cutStyle||'Sin preferencia indicada')}</strong></div><div class="detail-field"><span>Atención</span><strong>${c.conversationPreference==='conversar'?'Le gusta conversar':c.conversationPreference==='tranquilo'?'Prefiere tranquilidad':'Sin preferencia indicada'}</strong></div><div class="detail-field detail-wide"><span>Descuentos disponibles</span><strong>${escapeHtml(rewards.length?rewards.map(r=>r.label||`${r.discount}% OFF`).join(' · '):'Ninguno por el momento')}</strong></div><div class="detail-field detail-wide"><span>Contraseña de acceso</span><strong>No se puede consultar por seguridad</strong><small>Las contraseñas no se muestran en texto. Podés cambiarla desde Editar.</small></div></div><div class="modal-footer"><button class="btn btn-danger" data-action="close-modal">Cerrar</button><button class="btn btn-primary" data-action="edit-client" data-id="${escapeHtml(c.uid)}">Editar información</button></div></section></div>`;
     }
+    function cutPickerResultsMarkup(results=[],suspended=subStatus().status==='suspended'){
+      if(state.cutSearchTerm.trim().length<2)return `<div class="empty-state"><strong>Buscá un cliente</strong><p>Escribí al menos dos letras del nombre o tres dígitos del WhatsApp.</p></div>`;
+      if(!results.length)return `<div class="empty-state"><strong>No encontramos coincidencias</strong><p>Probá con el nombre desde el comienzo o con los primeros dígitos del WhatsApp.</p><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`;
+      return results.map(c=>`<div class="cut-picker-row"><div><strong>${escapeHtml(c.fullName||'Cliente')}</strong><small>${Number(c.totalCuts||0)} visitas totales · ciclo ${cycleCount(c)} de ${cycleLength(c)}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('');
+    }
     function openCutModal() {
-      const clients=state.customers.filter(c=>c.active!==false).sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));
+      state.cutSearchSeq++;
+      if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);
+      state.cutSearchResults=[];
+      state.cutSearchTerm='';
       const suspended=subStatus().status==='suspended';
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Elegí al cliente y registrá la visita.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar nuevas visitas.</div>`:''}<div class="login-divider"></div><label for="cutSearch" class="field-hint">CLIENTES REGISTRADOS</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí nombre o WhatsApp…"><div class="cut-picker-list">${state.customersLoading&&!state.customersLoaded?`<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando clientes…</strong><p>La lista aparece en cuanto termina la primera sincronización.</p></div>`:clients.map(c=>`<div class="cut-picker-row" data-cut-search="${escapeHtml(normalizeName(c.fullName))}" data-cut-phone="${escapeHtml(String(c.whatsapp||'').replace(/\D/g,''))}"><div><strong>${escapeHtml(c.fullName)}</strong><small>Ciclo ${cycleCount(c)} de ${cycleLength(c)}</small></div><button class="btn btn-primary btn-mini" data-action="add-cut" data-id="${escapeHtml(c.uid)}" ${suspended?'disabled':''}>Registrar</button></div>`).join('')||`<div class="empty-state"><strong>Primero creá un cliente registrado</strong><button class="btn btn-soft btn-mini" data-action="new-client">Crear cliente</button></div>`}</div><div id="cutSearchEmpty" class="empty-state" hidden>No encontramos clientes con ese nombre o WhatsApp.</div></section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cutModalTitle"><div class="modal-header"><div><h2 id="cutModalTitle">Registrar visita</h2><p>Buscá el cliente para sumar una visita a su tarjeta.</p></div><button class="close-modal" data-action="close-modal">×</button></div>${suspended?`<div class="notice" style="margin-bottom:12px">La cuenta está vencida. Renovala para registrar visitas.</div>`:''}<div class="login-divider"></div><label for="cutSearch" class="field-hint">BUSCAR CLIENTE · NOMBRE O WHATSAPP</label><input id="cutSearch" class="searchbox" name="cut_search_${Math.random().toString(36).slice(2,9)}" type="search" autocomplete="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" placeholder="⌕ Escribí al menos dos letras o tres números…"><div class="cut-picker-list">${cutPickerResultsMarkup([],suspended)}</div></section></div>`;
       const search=$('#cutSearch',modalRoot);
-      const list=$('.cut-picker-list',modalRoot);
-      const empty=$('#cutSearchEmpty',modalRoot);
-      const filterRows=()=>{
-        if(!search||!list)return;
-        const raw=String(search.value||'').trim();
-        const query=normalizeName(raw);
-        const phoneQuery=raw.replace(/\D/g,'');
-        const rows=$$('.cut-picker-row',list);
-        const matched=[];
-        let shown=0;
-        rows.forEach(row=>{
-          const name=normalizeName(row.dataset.cutSearch||'');
-          const phone=String(row.dataset.cutPhone||'');
-          const nameMatch=!!query&&name.includes(query);
-          const phoneMatch=phoneQuery.length>=3&&phone.includes(phoneQuery);
-          const matches=!query||nameMatch||phoneMatch;
-          row.hidden=!matches;
-          row.style.display=matches?'flex':'none';
-          row.setAttribute('aria-hidden',matches?'false':'true');
-          if(matches){shown++;matched.push(row);}
+      const holder=$('.cut-picker-list',modalRoot);
+      if(search){
+        search.addEventListener('input',()=>{
+          const term=String(search.value||'').trim();
+          state.cutSearchTerm=term;
+          state.cutSearchResults=[];
+          state.cutSearchSeq++;
+          if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);
+          const digits=term.replace(/\D/g,'');
+          if(term.length<2||(digits.length<3&&/^[+\d\s().-]+$/.test(term))){
+            if(holder)holder.innerHTML=cutPickerResultsMarkup([],suspended);
+            return;
+          }
+          if(holder)holder.innerHTML='<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Buscando…</strong></div>';
+          state.cutSearchTimer=setTimeout(()=>{void runCustomerSearch(term,'cut');},350);
         });
-        // Prioritize exact/prefix name matches, then substring matches, then phone matches.
-        if(query&&matched.length){
-          matched.sort((a,b)=>{
-            const score=row=>{const name=normalizeName(row.dataset.cutSearch||'');const phone=String(row.dataset.cutPhone||'');if(name===query)return 0;if(name.startsWith(query))return 1;if(name.includes(query))return 2;if(phoneQuery.length>=3&&phone.startsWith(phoneQuery))return 3;return 4;};
-            return score(a)-score(b)||String(a.querySelector('strong')?.textContent||'').localeCompare(String(b.querySelector('strong')?.textContent||''),'es');
-          });
-          matched.forEach(row=>list.appendChild(row));
-        }
-        if(empty){const show=!!query&&shown===0;empty.hidden=!show;empty.style.display=show?'block':'none';}
-      };
-      if(search){search.addEventListener('input',filterRows);search.addEventListener('search',filterRows);search.setAttribute('aria-controls','cutPickerList');list?.setAttribute('id','cutPickerList');filterRows();}
+      }
     }
     async function saveCustomerForm(form) {
       const fd=new FormData(form),id=form.dataset.id;

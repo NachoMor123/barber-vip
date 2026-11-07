@@ -1796,6 +1796,8 @@
         if(state.section==='clients'&&(!state.customersLoaded||state.customersRosterNeedsReload))void ensureAdminCustomersLoaded({force:state.customersRosterNeedsReload,reset:state.customersRosterNeedsReload}).catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
         renderApp();
       } else {
+        const customerSessionUid=state.user?.uid||'';
+        const customerBarberUid=me.barberUid;
         state.customerSection=readSectionPreference('customer',me.uid,['home','barber'],'home');
         state.customer=me.customer;
         state.barber=me.barber;
@@ -1805,7 +1807,7 @@
         // One small public-profile listener: no polling, only emits when the barber saves changes.
         const professionalMetaRef=doc(state.db,'barbers',me.barberUid,'publicMeta','professional');
         state.unsubscribers.push(onSnapshot(professionalMetaRef,snap=>{
-          if(!snap.exists())return;
+          if(state.role!=='customer'||state.user?.uid!==customerSessionUid||state.barberUid!==customerBarberUid||!snap.exists())return;
           const fresh=snap.data()||{};
           state.barber={...state.barber,displayName:fresh.displayName??state.barber?.displayName,barberName:fresh.barberName??state.barber?.barberName,whatsapp:fresh.whatsapp??state.barber?.whatsapp,instagramUrl:fresh.instagramUrl??state.barber?.instagramUrl,mapsUrl:fresh.mapsUrl??state.barber?.mapsUrl,schedule:fresh.schedule??state.barber?.schedule,services:Array.isArray(fresh.services)?fresh.services:state.barber?.services,showServices:fresh.showServices===true,loyaltyPrograms:Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms:state.barber?.loyaltyPrograms,defaultLoyaltyProgramId:fresh.defaultLoyaltyProgramId??state.barber?.defaultLoyaltyProgramId};
           renderApp();
@@ -1813,7 +1815,7 @@
 
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
-          if(!snap.exists())return;
+          if(state.role!=='customer'||state.user?.uid!==customerSessionUid||state.barberUid!==customerBarberUid||!snap.exists())return;
           const previousCustomer=state.customer;
           const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;
           if(previousCustomer&&document.visibilityState==='visible'&&Number(freshCustomer.totalCuts||0)>Number(previousCustomer.totalCuts||0)){

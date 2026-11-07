@@ -220,11 +220,15 @@ test("customer directory queries only active records and caps each page", () => 
   assert.match(html, /ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
 });
 
-test("customer login index migration batches do not overlap or skip customer records", () => {
-  const migration = functionBody(api, "async function migrateCustomerLoginIndex", "const apiRequest");
-  assert.match(migration, /offset \+= 350/);
-  assert.match(migration, /active\.slice\(offset, offset \+ 350\)/);
-  assert.doesNotMatch(migration, /offset \+= 200|offset \+ 400/);
+test("legacy customer login-index migration is resumable and bounds each read/write block", () => {
+  const migration = functionBody(api, "async function migrateCustomerLoginIndexForBarber", "async function migrateCustomerLoginIndex");
+  assert.match(migration, /const pageSize = 250/);
+  assert.match(migration, /orderBy\(documentId\(\)\)/);
+  assert.match(migration, /startAfter\(cursorId\)/);
+  assert.match(migration, /batch\.update\(barberRef, \{/);
+  assert.match(migration, /sparkLoginIndexMigrationCursor: cursorId/);
+  assert.match(migration, /sparkLoginIndexMigratedAt: serverTimestamp\(\)/);
+  assert.doesNotMatch(migration, /getDocs\(collection\(db\(\), 'barbers', uid, 'customers'\)\)/);
 });
 
 test("home quick actions have restrained portrait spacing and height", () => {
@@ -365,4 +369,10 @@ test("pending searches, pagination requests and customer listeners are isolated 
   assert.match(listeners, /customerSessionUid/);
   assert.match(listeners, /state\.user\?\.uid!==customerSessionUid/);
   assert.match(html, /state\.cutSearchSeq\+\+/);
+});
+
+
+test("migration cursor is permitted only as a barber-owned technical field", () => {
+  const barberRules = rules.slice(rules.indexOf("match /barbers/{barberId}"), rules.indexOf("match /customers/{customerId}"));
+  assert.match(barberRules, /sparkLoginIndexMigrationCursor/);
 });

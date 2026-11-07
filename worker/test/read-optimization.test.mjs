@@ -264,6 +264,14 @@ test("customer search and visit picker are bounded to 25 remote matches", () => 
   assert.match(html, /cutSearchResults/);
 });
 
+test("customer login falls back to a bounded exact lookup while legacy indexes migrate", () => {
+  const lookup = functionBody(worker, "async function lookupCustomerAccount", "async function registerCustomerAccount");
+  assert.match(lookup, /customerLoginLookup/);
+  assert.match(lookup, /fsQueryCustomerField\(env, barberUid, "usernameNormalized", normalizedName, 2\)/);
+  assert.match(worker, /path === "\/api\/customer-login"/);
+  assert.match(api, /workerRequest\('\/api\/customer-login'/);
+});
+
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {
   assert.match(worker, /appendCustomerRosterChange/);
   assert.match(worker, /from "\.\/customer-roster\.mjs"/);

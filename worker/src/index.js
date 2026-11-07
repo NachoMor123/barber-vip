@@ -274,6 +274,35 @@ function normalizeCustomerWhatsapp(value) {
   return number.length === 10 ? "549" + number : number;
 }
 
+async function lookupCustomerAccount(request, env) {
+  const data = await parseBody(request);
+  const barberCode = String(data.barberCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+  const normalizedName = normalizeCustomerSignupName(data.username);
+  if (!barberCode || normalizedName.length < 3) {
+    throw Object.assign(new Error("Completá el código de tu profesional y tu nombre."), { status: 400 });
+  }
+  const codeDoc = await fsGet(env, "publicBarberCodes/" + barberCode);
+  if (!codeDoc) throw Object.assign(new Error("No encontramos ese código. Revisalo con tu profesional y probá nuevamente."), { status: 404 });
+  const barberUid = String(codeDoc.data.barberUid || "");
+  if (!barberUid) throw Object.assign(new Error("El código de tu profesional no es válido."), { status: 404 });
+
+  const loginId = barberUid + "_" + await sha256Hex(normalizedName);
+  const loginDoc = await fsGet(env, "customerLoginLookup/" + loginId);
+  if (loginDoc && loginDoc.data.active !== false && loginDoc.data.email) {
+    return { ok: true, email: String(loginDoc.data.email) };
+  }
+
+  // Existing customers remain able to sign in while the legacy index migrates
+  // gradually in bounded pages on the professional's subsequent sessions.
+  const matches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2);
+  const active = matches.filter(row => row.data.active !== false && row.data.loginEmail);
+  if (active.length === 1) return { ok: true, email: String(active[0].data.loginEmail) };
+  if (active.length > 1) {
+    throw Object.assign(new Error("Encontramos más de una cuenta con ese nombre. Pedile a tu profesional que revise los datos."), { status: 409 });
+  }
+  throw Object.assign(new Error("No encontramos una cuenta activa con esos datos. Revisá tu código y nombre."), { status: 404 });
+}
+
 async function registerCustomerAccount(request, env) {
   const data = await parseBody(request);
   const barberCode = String(data.barberCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
@@ -694,6 +723,9 @@ async function route(request, env) {
   if (path === "/api/mercadopago-webhook" && ["POST", "GET"].includes(request.method)) return handleMercadoPagoWebhook(request, env);
   if (path === "/api/create-preference" && request.method === "POST") {
     return json(await createPaymentPreference(request, env), 200, corsHeaders(request, env));
+  }
+  if (path === "/api/customer-login" && request.method === "POST") {
+    return json(await lookupCustomerAccount(request, env), 200, corsHeaders(request, env));
   }
   if (path === "/api/customer-register" && request.method === "POST") {
     return json(await registerCustomerAccount(request, env), 200, corsHeaders(request, env));

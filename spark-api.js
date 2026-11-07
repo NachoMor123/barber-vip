@@ -363,13 +363,11 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberCode = cleanCode(data.barberCode);
     const normalized = normalizeName(data.username);
     if (!barberCode || !normalized) throw fail('Completá el código de tu profesional y tu nombre.');
-    const codeSnap = await getDoc(doc(db(), 'publicBarberCodes', barberCode));
-    if (!codeSnap.exists()) throw fail('No encontramos ese código. Revisalo con tu profesional y probá nuevamente.', 404);
-    const barberUid = String(codeSnap.data().barberUid || '');
-    const id = await loginLookupId(barberUid, normalized);
-    const loginSnap = await getDoc(doc(db(), 'customerLoginLookup', id));
-    if (!loginSnap.exists() || loginSnap.data().active === false) throw fail('No encontramos una cuenta activa con esos datos. Revisá tu código y nombre.');
-    return { ok: true, email: String(loginSnap.data().email || '') };
+    return await workerRequest('/api/customer-login', {
+      method: 'POST',
+      auth: false,
+      body: { barberCode, username: normalized }
+    });
   }
 
   async function migrateCustomerLoginIndexForBarber(barberData = state.barber || {}) {

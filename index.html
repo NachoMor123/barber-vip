@@ -1870,12 +1870,13 @@
       const searchTerm=state.query.trim();
       if(state.role!=='barber'||state.section!=='clients'||!searchTerm
         ||state.customerSearchTerm!==searchTerm||!state.customerSearchHasMore
-        ||!state.customerSearchCursorId||state.customerSearchLoadingMore)return;
+        ||!state.customerSearchCursorId||!Array.isArray(state.customerSearchResults)||state.customerSearchLoadingMore)return;
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
       const searchSeq=state.customerSearchSeq;
       customersPaginationObserver?.disconnect();customersPaginationObserver=null;
       state.customerSearchLoadingMore=true;
+      renderApp();
       let loaded=false;
       try{
         const page=await api('/api/customers/search',{method:'POST',body:{

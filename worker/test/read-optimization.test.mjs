@@ -262,13 +262,27 @@ test("payment webhook verifies signatures, approves exact amount and guards dupl
   assert.match(webhook, /Mercado Pago puede reintentar/);
 });
 
-test("customer search and visit picker are bounded to 25 remote matches", () => {
+test("customer search is prefix-based, cursor-paginated by 25, and independently sorted from visit ranking", () => {
   const search = functionBody(api, "async function searchCustomers", "const apiRequest");
   assert.match(search, /limit\(25\)/);
   assert.match(search, /where\(field, '>='/);
   assert.match(search, /where\(field, '<='/);
+  assert.match(search, /startAfter\(cursorValue, cursorId\)/);
+  assert.match(search, /hasMore: snap\.docs\.length === 25/);
+  assert.match(search, /\[uid, source, field, prefix, cursorValue, cursorId\]/);
+  assert.match(search, /numericSearch && rawDigits\.length < 3/);
   assert.match(html, /runCustomerSearch\(term,'cut'\)/);
   assert.match(html, /cutSearchResults/);
+  assert.match(html, /customerSearchLoadSentinel/);
+  assert.match(html, /loadMoreCustomerSearch/);
+  assert.match(html, /state\.query\.trim\(\)\.length>=1/);
+  assert.match(html, /state\.customerSearchHasMore/);
+  assert.match(html, /state\.sort/);
+  assert.match(html, /state\.customerSearchLoadingMore/);
+  assert.match(html, /numericOnly&&digits\.length<3/);
+  assert.match(html, /sort\.disabled=term\.length>=1/);
+  const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(filtered, /if\(searchActive\)return list/);
 });
 
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {

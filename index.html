@@ -1717,7 +1717,10 @@
       const previousVersion=Math.max(0,Number(state.customersRosterVersion)||0);
       const delta=customerRosterDelta(roster,previousVersion,state.customersCacheSavedAt);
       const changed=version>previousVersion||delta.changes.length>0;
-      const activeListSearch=state.section==='clients'&&state.query.trim().length>=2?state.query.trim():'';
+      const activeQuery=state.query.trim();
+      const activeNumericSearch=/^[+\d\s().-]+$/.test(activeQuery);
+      const activeListSearch=state.section==='clients'&&activeQuery.length>=1
+        &&!(activeNumericSearch&&activeQuery.replace(/\D/g,'').length<3)?activeQuery:'';
       const activeCutSearch=$('#cutSearch',modalRoot)?.value?.trim()||'';
 
       if(changed){
@@ -1728,6 +1731,11 @@
         state.cutSearchSeq++;
         state.customerSearchResults=null;
         state.customerSearchTerm='';
+        state.customerSearchLoading=false;
+        state.customerSearchLoadingMore=false;
+        state.customerSearchHasMore=false;
+        state.customerSearchCursorId='';
+        state.customerSearchCursorValue=null;
         state.cutSearchResults=[];
         state.cutSearchTerm='';
 
@@ -2645,7 +2653,7 @@
       if(target.id==='sortSelect'||target.id==='customerSourceFilter'){
         if(target.id==='sortSelect')state.sort=['cuts-desc','cuts-asc','visit-order-desc','last-cut-desc','last-cut-asc','name-asc'].includes(target.value)?target.value:'cuts-desc';
         else state.customerSourceFilter=['all','admin','self'].includes(target.value)?target.value:'all';
-        state.query='';state.customerSearchSeq++;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customersQueryKey='';
+        state.query='';state.customerSearchSeq++;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customersQueryKey='';
         void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>toast(userFacingError(error,'No se pudo actualizar la lista.'),'error'));
         renderApp();
       }

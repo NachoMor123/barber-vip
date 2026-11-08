@@ -103,12 +103,21 @@ test("Firebase identity changes invalidate the API cache and clear the previous 
   assert.match(html, /if\(state\.user\?\.uid!==nextUid\)cleanupContext\(\)/);
 });
 
-test("client sorting includes chronological visit order and has no redundant recent-reward filter", () => {
-  assert.match(html, /Ordenar por orden de visitas/);
+test("global customer sorting exposes only the three supported server orders", () => {
+  const clients = functionBody(html, "function clientsView()", "function renderSettings()");
+  const sort = functionBody(api, "function customerListSort", "function customerDirectoryFilters");
+  assert.match(clients, /Más visitas totales/);
+  assert.match(clients, /Menos visitas totales/);
+  assert.match(clients, /Última visita: más reciente/);
+  assert.doesNotMatch(clients, /Última visita: más antigua|Nombre: A–Z|last-cut-asc|name-asc/);
+  assert.doesNotMatch(sort, /last-cut-asc|name-asc/);
+  assert.match(sort, /case 'visit-order-desc'/);
+  const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.doesNotMatch(filtered, /list\.sort/);
+  assert.match(html, /resetCustomerDirectoryForCriteria\(\)/);
+  assert.match(html, /\['cuts-desc','cuts-asc','visit-order-desc'\]/);
   assert.match(html, /\.mobile-nav\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.doesNotMatch(html, /\.mobile-nav\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(html, /case 'visit-order-desc'/);
-  assert.doesNotMatch(html, /Última visita: más reciente/);
   assert.doesNotMatch(html, /customerRewardFilter/);
   assert.doesNotMatch(html, /reminder/i);
   assert.doesNotMatch(html, /PushManager|Notification\.requestPermission|showNotification|notificationclick/i);
@@ -324,24 +333,37 @@ test("customer detail keeps standard and custom rewards isolated by customer", (
 });
 
 test("customer local cache is versioned and cannot restore another barber or browser account", () => {
-  assert.match(html, /barberVipAdminCustomers:v3:/);
+  assert.match(html, /barberVipAdminCustomers:v4:/);
   assert.match(html, /ownerUid:state\.user\.uid/);
   assert.match(html, /barberUid:state\.barberUid/);
   assert.match(html, /cached\?\.ownerUid!==state\.user\.uid/);
   assert.match(html, /cached\?\.barberUid!==state\.barberUid/);
+  assert.match(html, /encodeURIComponent\(queryKey\)/);
+  assert.match(html, /state\.customersFirstPageCursorId/);
   assert.match(html, /api\.resetSessionCache\?\.\(\)/);
   assert.match(html, /browserLocalPersistence/);
   assert.doesNotMatch(html, /customersTotalCount/);
 });
 
-test("directory pages are server-sorted and local updates preserve Firestore tie-break order", () => {
+test("directory pages never mix sort or origin queries and reject stale responses", () => {
   const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
   const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
+  const more = functionBody(html, "async function loadMoreAdminCustomers", "async function loadMoreCustomerSearch");
   assert.match(list, /orderBy\(sort\.field, sort\.direction\)/);
   assert.match(list, /orderBy\(documentId\(\), sort\.direction\)/);
   assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);
-  assert.match(filtered, /tie\(a,b,'desc'\)/);
-  assert.match(filtered, /tie\(a,b,'asc'\)/);
+  assert.match(filtered, /The server owns ordering and cursors/);
+  assert.doesNotMatch(filtered, /list\.sort/);
+  assert.match(html, /customerDirectoryQueryKey\(\)/);
+  assert.match(html, /barberVipAdminCustomers:v4:/);
+  assert.match(html, /customersLoadSeq/);
+  assert.match(html, /customersLoadQueryKey/);
+  assert.match(loader, /customerDirectoryQueryKey\(\)!==queryKey/);
+  assert.match(loader, /state\.customersLoadSeq!==requestSeq/);
+  assert.match(more, /state\.customersLoadSeq!==requestSeq/);
+  assert.match(more, /state\.customersQueryKey!==queryKey/);
+  assert.match(html, /state\.customersFirstPageCursorId/);
 });
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
@@ -486,4 +508,27 @@ test("customer profile edits read the current database version before appending 
   assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
   assert.match(update, /const rosterCustomer = \{ \.\.\.fresh, \.\.\.updates/);
   assert.match(update, /appendCustomerRosterChange/);
+});
+
+
+test("roster events only reorder the directory when creation, removal, origin or sort fields change", () => {
+  const decision = functionBody(html, "function directoryRosterChangesRequireReload", "function invalidateCustomerDirectoryPages");
+  assert.match(decision, /changedFields/);
+  assert.match(decision, /totalCuts/);
+  assert.match(decision, /lastCutAt/);
+  assert.match(decision, /signupSource/);
+  assert.match(html, /clearAllAdminCustomersCaches\(\)/);
+  assert.match(html, /customerRosterResync/ === false ? /never/ : /invalidateCustomerDirectoryPages/);
+});
+
+test("recording a visit emits a roster change and refreshes only one bounded directory page", () => {
+  const visit = functionBody(api, "async function addCut(data)", "function customerListSort");
+  const addCutUi = functionBody(html, "async function addCut(id, button)", "function contactClient");
+  assert.match(visit, /transaction\.get\(rosterRef\)/);
+  assert.match(visit, /appendCustomerRosterChange/);
+  assert.match(visit, /lastCutAt/);
+  assert.match(addCutUi, /state\.customerSearchResults\?\.find/);
+  assert.match(addCutUi, /invalidateCustomerDirectoryPages\(\)/);
+  assert.match(addCutUi, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
+  assert.match(addCutUi, /No encontramos/ === false ? /never/ : /No se encontró al cliente seleccionado/);
 });

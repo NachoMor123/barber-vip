@@ -424,3 +424,25 @@ test("legacy customers can sign in while the resumable migration is incomplete",
   assert.match(worker, /const legacyNameMatches = await fsQueryCustomerField/);
   assert.match(worker, /const phoneMatches = await fsQueryCustomerField/);
 });
+
+
+test("profile and loyalty data publish atomically to the customer-facing professional card", () => {
+  const profile = functionBody(api, "async function saveProfile(data)", "async function saveLoyalty(data)");
+  const loyalty = functionBody(api, "async function saveLoyalty(data)", "apiRequest.resetSessionCache");
+  for (const block of [profile, loyalty]) {
+    assert.match(block, /writeBatch\(db\(\)\)/);
+    assert.match(block, /batch\.update\(/);
+    assert.match(block, /batch\.set\(doc\(db\(\), 'barbers', uid, 'publicMeta', 'professional'\)/);
+    assert.match(block, /await batch\.commit\(\)/);
+    assert.match(block, /invalidate\(\)/);
+  }
+});
+
+test("customer profile edits read the current database version before appending the roster update", () => {
+  const update = functionBody(api, "async function updateCustomer(data)", "async function disableCustomer(data)");
+  assert.match(update, /transaction\.get\(customerRef\)/);
+  assert.match(update, /transaction\.get\(rosterRef\)/);
+  assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
+  assert.match(update, /const rosterCustomer = \{ \.\.\.fresh, \.\.\.updates/);
+  assert.match(update, /appendCustomerRosterChange/);
+});

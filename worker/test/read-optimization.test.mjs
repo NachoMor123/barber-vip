@@ -284,3 +284,20 @@ test("barber listens only to one directory revision while Clients is visible", (
   assert.match(nav, /stopAdminCustomersListener\(\)/);
   assert.match(nav, /startAdminCustomersListener\(\)/);
 });
+
+
+test("directory cache restores every page already seen up to a safe record cap and resumes at its saved cursor", () => {
+  assert.match(html, /ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150/);
+  const serializer = functionBody(html, "function customerCursorValue", "function customerDirectoryQueryKey");
+  assert.match(serializer, /toDate\(\)\.toISOString\(\)/);
+  assert.match(serializer, /return null/);
+  const save = functionBody(html, "function saveAdminCustomersCache()", "function restoreAdminCustomersCache()");
+  assert.match(save, /slice\(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS\)/);
+  assert.match(save, /cacheTruncated\?String\(cacheLastCustomer\?\.uid\|\|''\):state\.customersCursorId/);
+  assert.match(save, /cacheTruncated\?customerCursorValue\(cacheLastCustomer\):state\.customersCursorValue/);
+  assert.match(save, /hasMore:cacheTruncated\|\|state\.customersHasMore/);
+  const restore = functionBody(html, "function restoreAdminCustomersCache()", "function clearAdminCustomersCache()");
+  assert.match(restore, /state\.customers=cached\.customers\.filter/);
+  assert.match(restore, /state\.customersCursorId=String\(cached\.cursorId\|\|''\)/);
+  assert.match(restore, /state\.customersCursorValue=cached\.cursorValue\?\?null/);
+});

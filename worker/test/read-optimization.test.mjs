@@ -61,7 +61,7 @@ test("directory cache persists across logout and is scoped by both Firebase UIDs
   const restore = functionBody(html, "function restoreAdminCustomersCache()", "function clearAdminCustomersCache()");
   assert.match(restore, /cached\?\.ownerUid!==state\.user\.uid/);
   assert.match(restore, /cached\?\.barberUid!==state\.barberUid/);
-  assert.match(restore, /cached\.directoryVersion/);
+  assert.match(restore, /cached\?\.directoryVersion/);
   assert.doesNotMatch(restore, /CACHE_TTL|24\*60\*60/);
   const logout = functionBody(html, "async function signOutAndReturn()", "function openCustomerModal");
   assert.doesNotMatch(logout, /clearAdminCustomersCache/);
@@ -93,7 +93,7 @@ test("list order is deterministic by last visit, with never-visited customers re
   assert.match(list, /orderBy\('lastCutAt', 'desc'\)/);
   assert.match(list, /orderBy\(documentId\(\), 'desc'\)/);
   assert.match(list, /cursorValue/);
-  assert.match(list, /lastData\.lastCutAt/);
+  assert.match(list, /last\.data\(\)\.lastCutAt/);
 });
 
 test("name and WhatsApp searches are prefix-based and capped at five matches", () => {

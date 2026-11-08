@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v73-count-free-directory';
+const CACHE_NAME = 'barber-vip-shell-v74-sort-cleanup';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/customer-roster.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

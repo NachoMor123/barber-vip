@@ -50,7 +50,7 @@ test("legacy promotions and Push backends are removed from the repository", asyn
 
 test("administrator customer cache is isolated by authenticated user and barber", () => {
   assert.match(html, /const ADMIN_CUSTOMERS_CACHE_TTL_MS=24\*60\*60\*1000/);
-  const key = functionBody(html, "function adminCustomersCacheKey()", "function saveAdminCustomersCache()");
+  const key = functionBody(html, "function adminCustomersCacheKey(queryKey=customerDirectoryQueryKey())", "function saveAdminCustomersCache()");
   assert.match(key, /state\.user\?\.uid/);
   assert.match(key, /state\.barberUid/);
 
@@ -147,7 +147,9 @@ test("customer list reads have a bounded retry circuit breaker and preserve stal
   assert.match(loader, /state\.customersRetryAfter/);
   assert.match(loader, /Math\.min\(300000,10000\*Math\.pow\(2/);
   assert.match(loader, /const hadLoaded=state\.customersLoaded/);
-  assert.match(loader, /if\(state\.role!=='barber'\|\|state\.barberUid!==barberUid\)return/);
+  assert.match(loader, /state\.user\?\.uid!==accountUid/);
+  assert.match(loader, /state\.customersLoadSeq!==requestSeq/);
+  assert.match(loader, /customerDirectoryQueryKey\(\)!==queryKey/);
   assert.match(loader, /state\.customersLoaded=hadLoaded/);
   assert.match(loader, /Seguimos mostrando la última copia guardada/);
 });
@@ -297,6 +299,7 @@ test("customer search is prefix-based, cursor-paginated by 25, and independently
   assert.match(more, /state\.user\?\.uid===accountUid/);
   assert.match(more, /renderApp\(\)/);
   const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(filtered, /if\(searchActive&&!remoteReady\)return \[\]/);
   assert.match(filtered, /if\(searchActive\)return list/);
   assert.match(html, /activeQuery\.length>=1/);
   assert.match(html, /customerSearchTerm=activeListSearch/);
@@ -396,7 +399,8 @@ test("client search and visit picker never load a full customer collection", () 
 
 test("customer query failure keeps the previous page visible until resync succeeds", () => {
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
-  assert.match(loader, /Keep the previous page visible/);
+  assert.match(loader, /const hadLoaded=state\.customersLoaded&&state\.customersQueryKey===queryKey/);
+  assert.match(loader, /state\.customersLoaded=hadLoaded/);
   assert.doesNotMatch(loader, /state\.customers=\[\];state\.customersLoaded=false/);
 });
 
@@ -553,7 +557,8 @@ test("changing source or sort clears the prior pages before the new query render
   assert.match(reset, /state\.customers=\[\]/);
   assert.match(reset, /state\.customersLoaded=false/);
   assert.match(reset, /restoreAdminCustomersCache\(\)/);
-  assert.match(reset, /customerDirectoryQueryKey\(\)/);
+  assert.match(html, /function customerDirectoryQueryKey\(\)/);
+  assert.match(html, /adminCustomersCacheKey\(queryKey\)/);
   assert.match(change, /resetCustomerDirectoryForCriteria\(\)/);
   assert.match(html, /customersQueryKey!==queryKey/);
 });

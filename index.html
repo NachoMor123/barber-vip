@@ -1283,11 +1283,6 @@
       switch(state.sort){
         case 'cuts-asc':list.sort((a,b)=>(Number(a.totalCuts)||0)-(Number(b.totalCuts)||0)||tie(a,b,'asc'));break;
         case 'visit-order-desc':case 'last-cut-desc':list.sort((a,b)=>(asDate(b.lastCutAt)?.getTime()||0)-(asDate(a.lastCutAt)?.getTime()||0)||tie(a,b,'desc'));break;
-        case 'last-cut-asc':list.sort((a,b)=>(asDate(a.lastCutAt)?.getTime()||0)-(asDate(b.lastCutAt)?.getTime()||0)||tie(a,b,'asc'));break;
-        case 'name-asc':list.sort((a,b)=>{
-          const left=String(a.fullName||''),right=String(b.fullName||'');
-          return (left<right?-1:left>right?1:0)||tie(a,b,'asc');
-        });break;
         default:list.sort((a,b)=>(Number(b.totalCuts)||0)-(Number(a.totalCuts)||0)||tie(a,b,'desc'));
       }
       return list;
@@ -1524,7 +1519,7 @@
       const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
       const sortControl=state.query.trim().length>=1
         ? '<select class="sort-select" disabled aria-label="Orden de búsqueda"><option>Orden: coincidencia</option></select>'
-        : `<select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="visit-order-desc" ${state.sort==='visit-order-desc'?'selected':''}>Ordenar por orden de visitas · más reciente</option><option value="last-cut-asc" ${state.sort==='last-cut-asc'?'selected':''}>Última visita: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select>`;
+        : `<select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="visit-order-desc" ${state.sort==='visit-order-desc'?'selected':''}>Última visita: más reciente</option></select>`;
       return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option></select>${sortControl}<span class="clients-toolbar-actions"><button type="button" class="clients-refresh-btn ${state.customersLoading?'is-busy':''}" data-action="refresh-clients" title="Actualizar lista de clientes" aria-label="Actualizar lista de clientes" ${state.customersLoading||Date.now()<Number(state.clientsRefreshUntil||0)?'disabled':'' }><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" aria-hidden="true">${Date.now()<Number(state.clientsRefreshUntil||0)?Math.max(1,Math.ceil((state.clientsRefreshUntil-Date.now())/1000)):''}</span></button></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
 
@@ -2751,11 +2746,11 @@
     document.addEventListener('change',event=>{
       const target=event.target;
       if(target.id==='sortSelect'||target.id==='customerSourceFilter'){
-        if(target.id==='sortSelect')state.sort=['cuts-desc','cuts-asc','visit-order-desc','last-cut-desc','last-cut-asc','name-asc'].includes(target.value)?target.value:'cuts-desc';
+        if(target.id==='sortSelect')state.sort=['cuts-desc','cuts-asc','visit-order-desc'].includes(target.value)?target.value:'cuts-desc';
         else state.customerSourceFilter=['all','admin','self'].includes(target.value)?target.value:'all';
-        state.query='';state.customerSearchSeq++;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customersQueryKey='';
-        void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>toast(userFacingError(error,'No se pudo actualizar la lista.'),'error'));
-        renderApp();
+        // A new sort or origin is a new Firestore query. Never show pages fetched
+        // under a different order while the replacement query is in flight.
+        resetCustomerDirectoryForCriteria();
       }
       
       if(target.id==='clientLoyaltyMode'){const box=$('#clientLoyaltyConfig',modalRoot);if(box){box.classList.toggle('hidden',target.value!=='custom');$$('input',box).forEach(input=>input.disabled=target.value!=='custom');}}

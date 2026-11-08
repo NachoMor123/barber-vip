@@ -277,14 +277,20 @@ test("customer search is prefix-based, cursor-paginated by 25, and independently
   assert.match(html, /loadMoreCustomerSearch/);
   assert.match(html, /state\.query\.trim\(\)\.length>=1/);
   assert.match(html, /state\.customerSearchHasMore/);
-  assert.match(html, /state\.sort/);
   assert.match(html, /state\.customerSearchLoadingMore/);
   assert.match(html, /numericOnly&&digits\.length<3/);
   assert.match(html, /Orden: coincidencia/);
   assert.match(html, /aria-label="Orden de búsqueda"/);
-  assert.match(html, /state\.query\.trim\(\)\.length>=1/);
+  const more = functionBody(html, "async function loadMoreCustomerSearch", "async function runCustomerSearch");
+  assert.match(more, /cursorId:state\.customerSearchCursorId/);
+  assert.match(more, /cursorValue:state\.customerSearchCursorValue/);
+  assert.match(more, /state\.customerSearchSeq===searchSeq/);
+  assert.match(more, /state\.user\?\.uid===accountUid/);
+  assert.match(more, /renderApp\(\)/);
   const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
   assert.match(filtered, /if\(searchActive\)return list/);
+  assert.match(html, /activeQuery\.length>=1/);
+  assert.match(html, /customerSearchTerm=activeListSearch/);
 });
 
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {

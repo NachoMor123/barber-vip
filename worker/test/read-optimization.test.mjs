@@ -220,3 +220,44 @@ test("the three customer composite indexes cover visit ordering and both search 
   assert.ok(fields.some(value => value.includes("active:ASCENDING") && value.includes("usernameNormalized:ASCENDING")));
   assert.ok(fields.some(value => value.includes("active:ASCENDING") && value.includes("whatsapp:ASCENDING")));
 });
+
+
+test("customer card cache is persistent and namespaced by customer UID plus barber UID", () => {
+  const key = functionBody(api, "function customerCardCacheKey", "function readCustomerCardCache");
+  const restore = functionBody(api, "function readCustomerCardCache", "function writeCustomerCardCache");
+  const save = functionBody(api, "function writeCustomerCardCache", "function removeCustomerCardCache");
+  assert.match(key, /barberVipCustomerCard:v1:/);
+  assert.match(key, /encodeURIComponent\(String\(uid\)\)/);
+  assert.match(key, /encodeURIComponent\(String\(barberUid\)\)/);
+  assert.match(restore, /cached\?\.ownerUid !== uid/);
+  assert.match(restore, /cached\?\.barberUid !== barberUid/);
+  assert.match(restore, /cached\.customer\?\.uid !== uid/);
+  assert.match(restore, /cached\.customer\?\.barberUid !== barberUid/);
+  assert.match(save, /delete safeCustomer\.loginEmail/);
+  assert.match(save, /delete safeCustomer\.usernameNormalized/);
+  assert.match(save, /localStorage\.setItem/);
+});
+
+test("customer login reuses its own saved card before fetching the customer and public profile again", () => {
+  const getMe = functionBody(api, "async function getMe()", "async function ensureBarberProfile");
+  assert.match(getMe, /readCustomerCardCache\(uid, barberUid\)/);
+  assert.ok(getMe.indexOf("readCustomerCardCache(uid, barberUid)") < getMe.indexOf("getDoc(doc(db(), 'barbers', barberUid, 'customers', uid))"));
+  assert.match(getMe, /writeCustomerCardCache\(uid, barberUid, result\.customer, result\.barber\)/);
+  const saveMethod = functionBody(api, "apiRequest.saveCustomerCardCache", "apiRequest.clearCustomerCardCache");
+  assert.match(saveMethod, /state\.auth\?\.currentUser\?\.uid/);
+});
+
+test("customer card snapshots refresh only the active account cache and revoke disabled access", () => {
+  const load = functionBody(html, "async function loadContext(me)", "async function resumeSession");
+  assert.match(load, /const customerSessionUid=state\.user\?\.uid/);
+  assert.match(load, /const customerBarberUid=me\.barberUid/);
+  assert.match(load, /onSnapshot\(customerRef/);
+  assert.match(load, /onSnapshot\(professionalMetaRef/);
+  assert.match(load, /state\.user\?\.uid!==customerSessionUid/);
+  assert.match(load, /state\.barberUid!==customerBarberUid/);
+  assert.match(load, /api\.saveCustomerCardCache\?\.\(state\.customer,state\.barber\)/);
+  assert.match(load, /api\.clearCustomerCardCache\?\.\(customerSessionUid,customerBarberUid\)/);
+  assert.match(load, /state\.customerAccessRevoked=false/);
+  const logout = functionBody(html, "async function signOutAndReturn()", "function openCustomerModal");
+  assert.doesNotMatch(logout, /clearCustomerCardCache/);
+});

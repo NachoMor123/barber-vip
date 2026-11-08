@@ -163,6 +163,50 @@ export function createSparkApi({ firebaseConfig, state }) {
   const customerSearchCache = new Map();
   const clearCustomerSearchCache = () => customerSearchCache.clear();
 
+  // Persistent client-card cache, isolated by both Firebase account UID and barber UID.
+  // It is stale-while-revalidate: scoped snapshots remain authoritative and refresh it.
+  function customerCardCacheKey(uid, barberUid) {
+    return 'barberVipCustomerCard:v1:' + encodeURIComponent(String(uid)) + ':' + encodeURIComponent(String(barberUid));
+  }
+  function readCustomerCardCache(uid, barberUid) {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      const cached = JSON.parse(localStorage.getItem(customerCardCacheKey(uid, barberUid)) || 'null');
+      const savedAt = Number(cached?.savedAt || 0);
+      if (cached?.ownerUid !== uid || cached?.barberUid !== barberUid
+        || !Number.isFinite(savedAt) || savedAt <= 0 || savedAt > Date.now() + 60000
+        || cached.customer?.uid !== uid || cached.customer?.barberUid !== barberUid
+        || cached.customer?.active === false || !cached.barber || typeof cached.barber !== 'object') return null;
+      return { customer: cached.customer, barber: cached.barber };
+    } catch (_) { return null; }
+  }
+  function writeCustomerCardCache(uid, barberUid, customer, barber) {
+    if (!uid || !barberUid || customer?.uid !== uid || customer?.barberUid !== barberUid
+      || customer?.active === false || !barber || typeof barber !== 'object') return;
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const safeCustomer = { ...customer };
+      delete safeCustomer.loginEmail;
+      delete safeCustomer.usernameNormalized;
+      for (const field of ['createdAt', 'updatedAt', 'lastCutAt', 'lastRewardAppliedAt']) {
+        const value = safeCustomer[field];
+        if (value && typeof value.toDate === 'function') safeCustomer[field] = value.toDate().toISOString();
+        else if (value instanceof Date) safeCustomer[field] = value.toISOString();
+      }
+      localStorage.setItem(customerCardCacheKey(uid, barberUid), JSON.stringify({
+        version: 1, ownerUid: uid, barberUid, savedAt: Date.now(),
+        customer: safeCustomer, barber: cleanProfileForCustomer(barber)
+      }));
+    } catch (_) {}
+  }
+  function removeCustomerCardCache(uid, barberUid) {
+    try {
+      if (typeof localStorage !== 'undefined' && uid && barberUid) {
+        localStorage.removeItem(customerCardCacheKey(uid, barberUid));
+      }
+    } catch (_) {}
+  }
+
   const db = () => {
     if (!state.db) throw fail('No se pudo conectar con el servicio. Recargá Barber VIP e intentá nuevamente.', 503);
     return state.db;
@@ -294,8 +338,24 @@ export function createSparkApi({ firebaseConfig, state }) {
 
     if (profile.role === 'customer' && profile.barberUid) {
       const barberUid = String(profile.barberUid);
+      if (profile.disabled === true) throw fail('Este cliente fue dado de baja. Consultá con tu profesional.', 403);
+
+      // userProfiles verifies the authenticated UID and its barber relationship.
+      // A previously saved card can now render immediately; the scoped snapshots
+      // attached by the UI revalidate both documents and refresh this cache.
+      const cachedCard = readCustomerCardCache(uid, barberUid);
+      if (cachedCard) {
+        const result = {
+          ok: true, role: 'customer', uid, barberUid,
+          customer: cachedCard.customer, barber: cachedCard.barber
+        };
+        cachedMe = result; cachedUid = uid;
+        return result;
+      }
+
       const customerSnap = await getDoc(doc(db(), 'barbers', barberUid, 'customers', uid));
-      if (!customerSnap.exists() || customerSnap.data().active === false || profile.disabled === true) {
+      if (!customerSnap.exists() || customerSnap.data().active === false) {
+        removeCustomerCardCache(uid, barberUid);
         throw fail('Este cliente fue dado de baja. Consultá con tu profesional.', 403);
       }
       const professional = await publicMetaForBarber(barberUid, {}, false);
@@ -304,10 +364,11 @@ export function createSparkApi({ firebaseConfig, state }) {
         customer: { ...customerSnap.data(), uid },
         barber: cleanProfileForCustomer(professional)
       };
+      writeCustomerCardCache(uid, barberUid, result.customer, result.barber);
       cachedMe = result; cachedUid = uid;
       return result;
     }
-    throw fail('El tipo de cuenta no está configurado correctamente.', 403);
+    throw fail('El tipo de cuenta no está configurado correctamente.', 403);    throw fail('El tipo de cuenta no está configurado correctamente.', 403);
   }
 
   async function ensureBarberProfile(data) {
@@ -921,5 +982,11 @@ export function createSparkApi({ firebaseConfig, state }) {
 
   apiRequest.resetSessionCache = invalidate;
   apiRequest.clearCustomerSearchCache = clearCustomerSearchCache;
+  apiRequest.saveCustomerCardCache = (customer, barber) => {
+    const uid = String(state.auth?.currentUser?.uid || '');
+    const barberUid = String(state.barberUid || customer?.barberUid || '');
+    if (uid) writeCustomerCardCache(uid, barberUid, customer, barber);
+  };
+  apiRequest.clearCustomerCardCache = (uid, barberUid) => removeCustomerCardCache(uid, barberUid);
   return apiRequest;
 }

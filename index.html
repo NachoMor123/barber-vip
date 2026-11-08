@@ -1921,35 +1921,46 @@
     }
 
     async function loadMoreAdminCustomers(){
-      if(state.role!=='barber'||state.customersLoadingMore||!state.customersHasMore||!state.customersCursorId||state.query.trim())return;
+      const queryKey=customerDirectoryQueryKey();
+      if(state.role!=='barber'||state.customersLoadingMore||!state.customersLoaded
+        ||state.customersQueryKey!==queryKey||!state.customersHasMore
+        ||!state.customersCursorId||state.query.trim())return;
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
+      const requestSeq=state.customersLoadSeq;
       customersPaginationObserver?.disconnect();customersPaginationObserver=null;
       state.customersLoadingMore=true;
+      renderApp();
       let loaded=false;
       try{
         const page=await api('/api/customers/list',{method:'POST',body:{
           sort:state.sort,source:state.customerSourceFilter,pageSize:ADMIN_CUSTOMERS_PAGE_SIZE,
           cursorId:state.customersCursorId,cursorValue:state.customersCursorValue
         }});
-        if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
+        if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid
+          ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==queryKey
+          ||state.customersQueryKey!==queryKey||state.query.trim())return;
         const seen=new Set(state.customers.map(c=>c.uid));
-        state.customers=[...state.customers,...(Array.isArray(page.customers)?page.customers:[]).filter(c=>!seen.has(c.uid))];
+        const next=(Array.isArray(page.customers)?page.customers:[]).filter(c=>!seen.has(c.uid));
+        state.customers=[...state.customers,...next];
         state.customersHasMore=page.hasMore===true;
         state.customersCursorId=String(page.cursorId||state.customersCursorId);
         state.customersCursorValue=page.cursorValue??state.customersCursorValue;
         saveAdminCustomersCache();
         loaded=true;
       }catch(error){
-        if(state.user?.uid===accountUid&&state.barberUid===barberUid){
+        if(state.user?.uid===accountUid&&state.barberUid===barberUid
+          &&state.customersLoadSeq===requestSeq&&customerDirectoryQueryKey()===queryKey){
           state.customersHasMore=false;
           toast(userFacingError(error,'No se pudieron actualizar más clientes. Revisá la conexión e intentá de nuevo.'),'error');
           saveAdminCustomersCache();
         }
       }finally{
-        state.customersLoadingMore=false;
-        if(state.section==='clients'&&state.role==='barber'&&state.user?.uid===accountUid&&state.barberUid===barberUid)renderApp();
-        else if(state.section==='clients')observeCustomersPagination();
+        if(state.customersLoadSeq===requestSeq&&state.user?.uid===accountUid&&state.barberUid===barberUid){
+          state.customersLoadingMore=false;
+          if(state.section==='clients')renderApp();
+          else observeCustomersPagination();
+        }
       }
     }
 

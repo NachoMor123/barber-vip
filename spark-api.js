@@ -708,7 +708,7 @@ export function createSparkApi({ firebaseConfig, state }) {
   function customerListSort(value) {
     switch (value) {
       case 'cuts-asc': return { field: 'totalCuts', direction: 'asc' };
-      case 'visit-order-desc': case 'last-cut-desc': return { field: 'lastCutAt', direction: 'desc' };
+      case 'visit-order-desc': return { field: 'lastCutAt', direction: 'desc' };
       default: return { field: 'totalCuts', direction: 'desc' };
     }
   }

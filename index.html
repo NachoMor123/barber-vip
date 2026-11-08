@@ -1695,6 +1695,13 @@
     // entered or refreshed. No customer-directory listener and no polling.
     const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=15;
     const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=3;
+    const ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150;
+    function customerCursorValue(customer){
+      const value=customer?.lastCutAt;
+      if(value&&typeof value.toDate==='function')return value.toDate().toISOString();
+      if(value instanceof Date)return value.toISOString();
+      return typeof value==='string'&&value?value:null;
+    }
     function adminCustomersCacheKey(){
       return 'barberVipAdminCustomers:v5:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
     }
@@ -1702,11 +1709,16 @@
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
       const savedAt=Date.now();state.customersCacheSavedAt=savedAt;
+      const cachedCustomers=state.customers.slice(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS);
+      const cacheTruncated=state.customers.length>cachedCustomers.length;
+      const cacheLastCustomer=cachedCustomers[cachedCustomers.length-1]||null;
+      const cursorId=cacheTruncated?String(cacheLastCustomer?.uid||''):state.customersCursorId;
+      const cursorValue=cacheTruncated?customerCursorValue(cacheLastCustomer):state.customersCursorValue;
       try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({
         ownerUid:state.user.uid,barberUid:state.barberUid,savedAt,
-        customers:state.customers.slice(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE),
-        hasMore:state.customers.length>ADMIN_CUSTOMERS_FIRST_PAGE_SIZE||state.customersHasMore,
-        cursorId:state.customersFirstPageCursorId,cursorValue:state.customersFirstPageCursorValue,
+        customers:cachedCustomers,
+        hasMore:cacheTruncated||state.customersHasMore,
+        cursorId,cursorValue,
         directoryVersion:Math.max(0,Number(state.customersCacheVersion)||0),queryKey:customerDirectoryQueryKey()
       }));}catch(_){}
     }

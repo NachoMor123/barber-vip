@@ -51,34 +51,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "lastCutAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "customers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "fullName",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "customers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "signupSource",
           "order": "ASCENDING"
         },
@@ -121,42 +93,6 @@
         {
           "fieldPath": "lastCutAt",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "customers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "signupSource",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastCutAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "customers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "signupSource",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "fullName",
-          "order": "ASCENDING"
         }
       ]
     },

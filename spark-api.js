@@ -567,7 +567,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const rosterCustomer = { ...fresh, ...updates, uid: id, updatedAt: changedAt };
       const nextRoster = appendCustomerRosterChange(
         rosterSnap.exists() ? rosterSnap.data() : null,
-        'updated', rosterCustomer, changedAt
+        'updated', rosterCustomer, changedAt, Object.keys(updates)
       );
       transaction.update(customerRef, updates);
       if (oldLookupRef && newLookupRef) {
@@ -625,10 +625,14 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!id) throw fail('Elegí un cliente.');
     const barberRef = doc(db(), 'barbers', uid);
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
+    const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
     let resultCustomer = null;
+    let rosterVersion = 0;
     let outcome = { appliedReward: null, cycleReset: false };
     await runTransaction(db(), async transaction => {
-      const [customerSnap, barberSnap] = await Promise.all([transaction.get(customerRef), transaction.get(barberRef)]);
+      const [customerSnap, barberSnap, rosterSnap] = await Promise.all([
+        transaction.get(customerRef), transaction.get(barberRef), transaction.get(rosterRef)
+      ]);
       if (!customerSnap.exists() || customerSnap.data().active === false) throw fail('El cliente no existe o fue dado de baja.');
       if (!barberSnap.exists()) throw fail('No se encontró el perfil profesional.');
       const customer = customerSnap.data();
@@ -685,6 +689,15 @@ export function createSparkApi({ firebaseConfig, state }) {
         lastCutAt: new Date().toISOString(),
         lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null
       };
+      const changedAt = new Date();
+      const rosterCustomer = { ...resultCustomer, uid: id, updatedAt: changedAt, lastCutAt: changedAt };
+      const nextRoster = appendCustomerRosterChange(
+        rosterSnap.exists() ? rosterSnap.data() : null,
+        'updated', rosterCustomer, changedAt,
+        ['totalCuts', 'actualCutsRegistered', 'cycleCuts', 'lastCutAt', 'availableRewards', 'rewardReady']
+      );
+      rosterVersion = nextRoster.version;
+      transaction.set(rosterRef, nextRoster);
       outcome = { appliedReward, cycleReset: appliedOnFinalMilestone };
     });
     let message = 'Visita registrada correctamente.';
@@ -692,15 +705,13 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
     clearCustomerSearchCache();
-    return { ok: true, customer: resultCustomer, message };
+    return { ok: true, customer: resultCustomer, message, rosterVersion };
   }
 
   function customerListSort(value) {
     switch (value) {
       case 'cuts-asc': return { field: 'totalCuts', direction: 'asc' };
-      case 'visit-order-desc': case 'last-cut-desc': return { field: 'lastCutAt', direction: 'desc' };
-      case 'last-cut-asc': return { field: 'lastCutAt', direction: 'asc' };
-      case 'name-asc': return { field: 'fullName', direction: 'asc' };
+      case 'visit-order-desc': return { field: 'lastCutAt', direction: 'desc' };
       default: return { field: 'totalCuts', direction: 'desc' };
     }
   }

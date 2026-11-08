@@ -12,14 +12,22 @@ function asMillis(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function appendCustomerRosterChange(current, action, customer, changedAt = new Date()) {
+export function appendCustomerRosterChange(current, action, customer, changedAt = new Date(), changedFields = null) {
   const previousVersion = Number(current?.version);
   const version = Number.isSafeInteger(previousVersion) && previousVersion >= 0 ? previousVersion + 1 : 1;
+  const normalizedAction = String(action || "updated");
+  const defaultFields = normalizedAction === "created"
+    ? ["active", "signupSource", "totalCuts", "lastCutAt"]
+    : (normalizedAction === "disabled" || normalizedAction === "deleted"
+      ? ["active", "signupSource"] : []);
   const event = {
     version,
-    action: String(action || "updated"),
+    action: normalizedAction,
     customerId: String(customer?.uid || ""),
     customer: customer && typeof customer === "object" ? customer : null,
+    changedFields: Array.isArray(changedFields)
+      ? [...new Set(changedFields.map(value => String(value)))]
+      : defaultFields,
     changedAt
   };
   const previous = Array.isArray(current?.changes) ? current.changes : [];

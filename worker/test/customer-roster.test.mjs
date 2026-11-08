@@ -61,3 +61,25 @@ test("roster disable events remove a cached record without touching visit fields
   ]);
   assert.deepEqual(changed, [{ ...original, fullName: "Actualizado" }]);
 });
+
+
+test("roster events include changed-field metadata for accurate directory invalidation", () => {
+  const visit = appendCustomerRosterChange(
+    { version: 4, changes: [] },
+    "updated",
+    { uid: "c1", totalCuts: 8, lastCutAt: new Date(5000) },
+    new Date(5000),
+    ["totalCuts", "lastCutAt"]
+  );
+  assert.deepEqual(visit.changes[0].changedFields, ["totalCuts", "lastCutAt"]);
+
+  const created = appendCustomerRosterChange(
+    { version: 5, changes: [] },
+    "created",
+    { uid: "c2", active: true, signupSource: "self" },
+    new Date(6000)
+  );
+  assert.ok(created.changes[0].changedFields.includes("active"));
+  assert.ok(created.changes[0].changedFields.includes("signupSource"));
+  assert.ok(created.changes[0].changedFields.includes("totalCuts"));
+});

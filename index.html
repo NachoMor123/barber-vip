@@ -1873,7 +1873,7 @@
       }
 
       state.customersRosterVersion=version;
-      if(state.customersRosterNeedsReload&&state.section==='clients'&&!activeListSearch&&!state.customersLoading){
+      if(state.customersRosterNeedsReload&&state.section==='clients'&&!activeQuery&&!state.customersLoading){
         void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
           showErrorOnce('customer-roster-resync','No se pudo actualizar la lista de clientes. Seguimos mostrando la última copia disponible.',error)
         );

@@ -1444,6 +1444,9 @@
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         if(result.customer){
           api.clearCustomerSearchCache?.();
+          if(Number.isSafeInteger(Number(result.rosterVersion))){
+            state.customersRosterVersion=Math.max(Number(state.customersRosterVersion)||0,Number(result.rosterVersion));
+          }
           state.customerSearchResults=Array.isArray(state.customerSearchResults)
             ?state.customerSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x)
             :state.customerSearchResults;

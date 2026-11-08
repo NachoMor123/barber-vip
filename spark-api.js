@@ -7,7 +7,7 @@ import {
   deleteUser, signOut, setPersistence, inMemoryPersistence
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {
-  collection, doc, getDoc, getDocs, getCountFromServer, query, where, orderBy, documentId, startAfter, limit, setDoc, updateDoc,
+  collection, doc, getDoc, getDocs, query, where, orderBy, documentId, startAfter, limit, setDoc, updateDoc,
   deleteDoc, writeBatch, runTransaction, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
@@ -173,7 +173,12 @@ export function createSparkApi({ firebaseConfig, state }) {
     return state.auth;
   };
   const currentUid = () => auth().currentUser.uid;
-  const invalidate = () => { cachedMe = null; cachedUid = ''; };
+  const invalidate = () => {
+    cachedMe = null;
+    cachedUid = '';
+    publicBarberCode = '';
+    clearCustomerSearchCache();
+  };
 
   async function workerRequest(path, options = {}) {
     const base = String(WORKER_API_BASE || '').trim().replace(/\/+$/, '');
@@ -732,22 +737,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       return customer;
     });
 
-    let totalCount = null;
-    if (data.includeCount !== false) {
-      try {
-        const count = await getCountFromServer(query(ref, ...filters));
-        totalCount = Number(count.data().count) || 0;
-      } catch (error) {
-        console.warn('[Barber VIP] No se pudo calcular el total de clientes.', error?.message || error);
-      }
-    }
     const last = snap.docs.at(-1);
     const lastData = last?.data() || {};
     const cursorValue = last
       ? (sort.field === 'lastCutAt' ? (dateOf(lastData[sort.field])?.toISOString() || null) : lastData[sort.field])
       : (data.cursorValue ?? null);
     return {
-      ok: true, customers, totalCount,
+      ok: true, customers,
       hasMore: snap.docs.length === pageSize,
       cursorId: last?.id || String(data.cursorId || ''),
       cursorValue,

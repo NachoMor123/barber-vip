@@ -7,7 +7,7 @@ Barber VIP es una PWA de fidelización para profesionales independientes. La pla
 - Firebase: `barbervip-309dc`
 - Hosting previsto para la app: `https://barbervip-309dc.web.app`
 - Hosting comercial: `https://barber-vip-comercial-309dc.web.app`
-- Frontend Vercel anterior: `https://barber-vip-three.vercel.app/`
+- Backend auxiliar: `https://barber-vip.barbervip.workers.dev`
 
 No crear otro proyecto Firebase ni otra base de datos. Las cuentas, perfiles, clientes, visitas y pagos existentes se conservan.
 
@@ -55,7 +55,7 @@ firebase use barbervip-309dc
 firebase deploy --only firestore:rules,hosting:app
 ```
 
-Antes de reemplazar el enlace de acceso, verificar el webhook de Mercado Pago, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. Mantener el frontend anterior disponible hasta validar el nuevo Hosting.
+Antes de difundir el enlace de acceso, verificar el webhook de Mercado Pago, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. El acceso productivo queda en Firebase Hosting.
 
 ## Lecturas y cuotas
 

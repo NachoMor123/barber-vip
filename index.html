@@ -1270,7 +1270,8 @@
       if(state.section==='clients'&&state.customerSourceFilter!=='all')list=list.filter(c=>state.customerSourceFilter==='admin'?c.signupSource==='admin':c.signupSource==='self');
       const q=normalizeName(state.query);if(q&&!remoteReady)list=list.filter(c=>normalizeName(c.fullName).includes(q)||String(c.whatsapp||'').replace(/\D/g,'').includes(q.replace(/\D/g,'')));
       const tie=(a,b,direction='asc')=>{
-        const result=String(a.uid||'').localeCompare(String(b.uid||''));
+        const left=String(a.uid||''),right=String(b.uid||'');
+        const result=left<right?-1:left>right?1:0;
         return direction==='desc'?-result:result;
       };
       switch(state.sort){

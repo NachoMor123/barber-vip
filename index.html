@@ -1914,6 +1914,7 @@
         if(state.section==='clients')void syncCustomerDirectory().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
         renderApp();
       } else {
+        state.customerAccessRevoked=false;
         const customerSessionUid=state.user?.uid||'';
         const customerBarberUid=me.barberUid;
         state.customerSection=readSectionPreference('customer',me.uid,['home','barber'],'home');
@@ -1928,14 +1929,35 @@
           if(state.role!=='customer'||state.user?.uid!==customerSessionUid||state.barberUid!==customerBarberUid||!snap.exists())return;
           const fresh=snap.data()||{};
           state.barber={...state.barber,displayName:fresh.displayName??state.barber?.displayName,barberName:fresh.barberName??state.barber?.barberName,whatsapp:fresh.whatsapp??state.barber?.whatsapp,instagramUrl:fresh.instagramUrl??state.barber?.instagramUrl,mapsUrl:fresh.mapsUrl??state.barber?.mapsUrl,schedule:fresh.schedule??state.barber?.schedule,services:Array.isArray(fresh.services)?fresh.services:state.barber?.services,showServices:fresh.showServices===true,loyaltyPrograms:Array.isArray(fresh.loyaltyPrograms)?fresh.loyaltyPrograms:state.barber?.loyaltyPrograms,defaultLoyaltyProgramId:fresh.defaultLoyaltyProgramId??state.barber?.defaultLoyaltyProgramId};
+          api.saveCustomerCardCache?.(state.customer,state.barber);
           renderApp();
         },err=>showErrorOnce('professional-profile-snapshot','No se pudieron actualizar los datos del profesional. Revisá tu conexión e intentá nuevamente.',err)));
 
         const customerRef=doc(state.db,'barbers',me.barberUid,'customers',state.user.uid);
         state.unsubscribers.push(onSnapshot(customerRef,snap=>{
-          if(state.role!=='customer'||state.user?.uid!==customerSessionUid||state.barberUid!==customerBarberUid||!snap.exists())return;
+          if(state.role!=='customer'||state.user?.uid!==customerSessionUid||state.barberUid!==customerBarberUid)return;
+          if(!snap.exists()){
+            // A cache miss while offline is not proof that the account was removed.
+            if(snap.metadata?.fromCache!==true){
+              api.clearCustomerCardCache?.(customerSessionUid,customerBarberUid);
+              if(!state.customerAccessRevoked){
+                state.customerAccessRevoked=true;
+                void signOutAndReturn().then(()=>toast('Este cliente fue dado de baja. Consultá con tu profesional.','error'));
+              }
+            }
+            return;
+          }
+          const snapshotData=snap.data()||{};
+          if(snapshotData.active===false){
+            api.clearCustomerCardCache?.(customerSessionUid,customerBarberUid);
+            if(!state.customerAccessRevoked){
+              state.customerAccessRevoked=true;
+              void signOutAndReturn().then(()=>toast('Este cliente fue dado de baja. Consultá con tu profesional.','error'));
+            }
+            return;
+          }
           const previousCustomer=state.customer;
-          const freshCustomer={uid:snap.id,...snap.data()};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;
+          const freshCustomer={uid:snap.id,...snapshotData};delete freshCustomer.isOnline;delete freshCustomer.lastSeenAt;delete freshCustomer.lastConnectedAt;
           if(previousCustomer&&document.visibilityState==='visible'&&Number(freshCustomer.totalCuts||0)>Number(previousCustomer.totalCuts||0)){
             const cycle=cycleCount(freshCustomer),max=cycleLength(freshCustomer),finalHit=freshCustomer.lastRewardAppliedOnFinalMilestone===true;
             const rewardLabel=String(freshCustomer.lastRewardAppliedLabel||'').trim();
@@ -1948,6 +1970,7 @@
             toast(message,'success');
           }
           state.customer=freshCustomer;
+          api.saveCustomerCardCache?.(state.customer,state.barber);
           renderApp();
         },err=>showErrorOnce('customer-snapshot','No se pudo actualizar tu tarjeta. Revisá tu conexión e intentá nuevamente.',err)));
 

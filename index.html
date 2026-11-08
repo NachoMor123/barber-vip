@@ -1268,24 +1268,13 @@
       const searchTerm=state.query.trim();
       const searchActive=searchTerm.length>=1;
       const remoteReady=searchActive&&state.customerSearchTerm===searchTerm&&Array.isArray(state.customerSearchResults);
-      // Never fall back to filtering only the pages already scrolled into view:
-      // search results always come from the server-side prefix query.
+      // The server owns ordering and cursors for both the directory and prefix search.
+      // Never re-sort only the pages loaded so far: that would create a false global ranking.
       if(searchActive&&!remoteReady)return [];
-      let list=(searchActive?state.customerSearchResults:state.customers).filter(c=>c.active!==false);
-      if(state.section==='clients'&&state.customerSourceFilter!=='all')list=list.filter(c=>state.customerSourceFilter==='admin'?c.signupSource==='admin':c.signupSource==='self');
-      if(searchActive)return list;
-
-      const tie=(a,b,direction='asc')=>{
-        const left=String(a.uid||''),right=String(b.uid||'');
-        const result=left<right?-1:left>right?1:0;
-        return direction==='desc'?-result:result;
-      };
-      switch(state.sort){
-        case 'cuts-asc':list.sort((a,b)=>(Number(a.totalCuts)||0)-(Number(b.totalCuts)||0)||tie(a,b,'asc'));break;
-        case 'visit-order-desc':case 'last-cut-desc':list.sort((a,b)=>(asDate(b.lastCutAt)?.getTime()||0)-(asDate(a.lastCutAt)?.getTime()||0)||tie(a,b,'desc'));break;
-        default:list.sort((a,b)=>(Number(b.totalCuts)||0)-(Number(a.totalCuts)||0)||tie(a,b,'desc'));
-      }
-      return list;
+      const source=searchActive?state.customerSearchResults:state.customers;
+      return (Array.isArray(source)?source:[]).filter(customer=>customer&&customer.active!==false
+        &&(state.section!=='clients'||state.customerSourceFilter==='all'
+          ||(state.customerSourceFilter==='admin'?customer.signupSource==='admin':customer.signupSource==='self')));
     }
 
         function clientStatus(c) { if(rewardForNextVisit(c).length)return ['Descuento para esta visita','good']; if(!Number(c.totalCuts||0))return ['Sin visitas','warn']; return ['Cliente activo','good']; }

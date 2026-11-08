@@ -1,6 +1,7 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { WORKER_API_BASE } from './worker-config.js';
 import { normalizeInstagramProfileUrl } from './profile-utils.js';
+import { appendCustomerRosterChange } from './customer-roster.js';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -160,6 +161,8 @@ export function createSparkApi({ firebaseConfig, state }) {
   let cachedMe = null;
   let cachedUid = '';
   let publicBarberCode = '';
+  const customerSearchCache = new Map();
+  const clearCustomerSearchCache = () => customerSearchCache.clear();
 
   const db = () => {
     if (!state.db) throw fail('No se pudo conectar con el servicio. Recargá Barber VIP e intentá nuevamente.', 503);
@@ -362,68 +365,73 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberCode = cleanCode(data.barberCode);
     const normalized = normalizeName(data.username);
     if (!barberCode || !normalized) throw fail('Completá el código de tu profesional y tu nombre.');
-    const codeSnap = await getDoc(doc(db(), 'publicBarberCodes', barberCode));
-    if (!codeSnap.exists()) throw fail('No encontramos ese código. Revisalo con tu profesional y probá nuevamente.', 404);
-    const barberUid = String(codeSnap.data().barberUid || '');
-    const id = await loginLookupId(barberUid, normalized);
-    const loginSnap = await getDoc(doc(db(), 'customerLoginLookup', id));
-    if (!loginSnap.exists() || loginSnap.data().active === false) throw fail('No encontramos una cuenta activa con esos datos. Revisá tu código y nombre.');
-    return { ok: true, email: String(loginSnap.data().email || '') };
+    return await workerRequest('/api/customer-login', {
+      method: 'POST',
+      auth: false,
+      body: { barberCode, username: normalized }
+    });
   }
 
   async function migrateCustomerLoginIndexForBarber(barberData = state.barber || {}) {
     const uid = currentUid();
     const barberRef = doc(db(), 'barbers', uid);
     if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false, cursorId: '' };
+
     const customersRef = collection(db(), 'barbers', uid, 'customers');
     const pageSize = 250;
-    let cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
-    let indexed = 0;
-    let processed = 0;
+    const cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
+    const pageQuery = cursorId
+      ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
+      : query(customersRef, orderBy(documentId()), limit(pageSize));
 
-    while (true) {
-      const pageQuery = cursorId
-        ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
-        : query(customersRef, orderBy(documentId()), limit(pageSize));
-      const snapshot = await getDocs(pageQuery);
-      if (snapshot.empty) break;
-
-      const batch = writeBatch(db());
-      for (const customerDoc of snapshot.docs) {
-        const customer = customerDoc.data() || {};
-        if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
-        const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
-        if (!normalized) continue;
-        const lookupId = await loginLookupId(uid, normalized);
-        batch.set(doc(db(), 'customerLoginLookup', lookupId), {
-          uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
-          active: true, updatedAt: serverTimestamp()
-        }, { merge: true });
-        indexed++;
-      }
-
-      cursorId = snapshot.docs[snapshot.docs.length - 1].id;
-      processed += snapshot.size;
-      // Save progress atomically with each block of index writes. A quota/network
-      // interruption resumes after this document instead of replaying old pages.
-      batch.update(barberRef, {
-        sparkLoginIndexMigrationCursor: cursorId,
+    // Exactly one bounded page per barber sign-in. Never walk the whole roster
+    // in one session; legacy customer access remains available through the Worker fallback.
+    const snapshot = await getDocs(pageQuery);
+    if (snapshot.empty) {
+      await updateDoc(barberRef, {
+        sparkLoginIndexMigratedAt: serverTimestamp(),
+        sparkLoginIndexMigrationCursor: null,
         updatedAt: serverTimestamp()
       });
-      await batch.commit();
-      if (snapshot.size < pageSize) break;
+      if (cachedMe?.profile) cachedMe = {
+        ...cachedMe,
+        profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
+      };
+      return { ok: true, migrated: true, indexed: 0, processed: 0, cursorId: '' };
     }
 
-    await updateDoc(barberRef, {
-      sparkLoginIndexMigratedAt: serverTimestamp(),
-      sparkLoginIndexMigrationCursor: null,
+    const batch = writeBatch(db());
+    let indexed = 0;
+    for (const customerDoc of snapshot.docs) {
+      const customer = customerDoc.data() || {};
+      if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
+      const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
+      if (!normalized) continue;
+      const lookupId = await loginLookupId(uid, normalized);
+      batch.set(doc(db(), 'customerLoginLookup', lookupId), {
+        uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
+        active: true, updatedAt: serverTimestamp()
+      }, { merge: true });
+      indexed++;
+    }
+
+    const nextCursorId = snapshot.docs[snapshot.docs.length - 1].id;
+    const completed = snapshot.size < pageSize;
+    batch.update(barberRef, {
+      sparkLoginIndexMigrationCursor: completed ? null : nextCursorId,
+      ...(completed ? { sparkLoginIndexMigratedAt: serverTimestamp() } : {}),
       updatedAt: serverTimestamp()
     });
-    if (cachedMe?.profile) cachedMe = {
+    await batch.commit();
+
+    if (completed && cachedMe?.profile) cachedMe = {
       ...cachedMe,
       profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
     };
-    return { ok: true, migrated: true, indexed, processed, cursorId: '' };
+    return {
+      ok: true, migrated: completed, indexed, processed: snapshot.size,
+      cursorId: completed ? '' : nextCursorId
+    };
   }
 
   async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {
@@ -466,11 +474,22 @@ export function createSparkApi({ firebaseConfig, state }) {
         loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: data.cutStyle, conversationPreference: data.conversationPreference, loyaltyOverride: override
       });
-      const batch = writeBatch(db());
-      batch.set(doc(db(), 'barbers', uid, 'customers', credential.user.uid), customer);
-      batch.set(doc(db(), 'userProfiles', credential.user.uid), { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
-      batch.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      await batch.commit();
+      const customerRef = doc(db(), 'barbers', uid, 'customers', credential.user.uid);
+      const profileRef = doc(db(), 'userProfiles', credential.user.uid);
+      const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+      const rosterCustomer = { ...customer, createdAt: new Date(), updatedAt: new Date() };
+      await runTransaction(db(), async transaction => {
+        const rosterSnap = await transaction.get(rosterRef);
+        const nextRoster = appendCustomerRosterChange(
+          rosterSnap.exists() ? rosterSnap.data() : null,
+          'created', rosterCustomer, new Date()
+        );
+        transaction.set(customerRef, customer);
+        transaction.set(profileRef, { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
+        transaction.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
+        transaction.set(rosterRef, nextRoster);
+      });
+      clearCustomerSearchCache();
       return { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } };
     } catch (error) {
       if (credential?.user) await deleteUser(credential.user).catch(() => {});
@@ -516,22 +535,48 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (data.loyaltyMode !== undefined) {
       updates.loyaltyOverride = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, state.barber || {});
     }
-    const batch = writeBatch(db());
-    batch.update(customerRef, updates);
-    if (newNormalized !== (existing.usernameNormalized || normalizeName(existing.fullName))) {
-      const oldId = await loginLookupId(uid, existing.usernameNormalized || normalizeName(existing.fullName));
-      const newId = await loginLookupId(uid, newNormalized);
-      const newNameIndex = await getDoc(doc(db(), 'customerLoginLookup', newId));
-      if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
-        throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
+    const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+    let savedCustomer = null;
+    await runTransaction(db(), async transaction => {
+      const [customerSnap, rosterSnap] = await Promise.all([
+        transaction.get(customerRef), transaction.get(rosterRef)
+      ]);
+      if (!customerSnap.exists() || customerSnap.data().active === false) {
+        throw fail('El cliente ya no está activo. Actualizá la lista y volvé a intentarlo.', 404);
       }
-      batch.delete(doc(db(), 'customerLoginLookup', oldId));
-      batch.set(doc(db(), 'customerLoginLookup', newId), {
-        uid: id, barberUid: uid, email: existing.loginEmail, active: existing.active !== false, updatedAt: serverTimestamp()
-      });
-    }
-    await batch.commit();
-    return { ok: true, customer: { ...existing, ...updates, updatedAt: new Date().toISOString() } };
+      const fresh = { uid: id, ...customerSnap.data() };
+      const oldNormalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
+      const nextNormalized = updates.usernameNormalized ?? oldNormalized;
+      let oldLookupRef = null, newLookupRef = null;
+      if (nextNormalized !== oldNormalized) {
+        const oldId = await loginLookupId(uid, oldNormalized);
+        const newId = await loginLookupId(uid, nextNormalized);
+        oldLookupRef = doc(db(), 'customerLoginLookup', oldId);
+        newLookupRef = doc(db(), 'customerLoginLookup', newId);
+        const newNameIndex = await transaction.get(newLookupRef);
+        if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
+          throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
+        }
+      }
+      const changedAt = new Date();
+      const rosterCustomer = { ...fresh, ...updates, uid: id, updatedAt: changedAt };
+      const nextRoster = appendCustomerRosterChange(
+        rosterSnap.exists() ? rosterSnap.data() : null,
+        'updated', rosterCustomer, changedAt
+      );
+      transaction.update(customerRef, updates);
+      if (oldLookupRef && newLookupRef) {
+        transaction.delete(oldLookupRef);
+        transaction.set(newLookupRef, {
+          uid: id, barberUid: uid, email: fresh.loginEmail,
+          active: fresh.active !== false, updatedAt: serverTimestamp()
+        });
+      }
+      transaction.set(rosterRef, nextRoster);
+      savedCustomer = rosterCustomer;
+    });
+    clearCustomerSearchCache();
+    return { ok: true, customer: { ...savedCustomer, updatedAt: new Date().toISOString() } };
   }
 
   async function disableCustomer(data) {
@@ -542,16 +587,30 @@ export function createSparkApi({ firebaseConfig, state }) {
     const existing = state.customers?.find(c => c.uid === id) || (await getDoc(customerRef)).data();
     if (!existing) throw fail('No se encontró ese cliente.', 404);
     const normalized = existing.usernameNormalized || normalizeName(existing.fullName);
-    const batch = writeBatch(db());
-    batch.update(customerRef, {
-      active: false, disabledAt: serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: serverTimestamp()
+    const profileRef = doc(db(), 'userProfiles', id);
+    const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+    const loginRef = normalized ? doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized)) : null;
+    const disabledAt = new Date();
+    const disabledCustomer = {
+      ...existing, uid: id, active: false, disabledAt,
+      usernameNormalized: null, whatsapp: '', updatedAt: disabledAt
+    };
+    await runTransaction(db(), async transaction => {
+      const rosterSnap = await transaction.get(rosterRef);
+      const nextRoster = appendCustomerRosterChange(
+        rosterSnap.exists() ? rosterSnap.data() : null,
+        'disabled', disabledCustomer, disabledAt
+      );
+      transaction.update(customerRef, {
+        active: false, disabledAt: serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: serverTimestamp()
+      });
+      transaction.set(profileRef, { disabled: true, updatedAt: serverTimestamp() }, { merge: true });
+      if (loginRef) transaction.set(loginRef, {
+        uid: id, barberUid: uid, email: existing.loginEmail || '', active: false, updatedAt: serverTimestamp()
+      }, { merge: true });
+      transaction.set(rosterRef, nextRoster);
     });
-    batch.set(doc(db(), 'userProfiles', id), { disabled: true, updatedAt: serverTimestamp() }, { merge: true });
-    if (normalized) {
-      const loginId = await loginLookupId(uid, normalized);
-      batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
-    }
-    await batch.commit();
+    clearCustomerSearchCache();
     return { ok: true };
   }
 
@@ -627,6 +686,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.appliedReward) message = 'Visita registrada. ' + (outcome.appliedReward.label || labelReward(outcome.appliedReward.discount)) + ' se aplicó en esta visita.';
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
+    clearCustomerSearchCache();
     return { ok: true, customer: resultCustomer, message };
   }
 
@@ -701,7 +761,8 @@ export function createSparkApi({ firebaseConfig, state }) {
     const term = cleanText(data.search, 100);
     if (term.length < 2) return { ok: true, customers: [] };
     const ref = collection(db(), 'barbers', uid, 'customers');
-    const filters = customerDirectoryFilters(ref, data.source);
+    const source = data.source === 'admin' || data.source === 'self' ? data.source : 'all';
+    const filters = customerDirectoryFilters(ref, source);
     const rawDigits = term.replace(/\D/g, '');
     const phoneSearch = rawDigits.length >= 3 && /^[+\d\s().-]+$/.test(term);
     const field = phoneSearch ? 'whatsapp' : 'usernameNormalized';
@@ -709,6 +770,14 @@ export function createSparkApi({ firebaseConfig, state }) {
       ? (rawDigits.startsWith('549') || rawDigits.startsWith('54') ? rawDigits : '549' + rawDigits)
       : normalizeName(term);
     if (!prefix) return { ok: true, customers: [] };
+
+    const cacheKey = [uid, source, field, prefix].join('|');
+    const cached = customerSearchCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { ok: true, customers: cached.customers.map(customer => ({ ...customer })) };
+    }
+    if (cached) customerSearchCache.delete(cacheKey);
+
     const q = query(
       ref,
       ...filters,
@@ -719,15 +788,21 @@ export function createSparkApi({ firebaseConfig, state }) {
       limit(25)
     );
     const snap = await getDocs(q);
-    return {
-      ok: true,
-      customers: snap.docs.map(item => {
-        const customer = { uid: item.id, ...item.data() };
-        delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
-        return customer;
-      })
-    };
+    const customers = snap.docs.map(item => {
+      const customer = { uid: item.id, ...item.data() };
+      delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
+      return customer;
+    });
+    // Brief, account-scoped memory cache smooths repeated searches without persisting
+    // private search results to localStorage or treating a partial directory page as complete.
+    if (customerSearchCache.size > 100) {
+      for (const [key, value] of customerSearchCache) if (value.expiresAt <= Date.now()) customerSearchCache.delete(key);
+      while (customerSearchCache.size >= 100) customerSearchCache.delete(customerSearchCache.keys().next().value);
+    }
+    customerSearchCache.set(cacheKey, { expiresAt: Date.now() + 30000, customers });
+    return { ok: true, customers: customers.map(customer => ({ ...customer })) };
   }
+
 
   const apiRequest = async function api(url, options = {}) {
     if (navigator.onLine === false) throw Object.assign(fail('Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.'), { retryable: true });
@@ -787,9 +862,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       theme: { accent: '#3478ff', density: data.theme?.density === 'compact' ? 'compact' : 'comfortable' },
       updatedAt: serverTimestamp()
     };
-    await updateDoc(ref, profile);
     const publicProfile = cleanProfileForCustomer({ ...(state.barber || {}), ...profile });
-    await setDoc(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), publicProfile, { merge: true });
+    const batch = writeBatch(db());
+    batch.update(ref, profile);
+    batch.set(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), publicProfile, { merge: true });
+    // Barber settings and the public card projection become visible atomically.
+    await batch.commit();
+    invalidate();
     const resultProfile = { ...(state.barber || {}), ...profile, whatsapp: profile.whatsapp };
     return { ok: true, profile: resultProfile };
   }
@@ -803,15 +882,20 @@ export function createSparkApi({ firebaseConfig, state }) {
       id, name: cleanText(selected.name || 'Programa de premios', 60),
       audience: 'all', customerIds: [], rewards: safeRewards(selected.rewards)
     };
-    await updateDoc(doc(db(), 'barbers', uid), {
+    const batch = writeBatch(db());
+    batch.update(doc(db(), 'barbers', uid), {
       loyaltyPrograms: [program], defaultLoyaltyProgramId: id, rewards: program.rewards, updatedAt: serverTimestamp()
     });
-    await setDoc(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), {
+    batch.set(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), {
       loyaltyPrograms: [program], defaultLoyaltyProgramId: id
     }, { merge: true });
+    // The barber program and the data consumed by customer cards cannot diverge on a partial write.
+    await batch.commit();
+    invalidate();
     return { ok: true, programs: [program], defaultLoyaltyProgramId: id };
   }
 
   apiRequest.resetSessionCache = invalidate;
+  apiRequest.clearCustomerSearchCache = clearCustomerSearchCache;
   return apiRequest;
 }

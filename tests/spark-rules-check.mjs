@@ -86,11 +86,17 @@ try {
   });
   await assertSucceeds(getDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state')));
   await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state')));
-  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
+  await assertSucceeds(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
     version: 2, changes: [], updatedAt: serverTimestamp()
   }));
+  await assertFails(setDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state'), {
+    version: 3, changes: [], updatedAt: serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
+    version: 3, changes: Array.from({ length: 101 }, (_, i) => ({ version: i + 1 })), updatedAt: serverTimestamp()
+  }));
   await assertFails(getDocs(collection(barberDb, 'barbers', barberUid, 'customerRoster')));
-  console.log('PASS: compact customer roster feed is readable only by the barber and not client-writable');
+  console.log('PASS: bounded customer roster feed is readable and writable only by its barber owner');
 
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
   if (listed.size !== 1) throw new Error('Expected exactly one customer');

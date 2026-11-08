@@ -226,19 +226,22 @@ test("legacy customer login-index migration is resumable and bounds each read/wr
   assert.match(migration, /orderBy\(documentId\(\)\)/);
   assert.match(migration, /startAfter\(cursorId\)/);
   assert.match(migration, /batch\.update\(barberRef, \{/);
-  assert.match(migration, /sparkLoginIndexMigrationCursor: cursorId/);
+  assert.match(migration, /sparkLoginIndexMigrationCursor: completed \? null : nextCursorId/);
   assert.match(migration, /sparkLoginIndexMigratedAt: serverTimestamp\(\)/);
+  assert.match(migration, /const snapshot = await getDocs\(pageQuery\)/);
+  assert.doesNotMatch(migration, /while\s*\(true\)/);
   assert.doesNotMatch(migration, /getDocs\(collection\(db\(\), 'barbers', uid, 'customers'\)\)/);
   const getMe = functionBody(api, "async function getMe()", "async function ensureBarberProfile");
   assert.match(getMe, /migrateCustomerLoginIndexForBarber\(barber\)/);
   assert.doesNotMatch(getMe, /getDocs\(activeCustomersQuery\)/);
 });
 
-test("home quick actions have restrained portrait spacing and height", () => {
-  const style = functionBody(html, '<style id="barbervip-home-spacing-v2">', '</style>');
-  assert.match(style, /margin-top:15px/);
-  assert.match(style, /row-gap:15px/);
-  assert.match(style, /min-height:158px/);
+test("home quick actions are visibly enlarged and separated in the final overriding style", () => {
+  const style = functionBody(html, '<style id="barbervip-home-spacing-final">', '</style>');
+  assert.match(style, /margin-top:28px/);
+  assert.match(style, /row-gap:16px/);
+  assert.match(style, /min-height:188px/);
+  assert.match(style, /min-height:168px/);
 });
 
 test("payment webhook verifies signatures, approves exact amount and guards duplicate processing", () => {
@@ -302,7 +305,7 @@ test("customer local state and cache are scoped to the authenticated identity", 
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
-  assert.match(serviceWorker, /v71-customer-roster-scale/);
+  assert.match(serviceWorker, /v72-production-hardening/);
   assert.match(rules, /match \/customerRoster/);
 });
 
@@ -378,4 +381,68 @@ test("pending searches, pagination requests and customer listeners are isolated 
 test("migration cursor is permitted only as a barber-owned technical field", () => {
   const barberRules = rules.slice(rules.indexOf("match /barbers/{barberId}"), rules.indexOf("match /customers/{customerId}"));
   assert.match(barberRules, /sparkLoginIndexMigrationCursor/);
+});
+
+
+test("customer directory pagination stays invisible and the exact total is shown without page counts", () => {
+  const markup = functionBody(html, "function customerResultsMarkup(list)", "function clientsView()");
+  const clients = functionBody(html, "function clientsView()", "function renderSettings()");
+  assert.match(markup, /customerLoadSentinel/);
+  assert.doesNotMatch(markup, /Cargar 50 clientes más|Mostramos los primeros 50/);
+  assert.match(html, /IntersectionObserver/);
+  assert.match(clients, /state\.customersTotalCount/);
+  assert.doesNotMatch(html, /clientes cargados|de \$\{state\.customers\.length\}/);
+});
+
+test("repeated exact customer searches use a short account-scoped memory cache that is invalidated after changes", () => {
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(search, /customerSearchCache\.get\(cacheKey\)/);
+  assert.match(search, /Date\.now\(\) \+ 30000/);
+  assert.match(search, /limit\(25\)/);
+  assert.match(api, /apiRequest\.clearCustomerSearchCache = clearCustomerSearchCache/);
+  assert.match(html, /api\.clearCustomerSearchCache\?\.\(\)/);
+});
+
+test("barber-created, edited and disabled customers publish roster events atomically", () => {
+  const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
+  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
+  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
+  for (const block of [create, update, disable]) {
+    assert.match(block, /appendCustomerRosterChange/);
+    assert.match(block, /runTransaction\(db\(\)/);
+    assert.match(block, /customerRoster', 'state'/);
+  }
+  assert.match(rules, /allow create, update: if rosterId == 'state'/);
+  assert.match(rules, /request\.resource\.data\.changes\.size\(\) <= 100/);
+});
+
+test("legacy customers can sign in while the resumable migration is incomplete", () => {
+  assert.match(api, /workerRequest\('\/api\/customer-login'/);
+  assert.match(worker, /async function lookupCustomerAccount/);
+  assert.match(worker, /fsQueryCustomerField\(env, barberUid, "usernameNormalized", normalizedName, 2\)/);
+  assert.match(worker, /path === "\/api\/customer-login"/);
+  assert.match(worker, /const legacyNameMatches = await fsQueryCustomerField/);
+  assert.match(worker, /const phoneMatches = await fsQueryCustomerField/);
+});
+
+
+test("profile and loyalty data publish atomically to the customer-facing professional card", () => {
+  const profile = functionBody(api, "async function saveProfile(data)", "async function saveLoyalty(data)");
+  const loyalty = functionBody(api, "async function saveLoyalty(data)", "apiRequest.resetSessionCache");
+  for (const block of [profile, loyalty]) {
+    assert.match(block, /writeBatch\(db\(\)\)/);
+    assert.match(block, /batch\.update\(/);
+    assert.match(block, /batch\.set\(doc\(db\(\), 'barbers', uid, 'publicMeta', 'professional'\)/);
+    assert.match(block, /await batch\.commit\(\)/);
+    assert.match(block, /invalidate\(\)/);
+  }
+});
+
+test("customer profile edits read the current database version before appending the roster update", () => {
+  const update = functionBody(api, "async function updateCustomer(data)", "async function disableCustomer(data)");
+  assert.match(update, /transaction\.get\(customerRef\)/);
+  assert.match(update, /transaction\.get\(rosterRef\)/);
+  assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
+  assert.match(update, /const rosterCustomer = \{ \.\.\.fresh, \.\.\.updates/);
+  assert.match(update, /appendCustomerRosterChange/);
 });

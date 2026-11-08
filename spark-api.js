@@ -755,50 +755,85 @@ export function createSparkApi({ firebaseConfig, state }) {
   async function searchCustomers(data = {}) {
     const uid = currentUid();
     const term = cleanText(data.search, 100);
-    if (term.length < 2) return { ok: true, customers: [] };
+    if (!term) return { ok: true, customers: [], hasMore: false, cursorId: '', cursorValue: null };
     const ref = collection(db(), 'barbers', uid, 'customers');
     const source = data.source === 'admin' || data.source === 'self' ? data.source : 'all';
     const filters = customerDirectoryFilters(ref, source);
     const rawDigits = term.replace(/\D/g, '');
-    const phoneSearch = rawDigits.length >= 3 && /^[+\d\s().-]+$/.test(term);
-    const field = phoneSearch ? 'whatsapp' : 'usernameNormalized';
-    const prefix = phoneSearch
+    const numericSearch = /^[+\d\s().-]+$/.test(term);
+    if (numericSearch && rawDigits.length < 3) {
+      return { ok: true, customers: [], hasMore: false, cursorId: '', cursorValue: null };
+    }
+    const field = numericSearch ? 'whatsapp' : 'usernameNormalized';
+    const prefix = numericSearch
       ? (rawDigits.startsWith('549') || rawDigits.startsWith('54') ? rawDigits : '549' + rawDigits)
       : normalizeName(term);
-    if (!prefix) return { ok: true, customers: [] };
+    if (!prefix) return { ok: true, customers: [], hasMore: false, cursorId: '', cursorValue: null };
 
-    const cacheKey = [uid, source, field, prefix].join('|');
+    const cursorId = cleanText(data.cursorId, 120);
+    const cursorValue = data.cursorValue === null || data.cursorValue === undefined
+      ? '' : cleanText(data.cursorValue, 120);
+    if (cursorId && !cursorValue) throw fail('No se pudo continuar la búsqueda. Volvé a escribir el dato.', 400);
+
+    const cacheKey = [uid, source, field, prefix, cursorValue, cursorId].join('|');
     const cached = customerSearchCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return { ok: true, customers: cached.customers.map(customer => ({ ...customer })) };
+      return {
+        ok: true,
+        customers: cached.customers.map(customer => ({ ...customer })),
+        hasMore: cached.hasMore,
+        cursorId: cached.cursorId,
+        cursorValue: cached.cursorValue
+      };
     }
     if (cached) customerSearchCache.delete(cacheKey);
 
-    const q = query(
-      ref,
+    const constraints = [
       ...filters,
       where(field, '>=', prefix),
       where(field, '<=', prefix + '\uf8ff'),
       orderBy(field, 'asc'),
-      orderBy(documentId(), 'asc'),
-      limit(25)
-    );
-    const snap = await getDocs(q);
+      orderBy(documentId(), 'asc')
+    ];
+    if (cursorId) constraints.push(startAfter(cursorValue, cursorId));
+    constraints.push(limit(25));
+
+    const snap = await getDocs(query(ref, ...constraints));
     const customers = snap.docs.map(item => {
       const customer = { uid: item.id, ...item.data() };
       delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
       return customer;
     });
-    // Brief, account-scoped memory cache smooths repeated searches without persisting
-    // private search results to localStorage or treating a partial directory page as complete.
-    if (customerSearchCache.size > 100) {
-      for (const [key, value] of customerSearchCache) if (value.expiresAt <= Date.now()) customerSearchCache.delete(key);
-      while (customerSearchCache.size >= 100) customerSearchCache.delete(customerSearchCache.keys().next().value);
-    }
-    customerSearchCache.set(cacheKey, { expiresAt: Date.now() + 30000, customers });
-    return { ok: true, customers: customers.map(customer => ({ ...customer })) };
-  }
+    const last = snap.docs.at(-1);
+    const lastData = last?.data() || {};
+    const nextCursorValue = last ? String(lastData[field] || '') : cursorValue;
+    const result = {
+      ok: true,
+      customers,
+      hasMore: snap.docs.length === 25,
+      cursorId: last?.id || cursorId,
+      cursorValue: nextCursorValue
+    };
 
+    // Cache each result page independently for 30 seconds. The key includes
+    // account, source, exact prefix and cursor so separate sessions never share pages.
+    if (customerSearchCache.size > 100) {
+      for (const [key, value] of customerSearchCache) {
+        if (value.expiresAt <= Date.now()) customerSearchCache.delete(key);
+      }
+      while (customerSearchCache.size >= 100) {
+        customerSearchCache.delete(customerSearchCache.keys().next().value);
+      }
+    }
+    customerSearchCache.set(cacheKey, {
+      expiresAt: Date.now() + 30000,
+      customers,
+      hasMore: result.hasMore,
+      cursorId: result.cursorId,
+      cursorValue: result.cursorValue
+    });
+    return { ...result, customers: customers.map(customer => ({ ...customer })) };
+  }
 
   const apiRequest = async function api(url, options = {}) {
     if (navigator.onLine === false) throw Object.assign(fail('Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.'), { retryable: true });

@@ -526,6 +526,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     }
     if (data.whatsapp !== undefined) {
       if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
+    if (data.password && (String(data.password).length < 6 || String(data.password).length > 128)) {
+      throw fail('La contraseña debe tener entre 6 y 128 caracteres.');
+    }
       const nextWhatsapp = normalizePhone(data.whatsapp);
       if (nextWhatsapp !== normalizePhone(existing.whatsapp)) {
         const matches = await searchCustomers({ search: nextWhatsapp, source: 'all' });

@@ -160,25 +160,18 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
   }));
 }
 
-async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10) {
+async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10, activeOnly = false) {
   const token = await googleAccessToken(env);
   const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
+  const filters = [{ fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } }];
+  if (activeOnly) filters.push({
+    fieldFilter: { field: { fieldPath: "active" }, op: "EQUAL", value: encodeValue(true) }
+  });
+  const where = filters.length === 1 ? filters[0] : { compositeFilter: { op: "AND", filters } };
   const response = await fetch(url, {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: "customers" }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath },
-            op: "EQUAL",
-            value: encodeValue(value)
-          }
-        },
-        limit
-      }
-    })
+    body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "customers" }], where, limit } })
   });
   const rows = await response.json().catch(() => []);
   if (!response.ok) throw new Error("Firestore no pudo verificar el cliente (" + response.status + ").");
@@ -341,11 +334,11 @@ async function registerCustomerAccount(request, env) {
     throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
   // Keep duplicate protection while older client records are being indexed.
-  const legacyNameMatches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2);
+  const legacyNameMatches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2, true);
   if (legacyNameMatches.some(row => row.data.active !== false)) {
     throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
-  const phoneMatches = await fsQueryCustomerField(env, barberUid, "whatsapp", whatsapp, 10);
+  const phoneMatches = await fsQueryCustomerField(env, barberUid, "whatsapp", whatsapp, 1, true);
   if (phoneMatches.some(row => row.data.active !== false && normalizeCustomerWhatsapp(row.data.whatsapp) === whatsapp)) {
     throw Object.assign(new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }

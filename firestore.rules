@@ -210,19 +210,16 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      match /customerRoster/{rosterId} {
-        // One bounded, private synchronization document per barber. The Worker
-        // publishes public signups; the authenticated owner publishes own CRUD changes.
-        allow get: if rosterId == 'state' && isOwner(barberId);
-        allow create, update: if rosterId == 'state'
-          && barberCanOperate(barberId)
-          && request.resource.data.keys().hasOnly(['version', 'changes', 'updatedAt'])
+      match /customerDirectory/{metaId} {
+        // Private revision marker only. It contains no customer records.
+        allow get: if metaId == 'state' && isOwner(barberId);
+        allow list, delete: if false;
+        allow create, update: if metaId == 'state'
+          && isOwner(barberId)
+          && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
           && request.resource.data.version is int
           && request.resource.data.version >= 0
-          && request.resource.data.changes is list
-          && request.resource.data.changes.size() <= 100
           && request.resource.data.updatedAt is timestamp;
-        allow list, delete: if false;
       }
 
       match /cuts/{cutId} {

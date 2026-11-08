@@ -1823,7 +1823,8 @@
       const activeListSearch=state.section==='clients'&&activeQuery.length>=1
         &&!(activeNumericSearch&&activeQuery.replace(/\D/g,'').length<3)?activeQuery:'';
       const activeCutSearch=$('#cutSearch',modalRoot)?.value?.trim()||'';
-      let reloadDirectory=delta.requiresReload;
+      let reloadDirectory=delta.requiresReload
+        ||(delta.changes.length>0&&(state.customersLoading||state.customersLoadingMore));
 
       if(changed){
         api.clearCustomerSearchCache?.();

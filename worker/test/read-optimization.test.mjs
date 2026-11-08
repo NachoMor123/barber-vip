@@ -300,7 +300,8 @@ test("customer search is prefix-based, cursor-paginated by 25, and independently
   assert.match(more, /renderApp\(\)/);
   const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
   assert.match(filtered, /if\(searchActive&&!remoteReady\)return \[\]/);
-  assert.match(filtered, /if\(searchActive\)return list/);
+  assert.match(filtered, /const source=searchActive\?state\.customerSearchResults:state\.customers/);
+  assert.doesNotMatch(filtered, /list\.sort/);
   assert.match(html, /activeQuery\.length>=1/);
   assert.match(html, /customerSearchTerm=activeListSearch/);
 });

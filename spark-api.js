@@ -1,6 +1,7 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { WORKER_API_BASE } from './worker-config.js';
 import { normalizeInstagramProfileUrl } from './profile-utils.js';
+import { appendCustomerRosterChange } from './customer-roster.js';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -160,6 +161,8 @@ export function createSparkApi({ firebaseConfig, state }) {
   let cachedMe = null;
   let cachedUid = '';
   let publicBarberCode = '';
+  const customerSearchCache = new Map();
+  const clearCustomerSearchCache = () => customerSearchCache.clear();
 
   const db = () => {
     if (!state.db) throw fail('No se pudo conectar con el servicio. Recargá Barber VIP e intentá nuevamente.', 503);
@@ -362,68 +365,73 @@ export function createSparkApi({ firebaseConfig, state }) {
     const barberCode = cleanCode(data.barberCode);
     const normalized = normalizeName(data.username);
     if (!barberCode || !normalized) throw fail('Completá el código de tu profesional y tu nombre.');
-    const codeSnap = await getDoc(doc(db(), 'publicBarberCodes', barberCode));
-    if (!codeSnap.exists()) throw fail('No encontramos ese código. Revisalo con tu profesional y probá nuevamente.', 404);
-    const barberUid = String(codeSnap.data().barberUid || '');
-    const id = await loginLookupId(barberUid, normalized);
-    const loginSnap = await getDoc(doc(db(), 'customerLoginLookup', id));
-    if (!loginSnap.exists() || loginSnap.data().active === false) throw fail('No encontramos una cuenta activa con esos datos. Revisá tu código y nombre.');
-    return { ok: true, email: String(loginSnap.data().email || '') };
+    return await workerRequest('/api/customer-login', {
+      method: 'POST',
+      auth: false,
+      body: { barberCode, username: normalized }
+    });
   }
 
   async function migrateCustomerLoginIndexForBarber(barberData = state.barber || {}) {
     const uid = currentUid();
     const barberRef = doc(db(), 'barbers', uid);
     if (barberData?.sparkLoginIndexMigratedAt) return { ok: true, migrated: false, cursorId: '' };
+
     const customersRef = collection(db(), 'barbers', uid, 'customers');
     const pageSize = 250;
-    let cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
-    let indexed = 0;
-    let processed = 0;
+    const cursorId = String(barberData?.sparkLoginIndexMigrationCursor || '');
+    const pageQuery = cursorId
+      ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
+      : query(customersRef, orderBy(documentId()), limit(pageSize));
 
-    while (true) {
-      const pageQuery = cursorId
-        ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
-        : query(customersRef, orderBy(documentId()), limit(pageSize));
-      const snapshot = await getDocs(pageQuery);
-      if (snapshot.empty) break;
-
-      const batch = writeBatch(db());
-      for (const customerDoc of snapshot.docs) {
-        const customer = customerDoc.data() || {};
-        if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
-        const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
-        if (!normalized) continue;
-        const lookupId = await loginLookupId(uid, normalized);
-        batch.set(doc(db(), 'customerLoginLookup', lookupId), {
-          uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
-          active: true, updatedAt: serverTimestamp()
-        }, { merge: true });
-        indexed++;
-      }
-
-      cursorId = snapshot.docs[snapshot.docs.length - 1].id;
-      processed += snapshot.size;
-      // Save progress atomically with each block of index writes. A quota/network
-      // interruption resumes after this document instead of replaying old pages.
-      batch.update(barberRef, {
-        sparkLoginIndexMigrationCursor: cursorId,
+    // Exactly one bounded page per barber sign-in. Never walk the whole roster
+    // in one session; legacy customer access remains available through the Worker fallback.
+    const snapshot = await getDocs(pageQuery);
+    if (snapshot.empty) {
+      await updateDoc(barberRef, {
+        sparkLoginIndexMigratedAt: serverTimestamp(),
+        sparkLoginIndexMigrationCursor: null,
         updatedAt: serverTimestamp()
       });
-      await batch.commit();
-      if (snapshot.size < pageSize) break;
+      if (cachedMe?.profile) cachedMe = {
+        ...cachedMe,
+        profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
+      };
+      return { ok: true, migrated: true, indexed: 0, processed: 0, cursorId: '' };
     }
 
-    await updateDoc(barberRef, {
-      sparkLoginIndexMigratedAt: serverTimestamp(),
-      sparkLoginIndexMigrationCursor: null,
+    const batch = writeBatch(db());
+    let indexed = 0;
+    for (const customerDoc of snapshot.docs) {
+      const customer = customerDoc.data() || {};
+      if (customer.active === false || !customer.loginEmail || !customer.fullName) continue;
+      const normalized = cleanText(customer.usernameNormalized || normalizeName(customer.fullName), 100);
+      if (!normalized) continue;
+      const lookupId = await loginLookupId(uid, normalized);
+      batch.set(doc(db(), 'customerLoginLookup', lookupId), {
+        uid: customerDoc.id, barberUid: uid, email: customer.loginEmail,
+        active: true, updatedAt: serverTimestamp()
+      }, { merge: true });
+      indexed++;
+    }
+
+    const nextCursorId = snapshot.docs[snapshot.docs.length - 1].id;
+    const completed = snapshot.size < pageSize;
+    batch.update(barberRef, {
+      sparkLoginIndexMigrationCursor: completed ? null : nextCursorId,
+      ...(completed ? { sparkLoginIndexMigratedAt: serverTimestamp() } : {}),
       updatedAt: serverTimestamp()
     });
-    if (cachedMe?.profile) cachedMe = {
+    await batch.commit();
+
+    if (completed && cachedMe?.profile) cachedMe = {
       ...cachedMe,
       profile: { ...cachedMe.profile, sparkLoginIndexMigratedAt: true, sparkLoginIndexMigrationCursor: null }
     };
-    return { ok: true, migrated: true, indexed, processed, cursorId: '' };
+    return {
+      ok: true, migrated: completed, indexed, processed: snapshot.size,
+      cursorId: completed ? '' : nextCursorId
+    };
   }
 
   async function migrateCustomerLoginIndex(customers, barberData = state.barber || {}) {
@@ -471,6 +479,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'userProfiles', credential.user.uid), { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
       batch.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
       await batch.commit();
+      clearCustomerSearchCache();
       return { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } };
     } catch (error) {
       if (credential?.user) await deleteUser(credential.user).catch(() => {});
@@ -531,6 +540,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       });
     }
     await batch.commit();
+    clearCustomerSearchCache();
     return { ok: true, customer: { ...existing, ...updates, updatedAt: new Date().toISOString() } };
   }
 
@@ -552,6 +562,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
     }
     await batch.commit();
+    clearCustomerSearchCache();
     return { ok: true };
   }
 
@@ -627,6 +638,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.appliedReward) message = 'Visita registrada. ' + (outcome.appliedReward.label || labelReward(outcome.appliedReward.discount)) + ' se aplicó en esta visita.';
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
+    clearCustomerSearchCache();
     return { ok: true, customer: resultCustomer, message };
   }
 
@@ -701,7 +713,8 @@ export function createSparkApi({ firebaseConfig, state }) {
     const term = cleanText(data.search, 100);
     if (term.length < 2) return { ok: true, customers: [] };
     const ref = collection(db(), 'barbers', uid, 'customers');
-    const filters = customerDirectoryFilters(ref, data.source);
+    const source = data.source === 'admin' || data.source === 'self' ? data.source : 'all';
+    const filters = customerDirectoryFilters(ref, source);
     const rawDigits = term.replace(/\D/g, '');
     const phoneSearch = rawDigits.length >= 3 && /^[+\d\s().-]+$/.test(term);
     const field = phoneSearch ? 'whatsapp' : 'usernameNormalized';
@@ -709,6 +722,14 @@ export function createSparkApi({ firebaseConfig, state }) {
       ? (rawDigits.startsWith('549') || rawDigits.startsWith('54') ? rawDigits : '549' + rawDigits)
       : normalizeName(term);
     if (!prefix) return { ok: true, customers: [] };
+
+    const cacheKey = [uid, source, field, prefix].join('|');
+    const cached = customerSearchCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { ok: true, customers: cached.customers.map(customer => ({ ...customer })) };
+    }
+    if (cached) customerSearchCache.delete(cacheKey);
+
     const q = query(
       ref,
       ...filters,
@@ -719,15 +740,21 @@ export function createSparkApi({ firebaseConfig, state }) {
       limit(25)
     );
     const snap = await getDocs(q);
-    return {
-      ok: true,
-      customers: snap.docs.map(item => {
-        const customer = { uid: item.id, ...item.data() };
-        delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
-        return customer;
-      })
-    };
+    const customers = snap.docs.map(item => {
+      const customer = { uid: item.id, ...item.data() };
+      delete customer.isOnline; delete customer.lastSeenAt; delete customer.lastConnectedAt;
+      return customer;
+    });
+    // Brief, account-scoped memory cache smooths repeated searches without persisting
+    // private search results to localStorage or treating a partial directory page as complete.
+    if (customerSearchCache.size > 100) {
+      for (const [key, value] of customerSearchCache) if (value.expiresAt <= Date.now()) customerSearchCache.delete(key);
+      while (customerSearchCache.size >= 100) customerSearchCache.delete(customerSearchCache.keys().next().value);
+    }
+    customerSearchCache.set(cacheKey, { expiresAt: Date.now() + 30000, customers });
+    return { ok: true, customers: customers.map(customer => ({ ...customer })) };
   }
+
 
   const apiRequest = async function api(url, options = {}) {
     if (navigator.onLine === false) throw Object.assign(fail('Parece que no hay conexión a internet. Revisá la conexión y volvé a intentar.'), { retryable: true });
@@ -813,5 +840,6 @@ export function createSparkApi({ firebaseConfig, state }) {
   }
 
   apiRequest.resetSessionCache = invalidate;
+  apiRequest.clearCustomerSearchCache = clearCustomerSearchCache;
   return apiRequest;
 }

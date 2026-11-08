@@ -372,7 +372,7 @@ test("directory pages never mix sort or origin queries and reject stale response
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
-  assert.match(serviceWorker, /v73-count-free-directory/);
+  assert.match(serviceWorker, /v74-sort-cleanup/);
   assert.match(rules, /match \/customerRoster/);
 });
 

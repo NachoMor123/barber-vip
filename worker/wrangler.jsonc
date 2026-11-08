@@ -12,9 +12,6 @@
     "APP_ORIGIN": "https://barbervip-309dc.web.app",
     "COMMERCIAL_ORIGIN": "https://barber-vip-comercial-309dc.web.app",
     "SUBSCRIPTION_PRICE_ARS": "8000",
-    "VERCEL_APP_ORIGIN": "https://barber-vip-three.vercel.app",
-    "VERCEL_PREVIEW_ORIGIN": "https://barber-vip-git-hybrid-cloudflare-im565991-4576.vercel.app",
-    "VERCEL_PREVIEW_PAYMENTS_ENABLED": "false",
     "FIREBASE_WEB_API_KEY": "AIzaSyBUx_sCO9FlyUsA4TpYUDLbHTNfl9tKkMw"
   }
 }

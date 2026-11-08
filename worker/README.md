@@ -32,10 +32,10 @@ Las claves VAPID ya no se utilizan. Después de publicar la versión visits-only
 
 - `APP_ORIGIN` define el origen HTTPS de retorno por defecto.
 - `COMMERCIAL_ORIGIN` identifica la web comercial.
-- El Worker mantiene el dominio Vercel anterior en la lista autorizada mientras dure la migración.
+- El Worker sólo autoriza Firebase Hosting, el dominio comercial y localhost para desarrollo.
 - `worker-config.js` apunta a `https://barber-vip.barbervip.workers.dev`.
 - Checkout vuelve al origen HTTPS autorizado que inició la solicitud; el webhook usa el propio Worker.
-- Los pagos iniciados desde previews de Vercel permanecen bloqueados por defecto mediante `VERCEL_PREVIEW_PAYMENTS_ENABLED=false`.
+- El retorno de Checkout usa únicamente un origen autorizado; si no hay origen de navegador, vuelve a Firebase Hosting.
 - Para probar cobros, utilizar un Worker separado con Access Token y secreto de webhook de prueba.
 
 ## Pruebas y despliegue

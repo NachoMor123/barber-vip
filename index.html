@@ -1435,16 +1435,28 @@
       const originalLabel=button?.textContent||'＋ Sumar visita';
       if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Registrando…';}
       try {
-        const c=state.customers.find(x=>x.uid===id)||state.cutSearchResults.find(x=>x.uid===id);
+        const c=state.customers.find(x=>x.uid===id)
+          ||state.customerSearchResults?.find(x=>x.uid===id)
+          ||state.cutSearchResults.find(x=>x.uid===id);
         if(!c){toast('No se encontró al cliente seleccionado. Volvé a buscarlo y probá de nuevo.','error');return;}
         const searchTerm=$('#cutSearch',modalRoot)?.value||'';
         const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id}});
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         if(result.customer){
           api.clearCustomerSearchCache?.();
-          state.customers=state.customers.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
+          state.customerSearchResults=Array.isArray(state.customerSearchResults)
+            ?state.customerSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x)
+            :state.customerSearchResults;
           state.cutSearchResults=state.cutSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
-          if(state.customersLoaded)saveAdminCustomersCache();
+          // totalCuts/lastCutAt are global ordering fields. Invalidate all cached
+          // directory pages and re-query only the first bounded page; never locally
+          // sort a partial set and call it the global ranking.
+          invalidateCustomerDirectoryPages();
+          if(state.section==='clients'&&!state.query.trim()){
+            void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+              toast(userFacingError(error,'La visita quedó registrada, pero no pudimos actualizar el orden de clientes.'),'error')
+            );
+          }
         }
         toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)){

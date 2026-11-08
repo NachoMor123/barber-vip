@@ -627,6 +627,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
     const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
     let resultCustomer = null;
+    let rosterVersion = 0;
     let outcome = { appliedReward: null, cycleReset: false };
     await runTransaction(db(), async transaction => {
       const [customerSnap, barberSnap, rosterSnap] = await Promise.all([
@@ -690,11 +691,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       };
       const changedAt = new Date();
       const rosterCustomer = { ...resultCustomer, uid: id, updatedAt: changedAt, lastCutAt: changedAt };
-      transaction.set(rosterRef, appendCustomerRosterChange(
+      const nextRoster = appendCustomerRosterChange(
         rosterSnap.exists() ? rosterSnap.data() : null,
         'updated', rosterCustomer, changedAt,
         ['totalCuts', 'actualCutsRegistered', 'cycleCuts', 'lastCutAt', 'availableRewards', 'rewardReady']
-      ));
+      );
+      rosterVersion = nextRoster.version;
+      transaction.set(rosterRef, nextRoster);
       outcome = { appliedReward, cycleReset: appliedOnFinalMilestone };
     });
     let message = 'Visita registrada correctamente.';
@@ -702,7 +705,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (outcome.cycleReset) message += ' El siguiente ciclo comenzó.';
     invalidate();
     clearCustomerSearchCache();
-    return { ok: true, customer: resultCustomer, message };
+    return { ok: true, customer: resultCustomer, message, rosterVersion };
   }
 
   function customerListSort(value) {

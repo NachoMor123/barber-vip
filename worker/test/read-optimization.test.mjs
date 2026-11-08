@@ -75,7 +75,8 @@ test("customer directory loads one bounded page on demand and deduplicates reque
   const apiList = functionBody(api, "async function listCustomers", "async function searchCustomers");
   assert.match(apiList, /limit\(pageSize\)/);
   assert.match(apiList, /startAfter\(/);
-  assert.match(apiList, /getCountFromServer/);
+  assert.doesNotMatch(apiList, /getCountFromServer|includeCount/);
+  assert.doesNotMatch(api, /getCountFromServer/);
 
   const cutModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
   assert.doesNotMatch(cutModal, /ensureAdminCustomersLoaded|collection\(state\.db/);
@@ -213,7 +214,12 @@ test("customer directory queries only active records and caps each page", () => 
   assert.match(list, /customerDirectoryFilters\(ref, source\)/);
   assert.match(list, /limit\(pageSize\)/);
   assert.match(list, /Math\.min\(100, Number\(data\.pageSize\) \|\| 50\)/);
-  assert.match(list, /getCountFromServer/);
+  assert.doesNotMatch(list, /getCountFromServer|includeCount/);
+  assert.doesNotMatch(api, /getCountFromServer/);
+  assert.match(html, /function observeCustomersPagination/);
+  assert.doesNotMatch(html, /clientes cargados|Total de clientes|25\+ resultados/);
+  const clientsView = functionBody(html, "function clientsView()", "function renderSettings()");
+  assert.doesNotMatch(clientsView, /result-count|customersTotalCount/);
   assert.match(api, /where\('active', '==', true\)/);
   assert.match(html, /ADMIN_CUSTOMERS_PAGE_SIZE=50/);
   assert.match(html, /loadMoreAdminCustomers/);
@@ -256,13 +262,35 @@ test("payment webhook verifies signatures, approves exact amount and guards dupl
   assert.match(webhook, /Mercado Pago puede reintentar/);
 });
 
-test("customer search and visit picker are bounded to 25 remote matches", () => {
+test("customer search is prefix-based, cursor-paginated by 25, and independently sorted from visit ranking", () => {
   const search = functionBody(api, "async function searchCustomers", "const apiRequest");
   assert.match(search, /limit\(25\)/);
   assert.match(search, /where\(field, '>='/);
   assert.match(search, /where\(field, '<='/);
+  assert.match(search, /startAfter\(cursorValue, cursorId\)/);
+  assert.match(search, /hasMore: snap\.docs\.length === 25/);
+  assert.match(search, /\[uid, source, field, prefix, cursorValue, cursorId\]/);
+  assert.match(search, /numericSearch && rawDigits\.length < 3/);
   assert.match(html, /runCustomerSearch\(term,'cut'\)/);
   assert.match(html, /cutSearchResults/);
+  assert.match(html, /customerSearchLoadSentinel/);
+  assert.match(html, /loadMoreCustomerSearch/);
+  assert.match(html, /state\.query\.trim\(\)\.length>=1/);
+  assert.match(html, /state\.customerSearchHasMore/);
+  assert.match(html, /state\.customerSearchLoadingMore/);
+  assert.match(html, /numericOnly&&digits\.length<3/);
+  assert.match(html, /Orden: coincidencia/);
+  assert.match(html, /aria-label="Orden de búsqueda"/);
+  const more = functionBody(html, "async function loadMoreCustomerSearch", "async function runCustomerSearch");
+  assert.match(more, /cursorId:state\.customerSearchCursorId/);
+  assert.match(more, /cursorValue:state\.customerSearchCursorValue/);
+  assert.match(more, /state\.customerSearchSeq===searchSeq/);
+  assert.match(more, /state\.user\?\.uid===accountUid/);
+  assert.match(more, /renderApp\(\)/);
+  const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(filtered, /if\(searchActive\)return list/);
+  assert.match(html, /activeQuery\.length>=1/);
+  assert.match(html, /customerSearchTerm=activeListSearch/);
 });
 
 test("direct customer signup publishes a single-document roster event for instant barber synchronization", () => {
@@ -295,17 +323,30 @@ test("customer detail keeps standard and custom rewards isolated by customer", (
   assert.doesNotMatch(update, /totalCuts|actualCutsRegistered|cycleCuts|cycleVersion|availableRewards|rewardReady/);
 });
 
-test("customer local state and cache are scoped to the authenticated identity", () => {
-  assert.match(html, /barberVipAdminCustomers:v2:/);
-  assert.match(html, /state\.user\?\.uid/);
-  assert.match(html, /cleanupContext\(\)/);
+test("customer local cache is versioned and cannot restore another barber or browser account", () => {
+  assert.match(html, /barberVipAdminCustomers:v3:/);
+  assert.match(html, /ownerUid:state\.user\.uid/);
+  assert.match(html, /barberUid:state\.barberUid/);
+  assert.match(html, /cached\?\.ownerUid!==state\.user\.uid/);
+  assert.match(html, /cached\?\.barberUid!==state\.barberUid/);
+  assert.match(html, /api\.resetSessionCache\?\.\(\)/);
   assert.match(html, /browserLocalPersistence/);
-  assert.match(html, /state\.customersTotalCount/);
+  assert.doesNotMatch(html, /customersTotalCount/);
+});
+
+test("directory pages are server-sorted and local updates preserve Firestore tie-break order", () => {
+  const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(list, /orderBy\(sort\.field, sort\.direction\)/);
+  assert.match(list, /orderBy\(documentId\(\), sort\.direction\)/);
+  assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);
+  assert.match(filtered, /tie\(a,b,'desc'\)/);
+  assert.match(filtered, /tie\(a,b,'asc'\)/);
 });
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
-  assert.match(serviceWorker, /v72-production-hardening/);
+  assert.match(serviceWorker, /v73-count-free-directory/);
   assert.match(rules, /match \/customerRoster/);
 });
 
@@ -384,14 +425,14 @@ test("migration cursor is permitted only as a barber-owned technical field", () 
 });
 
 
-test("customer directory pagination stays invisible and the exact total is shown without page counts", () => {
+test("customer directory pagination is invisible and the UI does not display partial or total counts", () => {
   const markup = functionBody(html, "function customerResultsMarkup(list)", "function clientsView()");
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
   assert.match(markup, /customerLoadSentinel/);
   assert.doesNotMatch(markup, /Cargar 50 clientes más|Mostramos los primeros 50/);
   assert.match(html, /IntersectionObserver/);
-  assert.match(clients, /state\.customersTotalCount/);
-  assert.doesNotMatch(html, /clientes cargados|de \$\{state\.customers\.length\}/);
+  assert.doesNotMatch(clients, /customersTotalCount|result-count/);
+  assert.doesNotMatch(html, /clientes cargados|de \$\{state\.customers\.length\}|Total de clientes|25\+ resultados/);
 });
 
 test("repeated exact customer searches use a short account-scoped memory cache that is invalidated after changes", () => {

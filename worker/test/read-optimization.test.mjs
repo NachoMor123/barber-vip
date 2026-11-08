@@ -518,7 +518,8 @@ test("roster events only reorder the directory when creation, removal, origin or
   assert.match(decision, /lastCutAt/);
   assert.match(decision, /signupSource/);
   assert.match(html, /clearAllAdminCustomersCaches\(\)/);
-  assert.match(html, /customerRosterResync/ === false ? /never/ : /invalidateCustomerDirectoryPages/);
+  assert.match(html, /invalidateCustomerDirectoryPages\(\)/);
+  assert.match(html, /state\.customersRosterNeedsReload=true/);
 });
 
 test("recording a visit emits a roster change and refreshes only one bounded directory page", () => {
@@ -530,5 +531,5 @@ test("recording a visit emits a roster change and refreshes only one bounded dir
   assert.match(addCutUi, /state\.customerSearchResults\?\.find/);
   assert.match(addCutUi, /invalidateCustomerDirectoryPages\(\)/);
   assert.match(addCutUi, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
-  assert.match(addCutUi, /No encontramos/ === false ? /never/ : /No se encontró al cliente seleccionado/);
+  assert.match(addCutUi, /No se encontró al cliente seleccionado/);
 });

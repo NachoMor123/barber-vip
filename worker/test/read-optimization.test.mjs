@@ -226,7 +226,7 @@ test("legacy customer login-index migration is resumable and bounds each read/wr
   assert.match(migration, /orderBy\(documentId\(\)\)/);
   assert.match(migration, /startAfter\(cursorId\)/);
   assert.match(migration, /batch\.update\(barberRef, \{/);
-  assert.match(migration, /sparkLoginIndexMigrationCursor: cursorId/);
+  assert.match(migration, /sparkLoginIndexMigrationCursor: completed \? null : nextCursorId/);
   assert.match(migration, /sparkLoginIndexMigratedAt: serverTimestamp\(\)/);
   assert.match(migration, /const snapshot = await getDocs\(pageQuery\)/);
   assert.doesNotMatch(migration, /while\s*\(true\)/);

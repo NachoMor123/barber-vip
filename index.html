@@ -1835,33 +1835,43 @@
     }
     async function ensureAdminCustomersLoaded({force=false,reset=false}={}){
       if(state.role!=='barber'||document.visibilityState!=='visible')return;
-      if(state.customersLoadPromise)return state.customersLoadPromise;
       const queryKey=customerDirectoryQueryKey();
+      if(state.customersLoadPromise&&state.customersLoadQueryKey===queryKey)return state.customersLoadPromise;
+
       const queryChanged=!!state.customersQueryKey&&state.customersQueryKey!==queryKey;
       if(reset||queryChanged||state.customersRosterNeedsReload){
-        // Keep the previous page visible until the replacement page succeeds.
-        // A temporary network failure must not make a populated customer list disappear.
         state.customersHasMore=false;
         state.customersCursorId='';state.customersCursorValue=null;
-        state.customersQueryKey=queryKey;force=true;
+        state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;
+        state.customersQueryKey=queryKey;
+        force=true;
       }
-      if(state.customersLoaded&&!force&&Date.now()-Number(state.customersCacheSavedAt||0)<ADMIN_CUSTOMERS_CACHE_TTL_MS)return;
+      if(state.customersLoaded&&state.customersQueryKey===queryKey&&!force
+        &&Date.now()-Number(state.customersCacheSavedAt||0)<ADMIN_CUSTOMERS_CACHE_TTL_MS)return;
       if(Date.now()<Number(state.customersRetryAfter||0)){
         if(state.customersLoaded)return;
         const waitSeconds=Math.max(1,Math.ceil((state.customersRetryAfter-Date.now())/1000));
-        const limited=new Error(`La lista está temporalmente protegida para evitar consultas repetidas. Probá nuevamente en ${waitSeconds} segundos.`);limited.status=429;limited.retryable=true;throw limited;
+        const limited=new Error(`La lista está temporalmente protegida para evitar consultas repetidas. Probá nuevamente en ${waitSeconds} segundos.`);
+        limited.status=429;limited.retryable=true;throw limited;
       }
+
+      const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid;
-      const hadLoaded=state.customersLoaded;
+      const requestSeq=++state.customersLoadSeq;
       const rosterVersionAtStart=state.customersRosterVersion;
       const refreshStartedAt=Date.now();
+      const hadLoaded=state.customersLoaded&&state.customersQueryKey===queryKey;
+      state.customersLoadQueryKey=queryKey;
       state.customersLoading=true;
+
       const promise=(async()=>{
         try{
           const page=await api('/api/customers/list',{method:'POST',body:{
             sort:state.sort,source:state.customerSourceFilter,pageSize:ADMIN_CUSTOMERS_PAGE_SIZE
           }});
-          if(state.role!=='barber'||state.barberUid!==barberUid)return;
+          if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid
+            ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==queryKey)return;
+
           let customers=Array.isArray(page.customers)?page.customers:[];
           if(state.customersRosterData){
             const since=rosterVersionAtStart>0?state.customersCacheSavedAt:refreshStartedAt;
@@ -1875,27 +1885,41 @@
           state.customersHasMore=page.hasMore===true;
           state.customersCursorId=String(page.cursorId||'');
           state.customersCursorValue=page.cursorValue??null;
-            state.customersQueryKey=queryKey;
+          state.customersFirstPageCursorId=state.customersCursorId;
+          state.customersFirstPageCursorValue=state.customersCursorValue;
+          state.customersQueryKey=queryKey;
           state.customersRosterNeedsReload=false;
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();
           saveAdminCustomersCache();
           if(state.section==='clients'&&document.visibilityState==='visible')renderApp();
         }catch(error){
-          if(state.role!=='barber'||state.barberUid!==barberUid)return;
+          if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid
+            ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==queryKey)return;
           console.error('customers paginated read',error);
           state.customersLoaded=hadLoaded;
           state.customersLoadFailures=Math.min(6,(Number(state.customersLoadFailures)||0)+1);
-          state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));saveAdminCustomersRetryGuard();
-          const failure=new Error(hadLoaded?'No se pudo actualizar la lista. Seguimos mostrando la última copia guardada.':'No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
-          failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;throw failure;
+          state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));
+          saveAdminCustomersRetryGuard();
+          const failure=new Error(hadLoaded
+            ?'No se pudo actualizar la lista. Seguimos mostrando la última copia guardada.'
+            :'No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
+          failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;
+          throw failure;
         }finally{
-          if(state.barberUid===barberUid)state.customersLoading=false;
+          if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid){
+            state.customersLoading=false;
+            if(state.customersLoadQueryKey===queryKey)state.customersLoadQueryKey='';
+          }
         }
       })();
       state.customersLoadPromise=promise;
       try{await promise;}
-      finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;if(state.barberUid===barberUid)state.customersLoading=false;}
+      finally{
+        if(state.customersLoadPromise===promise)state.customersLoadPromise=null;
+        if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid)state.customersLoading=false;
+      }
     }
+
     async function loadMoreAdminCustomers(){
       if(state.role!=='barber'||state.customersLoadingMore||!state.customersHasMore||!state.customersCursorId||state.query.trim())return;
       const accountUid=state.user?.uid||'';

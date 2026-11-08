@@ -793,7 +793,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersTotalCount:null, customersQueryKey:'', customersRosterVersion:0, customersRosterData:null, customersRosterNeedsReload:false, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersQueryKey:'', customersRosterVersion:0, customersRosterData:null, customersRosterNeedsReload:false, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1269,7 +1269,20 @@
       let list=(state.query.trim().length>=2?(remoteReady?state.customerSearchResults:[]):state.customers).filter(c=>c.active!==false);
       if(state.section==='clients'&&state.customerSourceFilter!=='all')list=list.filter(c=>state.customerSourceFilter==='admin'?c.signupSource==='admin':c.signupSource==='self');
       const q=normalizeName(state.query);if(q&&!remoteReady)list=list.filter(c=>normalizeName(c.fullName).includes(q)||String(c.whatsapp||'').replace(/\D/g,'').includes(q.replace(/\D/g,'')));
-      switch(state.sort){case 'cuts-asc':list.sort((a,b)=>(Number(a.totalCuts)||0)-(Number(b.totalCuts)||0));break;case 'last-cut-desc':case 'visit-order-desc':list.sort((a,b)=>(asDate(b.lastCutAt)?.getTime()||0)-(asDate(a.lastCutAt)?.getTime()||0));break;case 'last-cut-asc':list.sort((a,b)=>(asDate(a.lastCutAt)?.getTime()||0)-(asDate(b.lastCutAt)?.getTime()||0));break;case 'name-asc':list.sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||''),'es'));break;default:list.sort((a,b)=>(Number(b.totalCuts)||0)-(Number(a.totalCuts)||0));}
+      const tie=(a,b,direction='asc')=>{
+        const result=String(a.uid||'').localeCompare(String(b.uid||''));
+        return direction==='desc'?-result:result;
+      };
+      switch(state.sort){
+        case 'cuts-asc':list.sort((a,b)=>(Number(a.totalCuts)||0)-(Number(b.totalCuts)||0)||tie(a,b,'asc'));break;
+        case 'visit-order-desc':case 'last-cut-desc':list.sort((a,b)=>(asDate(b.lastCutAt)?.getTime()||0)-(asDate(a.lastCutAt)?.getTime()||0)||tie(a,b,'desc'));break;
+        case 'last-cut-asc':list.sort((a,b)=>(asDate(a.lastCutAt)?.getTime()||0)-(asDate(b.lastCutAt)?.getTime()||0)||tie(a,b,'asc'));break;
+        case 'name-asc':list.sort((a,b)=>{
+          const left=String(a.fullName||''),right=String(b.fullName||'');
+          return (left<right?-1:left>right?1:0)||tie(a,b,'asc');
+        });break;
+        default:list.sort((a,b)=>(Number(b.totalCuts)||0)-(Number(a.totalCuts)||0)||tie(a,b,'desc'));
+      }
       return list;
     }
 
@@ -1643,7 +1656,6 @@
         state.customers=cached.customers.filter(c=>c&&typeof c.uid==='string'&&(!c.barberUid||c.barberUid===state.barberUid));
         state.customersLoaded=true;
         state.customersCacheSavedAt=savedAt;
-        state.customersTotalCount=null;
         state.customersHasMore=cached.hasMore===true;
         state.customersCursorId=String(cached.cursorId||'');
         state.customersCursorValue=cached.cursorValue??null;
@@ -1755,8 +1767,7 @@
           state.customersHasMore=page.hasMore===true;
           state.customersCursorId=String(page.cursorId||'');
           state.customersCursorValue=page.cursorValue??null;
-          state.customersTotalCount=null;
-          state.customersQueryKey=queryKey;
+            state.customersQueryKey=queryKey;
           state.customersRosterNeedsReload=false;
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();
           saveAdminCustomersCache();
@@ -1857,7 +1868,7 @@
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false;state.customersLoadingMore=false;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersTotalCount=null;state.customersQueryKey='';state.customersRosterVersion=0;state.customersRosterData=null;state.customersRosterNeedsReload=false;state.customerSearchResults=null;state.customerSearchTerm='';state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false;state.customersLoadingMore=false;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersRosterVersion=0;state.customersRosterData=null;state.customersRosterNeedsReload=false;state.customerSearchResults=null;state.customerSearchTerm='';state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();

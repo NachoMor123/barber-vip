@@ -1,5 +1,5 @@
-const CACHE_NAME = 'barber-vip-shell-v74-sort-cleanup';
-const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/customer-roster.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
+const CACHE_NAME = 'barber-vip-shell-v75-visit-first';
+const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

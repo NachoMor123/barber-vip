@@ -42,6 +42,9 @@ try {
   first.set(doc(barberDb, 'barbers', barberUid, 'publicMeta', 'professional'), {
     displayName: 'Barbero de prueba', barberCode: 'BARBER01', showServices: false
   });
+  first.set(doc(barberDb, 'barbers', barberUid, 'customerDirectory', 'state'), {
+    version: 0, updatedAt: serverTimestamp()
+  });
   await assertSucceeds(first.commit());
   console.log('PASS: barber trial bootstrap');
 
@@ -61,6 +64,9 @@ try {
   second.set(doc(barberDb, 'customerLoginLookup', 'name-hash-001'), {
     uid: customerUid, barberUid, email: customer.loginEmail, active: true, updatedAt: serverTimestamp()
   });
+  second.update(doc(barberDb, 'barbers', barberUid, 'customerDirectory', 'state'), {
+    version: 1, updatedAt: serverTimestamp()
+  });
   await assertSucceeds(second.commit());
   console.log('PASS: barber creates customer and name lookup index');
 
@@ -73,30 +79,15 @@ try {
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'customerLoginLookup', 'name-hash-001')));
   console.log('PASS: customer privacy and exact public lookups');
 
-  await env.withSecurityRulesDisabled(async context => {
-    await setDoc(doc(context.firestore(), 'barbers', barberUid, 'customerRoster', 'state'), {
-      version: 1,
-      changes: [{
-        version: 1, action: 'created', customerId: customerUid,
-        customer: { uid: customerUid, barberUid, fullName: 'Franco Prueba', active: true },
-        changedAt: Timestamp.fromMillis(Date.now())
-      }],
-      updatedAt: serverTimestamp()
-    });
-  });
-  await assertSucceeds(getDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state')));
-  await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state')));
-  await assertSucceeds(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
-    version: 2, changes: [], updatedAt: serverTimestamp()
+  const directoryRef = doc(barberDb, 'barbers', barberUid, 'customerDirectory', 'state');
+  await assertSucceeds(getDoc(directoryRef));
+  await assertFails(getDoc(doc(customerDb, 'barbers', barberUid, 'customerDirectory', 'state')));
+  await assertSucceeds(updateDoc(directoryRef, { version: 2, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(customerDb, 'barbers', barberUid, 'customerDirectory', 'state'), {
+    version: 3, updatedAt: serverTimestamp()
   }));
-  await assertFails(setDoc(doc(customerDb, 'barbers', barberUid, 'customerRoster', 'state'), {
-    version: 3, changes: [], updatedAt: serverTimestamp()
-  }));
-  await assertFails(setDoc(doc(barberDb, 'barbers', barberUid, 'customerRoster', 'state'), {
-    version: 3, changes: Array.from({ length: 101 }, (_, i) => ({ version: i + 1 })), updatedAt: serverTimestamp()
-  }));
-  await assertFails(getDocs(collection(barberDb, 'barbers', barberUid, 'customerRoster')));
-  console.log('PASS: bounded customer roster feed is readable and writable only by its barber owner');
+  await assertFails(getDocs(collection(barberDb, 'barbers', barberUid, 'customerDirectory')));
+  console.log('PASS: directory revision is visible and writable only by its owning barber');
 
   const listed = await assertSucceeds(getDocs(collection(barberDb, 'barbers', barberUid, 'customers')));
   if (listed.size !== 1) throw new Error('Expected exactly one customer');
@@ -149,6 +140,7 @@ try {
   disable.set(doc(barberDb, 'customerLoginLookup', 'name-hash-002'), {
     uid: selfUid, barberUid, email: selfCustomer.loginEmail, active: false, updatedAt: serverTimestamp()
   }, { merge: true });
+  disable.update(directoryRef, { version: 3, updatedAt: serverTimestamp() });
   await assertSucceeds(disable.commit());
   await assertFails(getDoc(doc(selfDb, 'barbers', barberUid, 'customers', selfUid)));
   console.log('PASS: customer deactivation revokes card access');

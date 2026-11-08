@@ -1,4 +1,3 @@
-import { appendCustomerRosterChange } from "../../customer-roster.mjs";
 const DAY_MS = 86_400_000;
 const PAID_PERIOD_DAYS = 30;
 const GRACE_DAYS = 5;
@@ -160,25 +159,18 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
   }));
 }
 
-async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10) {
+async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10, activeOnly = false) {
   const token = await googleAccessToken(env);
   const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
+  const filters = [{ fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } }];
+  if (activeOnly) filters.push({
+    fieldFilter: { field: { fieldPath: "active" }, op: "EQUAL", value: encodeValue(true) }
+  });
+  const where = filters.length === 1 ? filters[0] : { compositeFilter: { op: "AND", filters } };
   const response = await fetch(url, {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: "customers" }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath },
-            op: "EQUAL",
-            value: encodeValue(value)
-          }
-        },
-        limit
-      }
-    })
+    body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "customers" }], where, limit } })
   });
   const rows = await response.json().catch(() => []);
   if (!response.ok) throw new Error("Firestore no pudo verificar el cliente (" + response.status + ").");
@@ -341,11 +333,11 @@ async function registerCustomerAccount(request, env) {
     throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
   // Keep duplicate protection while older client records are being indexed.
-  const legacyNameMatches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2);
+  const legacyNameMatches = await fsQueryCustomerField(env, barberUid, "usernameNormalized", normalizedName, 2, true);
   if (legacyNameMatches.some(row => row.data.active !== false)) {
     throw Object.assign(new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
-  const phoneMatches = await fsQueryCustomerField(env, barberUid, "whatsapp", whatsapp, 10);
+  const phoneMatches = await fsQueryCustomerField(env, barberUid, "whatsapp", whatsapp, 1, true);
   if (phoneMatches.some(row => row.data.active !== false && normalizeCustomerWhatsapp(row.data.whatsapp) === whatsapp)) {
     throw Object.assign(new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
@@ -381,7 +373,6 @@ async function registerCustomerAccount(request, env) {
     usernameNormalized: normalizedName,
     loginEmail,
     whatsapp,
-    signupSource: "self",
     cutStyle: "",
     conversationPreference: "",
     loyaltyOverride: { mode: "standard", rewards: [] },
@@ -413,33 +404,21 @@ async function registerCustomerAccount(request, env) {
       currentDocument: { exists: false }
     }
   ];
-  const rosterPath = "barbers/" + barberUid + "/customerRoster/state";
-
+  const directoryPath = "barbers/" + barberUid + "/customerDirectory/state";
   try {
-    // The customer, profile, name index and one compact roster event are atomic.
-    // A barber online in the app receives only this one-document change instead
-    // of having to re-read the whole customer collection after a self-signup.
     let committed = false;
     for (let attempt = 0; attempt < 5 && !committed; attempt++) {
-      const currentRoster = await fsGet(env, rosterPath);
-      const latestLookup = attempt === 0 ? existingLookup : await fsGet(env, loginPath);
+      const [currentDirectory, latestLookup] = await Promise.all([
+        fsGet(env, directoryPath),
+        attempt === 0 ? Promise.resolve(existingLookup) : fsGet(env, loginPath)
+      ]);
       if (latestLookup && latestLookup.data.active !== false) {
         throw Object.assign(
           new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."),
           { status: 409 }
         );
       }
-      const nextRoster = appendCustomerRosterChange(currentRoster?.data, "created", customer, now);
-      const rosterWrite = {
-        update: {
-          name: currentRoster?.name || firestoreResourceName(env, rosterPath),
-          fields: encodeFields(nextRoster)
-        },
-        updateMask: { fieldPaths: ["version", "changes", "updatedAt"] },
-        currentDocument: currentRoster?.updateTime
-          ? { updateTime: currentRoster.updateTime }
-          : { exists: false }
-      };
+      const version = Math.max(0, Number(currentDirectory?.data?.version) || 0) + 1;
       const lookupWrite = {
         update: {
           name: firestoreResourceName(env, loginPath),
@@ -451,15 +430,25 @@ async function registerCustomerAccount(request, env) {
           ? { updateTime: latestLookup.updateTime }
           : { exists: false }
       };
+      const directoryWrite = {
+        update: {
+          name: currentDirectory?.name || firestoreResourceName(env, directoryPath),
+          fields: encodeFields({ version, updatedAt: now })
+        },
+        updateMask: { fieldPaths: ["version", "updatedAt"] },
+        currentDocument: currentDirectory?.updateTime
+          ? { updateTime: currentDirectory.updateTime }
+          : { exists: false }
+      };
       try {
-        await fsCommit(env, [...customerWrites, lookupWrite, rosterWrite]);
+        await fsCommit(env, [...customerWrites, lookupWrite, directoryWrite]);
         committed = true;
       } catch (error) {
         if (error?.conflict && attempt < 4) continue;
         throw error;
       }
     }
-    if (!committed) throw new Error("No se pudo sincronizar el alta del cliente.");
+    if (!committed) throw new Error("No se pudo actualizar la versión del directorio de clientes.");
   } catch (error) {
     await fetch(
       "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=" + encodeURIComponent(env.FIREBASE_WEB_API_KEY),

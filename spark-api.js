@@ -699,8 +699,6 @@ export function createSparkApi({ firebaseConfig, state }) {
     switch (value) {
       case 'cuts-asc': return { field: 'totalCuts', direction: 'asc' };
       case 'visit-order-desc': case 'last-cut-desc': return { field: 'lastCutAt', direction: 'desc' };
-      case 'last-cut-asc': return { field: 'lastCutAt', direction: 'asc' };
-      case 'name-asc': return { field: 'fullName', direction: 'asc' };
       default: return { field: 'totalCuts', direction: 'desc' };
     }
   }

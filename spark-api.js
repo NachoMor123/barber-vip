@@ -535,39 +535,48 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (data.loyaltyMode !== undefined) {
       updates.loyaltyOverride = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, state.barber || {});
     }
-    const oldNormalized = existing.usernameNormalized || normalizeName(existing.fullName);
-    let oldLookupRef = null, newLookupRef = null;
-    if (newNormalized !== oldNormalized) {
-      const oldId = await loginLookupId(uid, oldNormalized);
-      const newId = await loginLookupId(uid, newNormalized);
-      newLookupRef = doc(db(), 'customerLoginLookup', newId);
-      const newNameIndex = await getDoc(newLookupRef);
-      if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
-        throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
-      }
-      oldLookupRef = doc(db(), 'customerLoginLookup', oldId);
-    }
-
     const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
-    const rosterCustomer = { ...existing, ...updates, uid: id, updatedAt: new Date() };
+    let savedCustomer = null;
     await runTransaction(db(), async transaction => {
-      const rosterSnap = await transaction.get(rosterRef);
+      const [customerSnap, rosterSnap] = await Promise.all([
+        transaction.get(customerRef), transaction.get(rosterRef)
+      ]);
+      if (!customerSnap.exists() || customerSnap.data().active === false) {
+        throw fail('El cliente ya no está activo. Actualizá la lista y volvé a intentarlo.', 404);
+      }
+      const fresh = { uid: id, ...customerSnap.data() };
+      const oldNormalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
+      const nextNormalized = updates.usernameNormalized ?? oldNormalized;
+      let oldLookupRef = null, newLookupRef = null;
+      if (nextNormalized !== oldNormalized) {
+        const oldId = await loginLookupId(uid, oldNormalized);
+        const newId = await loginLookupId(uid, nextNormalized);
+        oldLookupRef = doc(db(), 'customerLoginLookup', oldId);
+        newLookupRef = doc(db(), 'customerLoginLookup', newId);
+        const newNameIndex = await transaction.get(newLookupRef);
+        if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
+          throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
+        }
+      }
+      const changedAt = new Date();
+      const rosterCustomer = { ...fresh, ...updates, uid: id, updatedAt: changedAt };
       const nextRoster = appendCustomerRosterChange(
         rosterSnap.exists() ? rosterSnap.data() : null,
-        'updated', rosterCustomer, new Date()
+        'updated', rosterCustomer, changedAt
       );
       transaction.update(customerRef, updates);
       if (oldLookupRef && newLookupRef) {
         transaction.delete(oldLookupRef);
         transaction.set(newLookupRef, {
-          uid: id, barberUid: uid, email: existing.loginEmail,
-          active: existing.active !== false, updatedAt: serverTimestamp()
+          uid: id, barberUid: uid, email: fresh.loginEmail,
+          active: fresh.active !== false, updatedAt: serverTimestamp()
         });
       }
       transaction.set(rosterRef, nextRoster);
+      savedCustomer = rosterCustomer;
     });
     clearCustomerSearchCache();
-    return { ok: true, customer: { ...existing, ...updates, updatedAt: new Date().toISOString() } };
+    return { ok: true, customer: { ...savedCustomer, updatedAt: new Date().toISOString() } };
   }
 
   async function disableCustomer(data) {
@@ -853,9 +862,13 @@ export function createSparkApi({ firebaseConfig, state }) {
       theme: { accent: '#3478ff', density: data.theme?.density === 'compact' ? 'compact' : 'comfortable' },
       updatedAt: serverTimestamp()
     };
-    await updateDoc(ref, profile);
     const publicProfile = cleanProfileForCustomer({ ...(state.barber || {}), ...profile });
-    await setDoc(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), publicProfile, { merge: true });
+    const batch = writeBatch(db());
+    batch.update(ref, profile);
+    batch.set(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), publicProfile, { merge: true });
+    // Barber settings and the public card projection become visible atomically.
+    await batch.commit();
+    invalidate();
     const resultProfile = { ...(state.barber || {}), ...profile, whatsapp: profile.whatsapp };
     return { ok: true, profile: resultProfile };
   }
@@ -869,12 +882,16 @@ export function createSparkApi({ firebaseConfig, state }) {
       id, name: cleanText(selected.name || 'Programa de premios', 60),
       audience: 'all', customerIds: [], rewards: safeRewards(selected.rewards)
     };
-    await updateDoc(doc(db(), 'barbers', uid), {
+    const batch = writeBatch(db());
+    batch.update(doc(db(), 'barbers', uid), {
       loyaltyPrograms: [program], defaultLoyaltyProgramId: id, rewards: program.rewards, updatedAt: serverTimestamp()
     });
-    await setDoc(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), {
+    batch.set(doc(db(), 'barbers', uid, 'publicMeta', 'professional'), {
       loyaltyPrograms: [program], defaultLoyaltyProgramId: id
     }, { merge: true });
+    // The barber program and the data consumed by customer cards cannot diverge on a partial write.
+    await batch.commit();
+    invalidate();
     return { ok: true, programs: [program], defaultLoyaltyProgramId: id };
   }
 

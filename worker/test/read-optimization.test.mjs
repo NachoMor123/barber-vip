@@ -402,14 +402,14 @@ test("migration cursor is permitted only as a barber-owned technical field", () 
 });
 
 
-test("customer directory pagination stays invisible and the exact total is shown without page counts", () => {
+test("customer directory pagination is invisible and the UI does not display partial or total counts", () => {
   const markup = functionBody(html, "function customerResultsMarkup(list)", "function clientsView()");
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
   assert.match(markup, /customerLoadSentinel/);
   assert.doesNotMatch(markup, /Cargar 50 clientes más|Mostramos los primeros 50/);
   assert.match(html, /IntersectionObserver/);
-  assert.match(clients, /state\.customersTotalCount/);
-  assert.doesNotMatch(html, /clientes cargados|de \$\{state\.customers\.length\}/);
+  assert.doesNotMatch(clients, /customersTotalCount|result-count/);
+  assert.doesNotMatch(html, /clientes cargados|de \$\{state\.customers\.length\}|Total de clientes|25\+ resultados/);
 });
 
 test("repeated exact customer searches use a short account-scoped memory cache that is invalidated after changes", () => {

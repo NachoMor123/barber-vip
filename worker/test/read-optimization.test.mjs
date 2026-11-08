@@ -280,7 +280,9 @@ test("customer search is prefix-based, cursor-paginated by 25, and independently
   assert.match(html, /state\.sort/);
   assert.match(html, /state\.customerSearchLoadingMore/);
   assert.match(html, /numericOnly&&digits\.length<3/);
-  assert.match(html, /sort\.disabled=term\.length>=1/);
+  assert.match(html, /Orden: coincidencia/);
+  assert.match(html, /aria-label="Orden de búsqueda"/);
+  assert.match(html, /state\.query\.trim\(\)\.length>=1/);
   const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
   assert.match(filtered, /if\(searchActive\)return list/);
 });

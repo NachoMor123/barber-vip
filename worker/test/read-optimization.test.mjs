@@ -217,7 +217,8 @@ test("customer directory queries only active records and caps each page", () => 
   assert.doesNotMatch(api, /getCountFromServer/);
   assert.match(html, /function observeCustomersPagination/);
   assert.doesNotMatch(html, /clientes cargados|Total de clientes|25\+ resultados/);
-  assert.doesNotMatch(html, /\.result-count/);
+  const clientsView = functionBody(html, "function clientsView()", "function renderSettings()");
+  assert.doesNotMatch(clientsView, /result-count|customersTotalCount/);
   assert.match(api, /where\('active', '==', true\)/);
   assert.match(html, /ADMIN_CUSTOMERS_PAGE_SIZE=50/);
   assert.match(html, /loadMoreAdminCustomers/);

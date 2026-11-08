@@ -324,7 +324,7 @@ test("directory pages are server-sorted and local updates preserve Firestore tie
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {
   assert.match(serviceWorker, /customer-roster\.js/);
-  assert.match(serviceWorker, /v72-production-hardening/);
+  assert.match(serviceWorker, /v73-count-free-directory/);
   assert.match(rules, /match \/customerRoster/);
 });
 

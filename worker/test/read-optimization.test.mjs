@@ -528,8 +528,32 @@ test("recording a visit emits a roster change and refreshes only one bounded dir
   assert.match(visit, /transaction\.get\(rosterRef\)/);
   assert.match(visit, /appendCustomerRosterChange/);
   assert.match(visit, /lastCutAt/);
+  assert.match(visit, /rosterVersion = nextRoster\.version/);
+  assert.match(visit, /return \{ ok: true, customer: resultCustomer, message, rosterVersion \}/);
   assert.match(addCutUi, /state\.customerSearchResults\?\.find/);
   assert.match(addCutUi, /invalidateCustomerDirectoryPages\(\)/);
   assert.match(addCutUi, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
   assert.match(addCutUi, /No se encontró al cliente seleccionado/);
+});
+
+
+test("the direct-registration filter applies consistently to the global list and name/phone search", () => {
+  const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(list, /customerDirectoryFilters\(ref, source\)/);
+  assert.match(search, /customerDirectoryFilters\(ref, source\)/);
+  assert.match(html, /value="self"[\s\S]*Registro directo/);
+  assert.match(html, /customerSourceFilter/);
+  assert.match(html, /source:state\.customerSourceFilter/);
+});
+
+test("changing source or sort clears the prior pages before the new query renders", () => {
+  const reset = functionBody(html, "function resetCustomerDirectoryForCriteria", "function adminCustomersRetryKey");
+  const change = functionBody(html, "document.addEventListener('change'", "if(firebaseConfigured()");
+  assert.match(reset, /state\.customers=\[\]/);
+  assert.match(reset, /state\.customersLoaded=false/);
+  assert.match(reset, /restoreAdminCustomersCache\(\)/);
+  assert.match(reset, /customerDirectoryQueryKey\(\)/);
+  assert.match(change, /resetCustomerDirectoryForCriteria\(\)/);
+  assert.match(html, /customersQueryKey!==queryKey/);
 });

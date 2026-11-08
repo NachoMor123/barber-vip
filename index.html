@@ -1861,7 +1861,7 @@
         }
       }finally{
         state.customersLoadingMore=false;
-        if(loaded&&state.section==='clients'&&state.user?.uid===accountUid&&state.barberUid===barberUid)renderApp();
+        if(state.section==='clients'&&state.role==='barber'&&state.user?.uid===accountUid&&state.barberUid===barberUid)renderApp();
         else if(state.section==='clients')observeCustomersPagination();
       }
     }
@@ -1901,7 +1901,7 @@
         }
       }finally{
         state.customerSearchLoadingMore=false;
-        if(loaded&&state.section==='clients'&&state.user?.uid===accountUid&&state.barberUid===barberUid
+        if(state.section==='clients'&&state.role==='barber'&&state.user?.uid===accountUid&&state.barberUid===barberUid
           &&state.query.trim()===searchTerm&&state.customerSearchSeq===searchSeq)renderApp();
         else if(state.section==='clients')observeCustomersPagination();
       }

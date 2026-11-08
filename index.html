@@ -2788,6 +2788,12 @@
           if(results)results.innerHTML=customerResultsMarkup([]);
           state.customerSearchTimer=setTimeout(()=>{void runCustomerSearch(term,'clients');},350);
         }else{
+          if(!term&&state.role==='barber'
+            &&(!state.customersLoaded||state.customersRosterNeedsReload
+              ||state.customersQueryKey!==customerDirectoryQueryKey())){
+            void ensureAdminCustomersLoaded({force:state.customersRosterNeedsReload,reset:state.customersRosterNeedsReload})
+              .catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
+          }
           if(results)results.innerHTML=customerResultsMarkup(filteredCustomers());
           observeCustomersPagination();
         }

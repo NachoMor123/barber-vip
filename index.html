@@ -1168,7 +1168,7 @@
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
-    const clearListeners = () => { api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customersDirectoryCheckSeq++;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
+    const clearListeners = () => { stopAdminCustomersListener(); api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customersDirectoryCheckSeq++;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
     const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
@@ -1554,6 +1554,10 @@
     }
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
+      if(state.role==='barber'&&state.section==='clients'){
+        if(document.visibilityState==='hidden')stopAdminCustomersListener();
+        else startAdminCustomersListener();
+      }
       void syncFirestoreNetworkWithVisibility().catch(error=>{
         if(document.visibilityState==='hidden'){
           firestoreBackgroundPause=false;
@@ -1633,12 +1637,60 @@
     }
 
     function stopAdminCustomersListener(){
-      // Keep no collection-wide listener open: new visits and edits do not rescan every client.
       const unsubscribe=state.customersUnsubscribe;
       state.customersUnsubscribe=null;
       state.customersListenerStarted=false;
       if(typeof unsubscribe==='function'){try{unsubscribe();}catch(_){}}
     }
+    function startAdminCustomersListener(){
+      if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible'
+        ||!state.user?.uid||!state.barberUid||state.customersListenerStarted)return;
+      const accountUid=state.user.uid,barberUid=state.barberUid;
+      const directoryRef=doc(state.db,'barbers',barberUid,'customerDirectory','state');
+      state.customersListenerStarted=true;
+      let unsubscribe=()=>{};
+      unsubscribe=onSnapshot(directoryRef,snapshot=>{
+        if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible'
+          ||state.user?.uid!==accountUid||state.barberUid!==barberUid){
+          unsubscribe();
+          if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
+          return;
+        }
+        const remoteVersion=snapshot.exists()?Math.max(0,Number(snapshot.data()?.version)||0):0;
+        const knownVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
+        if(snapshot.metadata?.fromCache===true){
+          if(!state.customersLoaded)void ensureAdminCustomersLoaded({force:true,reset:true})
+            .catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
+          return;
+        }
+        if(!state.customersLoaded){
+          state.customersDirectoryVersion=remoteVersion;
+          void ensureAdminCustomersLoaded({force:true,reset:true})
+            .catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
+          return;
+        }
+        if(remoteVersion<=knownVersion)return;
+        state.customersDirectoryVersion=remoteVersion;
+        api.clearCustomerSearchCache?.();
+        const searchTerm=state.query.trim();
+        if(searchTerm){
+          state.customerSearchResults=null;state.customerSearchTerm='';
+          state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
+          void runCustomerSearch(searchTerm,'clients');
+        }else{
+          invalidateCustomerDirectoryPages({preserveVisible:true});
+          void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+            toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
+          );
+        }
+      },error=>{
+        if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
+        showErrorOnce('customer-directory-snapshot','No se pudo sincronizar el directorio. Los datos guardados siguen disponibles.',error);
+      });
+      state.customersUnsubscribe=unsubscribe;
+    }
+    // Subscribe only while the Clients view is visible. This is one metadata
+    // document, not the customer collection, and it is disconnected on exit/background.
     // A tiny revision document detects outside changes only when the section is
     // entered or refreshed. No customer-directory listener and no polling.
     const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=15;
@@ -1911,7 +1963,7 @@
         state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
         // One revision check when Clients opens; never keep a directory listener active.
-        if(state.section==='clients')void syncCustomerDirectory().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
+        if(state.section==='clients')startAdminCustomersListener();
         renderApp();
       } else {
         state.customerAccessRevoked=false;
@@ -2367,7 +2419,7 @@
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
         else if(action==='customer-entry'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-customer-access')?.scrollIntoView({behavior:'smooth',block:'start'}));}
         else if(action==='settings-profile'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-profile-section')?.scrollIntoView({behavior:'smooth',block:'start'}));}
-        else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients')pendingLoad=syncCustomerDirectory().catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
+        else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients')pendingLoad=Promise.resolve(startAdminCustomersListener());renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}

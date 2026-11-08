@@ -130,7 +130,7 @@ test("the directory revision replaces the roster and is checked only on Clients 
   assert.match(sync, /getDoc\(doc\(state\.db,'barbers',barberUid,'customerDirectory','state'\)\)/);
   assert.match(sync, /remoteVersion/);
   assert.doesNotMatch(sync, /onSnapshot|setInterval|setTimeout/);
-  assert.match(load, /syncCustomerDirectory\(\)/);
+  assert.match(load, /startAdminCustomersListener\(\)/);
   assert.doesNotMatch(load, /onSnapshot\(rosterRef/);
   assert.doesNotMatch(api, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(worker, /customerRoster|appendCustomerRosterChange/);
@@ -260,4 +260,27 @@ test("customer card snapshots refresh only the active account cache and revoke d
   assert.match(load, /state\.customerAccessRevoked=false/);
   const logout = functionBody(html, "async function signOutAndReturn()", "function openCustomerModal");
   assert.doesNotMatch(logout, /clearCustomerCardCache/);
+});
+
+
+test("barber listens only to one directory revision while Clients is visible", () => {
+  const listener = functionBody(html, "function startAdminCustomersListener()", "async function syncCustomerDirectory");
+  const clear = html.slice(html.indexOf("const clearListeners ="), html.indexOf("const cleanupContext", html.indexOf("const clearListeners =")));
+  const visibilityStart = html.indexOf("document.addEventListener('visibilitychange'");
+  const visibilityEnd = html.indexOf("});", visibilityStart) + 3;
+  const visibility = html.slice(visibilityStart, visibilityEnd);
+  const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='refresh-clients')"));
+  assert.match(listener, /onSnapshot\(directoryRef/);
+  assert.match(listener, /state\.section!=='clients'/);
+  assert.match(listener, /document\.visibilityState!=='visible'/);
+  assert.match(listener, /state\.user\?\.uid!==accountUid/);
+  assert.match(listener, /state\.barberUid!==barberUid/);
+  assert.match(listener, /remoteVersion<=knownVersion/);
+  assert.match(listener, /ensureAdminCustomersLoaded/);
+  assert.doesNotMatch(listener, /onSnapshot\(collection\(.*customers/);
+  assert.match(clear, /stopAdminCustomersListener\(\)/);
+  assert.match(visibility, /stopAdminCustomersListener\(\)/);
+  assert.match(visibility, /startAdminCustomersListener\(\)/);
+  assert.match(nav, /stopAdminCustomersListener\(\)/);
+  assert.match(nav, /startAdminCustomersListener\(\)/);
 });

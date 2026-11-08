@@ -290,7 +290,7 @@ test("directory cache restores every page already seen up to a safe record cap a
   assert.match(html, /ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150/);
   const serializer = functionBody(html, "function customerCursorValue", "function customerDirectoryQueryKey");
   assert.match(serializer, /toDate\(\)\.toISOString\(\)/);
-  assert.match(serializer, /return null/);
+  assert.match(serializer, /typeof value==='string'&&value\?value:null/);
   const save = functionBody(html, "function saveAdminCustomersCache()", "function restoreAdminCustomersCache()");
   assert.match(save, /slice\(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS\)/);
   assert.match(save, /cacheTruncated\?String\(cacheLastCustomer\?\.uid\|\|''\):state\.customersCursorId/);

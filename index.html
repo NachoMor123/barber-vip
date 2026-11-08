@@ -793,7 +793,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersQueryKey:'', customersRosterVersion:0, customersRosterData:null, customersRosterNeedsReload:false, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersQueryKey:'', customersRosterVersion:0, customersRosterData:null, customersRosterNeedsReload:false, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', sort:'cuts-desc', query:'', customerSourceFilter:'all', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1169,7 +1169,7 @@
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
-    const clearListeners = () => { api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadPromise=null;state.customersRosterData=null;state.customersRosterVersion=0;state.customersRosterNeedsReload=false;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.cutSearchResults=[];state.cutSearchTerm=''; };
+    const clearListeners = () => { api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadPromise=null;state.customersRosterData=null;state.customersRosterVersion=0;state.customersRosterNeedsReload=false;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
     const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
@@ -1265,10 +1265,16 @@
       return 'Sin fecha de vencimiento';
     }
     function filteredCustomers() {
-      const remoteReady=state.query.trim().length>=2&&state.customerSearchTerm===state.query.trim()&&Array.isArray(state.customerSearchResults);
-      let list=(state.query.trim().length>=2?(remoteReady?state.customerSearchResults:[]):state.customers).filter(c=>c.active!==false);
+      const searchTerm=state.query.trim();
+      const searchActive=searchTerm.length>=1;
+      const remoteReady=searchActive&&state.customerSearchTerm===searchTerm&&Array.isArray(state.customerSearchResults);
+      // Never fall back to filtering only the pages already scrolled into view:
+      // search results always come from the server-side prefix query.
+      if(searchActive&&!remoteReady)return [];
+      let list=(searchActive?state.customerSearchResults:state.customers).filter(c=>c.active!==false);
       if(state.section==='clients'&&state.customerSourceFilter!=='all')list=list.filter(c=>state.customerSourceFilter==='admin'?c.signupSource==='admin':c.signupSource==='self');
-      const q=normalizeName(state.query);if(q&&!remoteReady)list=list.filter(c=>normalizeName(c.fullName).includes(q)||String(c.whatsapp||'').replace(/\D/g,'').includes(q.replace(/\D/g,'')));
+      if(searchActive)return list;
+
       const tie=(a,b,direction='asc')=>{
         const left=String(a.uid||''),right=String(b.uid||'');
         const result=left<right?-1:left>right?1:0;
@@ -1490,20 +1496,33 @@
     }
 
     function customerResultsMarkup(list) {
+      const searchTerm=state.query.trim();
+      const searchActive=searchTerm.length>=1&&state.customerSearchTerm===searchTerm&&Array.isArray(state.customerSearchResults);
       if(state.customersLoading&&!state.customersLoaded)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando clientes…</strong><p>Preparando tu comunidad.</p></div>`;
-      if(state.customerSearchLoading&&state.query.trim().length>=2&&!list.length)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Buscando clientes…</strong><p>Buscando coincidencias.</p></div>`;
+      if(state.customerSearchLoading&&searchTerm.length>=1&&!list.length)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Buscando clientes…</strong><p>Buscando coincidencias.</p></div>`;
       if(list.length){
-        const sentinel=!state.query.trim()&&state.customersHasMore?'<div id="customerLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>':'';
-        return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>${sentinel}`;
+        const sentinel=searchActive&&state.customerSearchHasMore
+          ? '<div id="customerSearchLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>'
+          : (!searchTerm&&state.customersHasMore
+            ? '<div id="customerLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>' : '');
+        const loadingMore=state.customerSearchLoadingMore
+          ? '<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando más coincidencias…</strong></div>'
+          : (state.customersLoadingMore
+            ? '<div class="customer-load-sentinel" role="status" aria-label="Cargando más clientes"></div>' : '');
+        return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>${loadingMore}${sentinel}`;
       }
-      const heading=state.query?'No encontramos coincidencias':'Todavía no hay clientes';
-      const copy=state.query?'Probá con el nombre desde el comienzo o con los primeros dígitos del WhatsApp.':'Creá el primer perfil para empezar a registrar visitas y beneficios.';
-      return `<div class="empty-state"><div class="empty-icon">♙</div><strong>${heading}</strong><p>${copy}</p>${!state.query?`<button class="btn btn-primary" data-action="new-client">＋ Crear cliente</button>`:''}</div>`;
+      const heading=searchTerm?'No encontramos coincidencias':'Todavía no hay clientes';
+      const digits=searchTerm.replace(/\D/g,'');
+      const numericOnly=/^[+\d\s().-]+$/.test(searchTerm);
+      const copy=searchTerm
+        ? (numericOnly&&digits.length<3?'Ingresá al menos tres dígitos para buscar por WhatsApp.':'Probá con el nombre desde el comienzo o con los primeros dígitos del WhatsApp.')
+        : 'Creá el primer perfil para empezar a registrar visitas y beneficios.';
+      return `<div class="empty-state"><div class="empty-icon">♙</div><strong>${heading}</strong><p>${copy}</p>${!searchTerm?`<button class="btn btn-primary" data-action="new-client">＋ Crear cliente</button>`:''}</div>`;
     }
     function clientsView() {
       const list=filteredCustomers();
       const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
-      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option></select><select id="sortSelect" class="sort-select"><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="visit-order-desc" ${state.sort==='visit-order-desc'?'selected':''}>Ordenar por orden de visitas · más reciente</option><option value="last-cut-asc" ${state.sort==='last-cut-asc'?'selected':''}>Última visita: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="clients-toolbar-actions"><button type="button" class="clients-refresh-btn ${state.customersLoading?'is-busy':''}" data-action="refresh-clients" title="Actualizar lista de clientes" aria-label="Actualizar lista de clientes" ${state.customersLoading||Date.now()<Number(state.clientsRefreshUntil||0)?'disabled':'' }><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" aria-hidden="true">${Date.now()<Number(state.clientsRefreshUntil||0)?Math.max(1,Math.ceil((state.clientsRefreshUntil-Date.now())/1000)):''}</span></button></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
+      return `${sectionHeading('TU COMUNIDAD','Clientes','Perfiles activos, visitas y beneficios de fidelización.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><select id="customerSourceFilter" class="sort-select"><option value="all" ${state.customerSourceFilter==='all'?'selected':''}>Todos los orígenes</option><option value="admin" ${state.customerSourceFilter==='admin'?'selected':''}>Creados por vos</option><option value="self" ${state.customerSourceFilter==='self'?'selected':''}>Registro directo</option></select><select id="sortSelect" class="sort-select" ${state.query.trim().length>=1?'disabled title="La búsqueda se ordena por coincidencia de nombre o WhatsApp."':''}><option value="cuts-desc" ${state.sort==='cuts-desc'?'selected':''}>Más visitas totales</option><option value="cuts-asc" ${state.sort==='cuts-asc'?'selected':''}>Menos visitas totales</option><option value="visit-order-desc" ${state.sort==='visit-order-desc'?'selected':''}>Ordenar por orden de visitas · más reciente</option><option value="last-cut-asc" ${state.sort==='last-cut-asc'?'selected':''}>Última visita: más antigua</option><option value="name-asc" ${state.sort==='name-asc'?'selected':''}>Nombre: A–Z</option></select><span class="clients-toolbar-actions"><button type="button" class="clients-refresh-btn ${state.customersLoading?'is-busy':''}" data-action="refresh-clients" title="Actualizar lista de clientes" aria-label="Actualizar lista de clientes" ${state.customersLoading||Date.now()<Number(state.clientsRefreshUntil||0)?'disabled':'' }><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" aria-hidden="true">${Date.now()<Number(state.clientsRefreshUntil||0)?Math.max(1,Math.ceil((state.clientsRefreshUntil-Date.now())/1000)):''}</span></button></span></div><div id="customerResults">${customerResultsMarkup(list,false)}</div>`;
     }
 
     function renderSettings() {
@@ -1591,19 +1610,33 @@
 
     function observeCustomersPagination(){
       if(customersPaginationObserver){customersPaginationObserver.disconnect();customersPaginationObserver=null;}
-      if(state.role!=='barber'||state.section!=='clients'||state.query.trim()||!state.customersHasMore||!$('#customerLoadSentinel'))return;
-      const sentinel=$('#customerLoadSentinel');
+      if(state.role!=='barber'||state.section!=='clients')return;
+      const searchTerm=state.query.trim();
+      const searchActive=searchTerm.length>=1&&state.customerSearchTerm===searchTerm&&Array.isArray(state.customerSearchResults);
+      const sentinel=searchActive?$('#customerSearchLoadSentinel'):(!searchTerm?$('#customerLoadSentinel'):null);
+      const canLoad=searchActive
+        ? state.customerSearchHasMore&&!state.customerSearchLoadingMore&&!state.customerSearchLoading
+        : !searchTerm&&state.customersHasMore&&!state.customersLoadingMore&&!state.customersLoading;
+      if(!canLoad||!sentinel)return;
+      const loadNext=()=>searchActive?void loadMoreCustomerSearch():void loadMoreAdminCustomers();
       if('IntersectionObserver' in window){
         customersPaginationObserver=new IntersectionObserver(entries=>{
-          if(entries.some(entry=>entry.isIntersecting))void loadMoreAdminCustomers();
+          if(entries.some(entry=>entry.isIntersecting))loadNext();
         },{rootMargin:'420px 0px'});
         customersPaginationObserver.observe(sentinel);
       }else if(!customerScrollFallbackBound){
         customerScrollFallbackBound=true;
         window.addEventListener('scroll',()=>{
-          if(state.role!=='barber'||state.section!=='clients'||state.query.trim()||!state.customersHasMore||state.customersLoadingMore)return;
-          const target=$('#customerLoadSentinel');
-          if(target&&target.getBoundingClientRect().top<window.innerHeight+420)void loadMoreAdminCustomers();
+          if(state.role!=='barber'||state.section!=='clients')return;
+          const currentTerm=state.query.trim();
+          const currentSearch=currentTerm.length>=1&&state.customerSearchTerm===currentTerm&&Array.isArray(state.customerSearchResults);
+          const target=currentSearch?$('#customerSearchLoadSentinel'):(!currentTerm?$('#customerLoadSentinel'):null);
+          const eligible=currentSearch
+            ? state.customerSearchHasMore&&!state.customerSearchLoadingMore&&!state.customerSearchLoading
+            : !currentTerm&&state.customersHasMore&&!state.customersLoadingMore&&!state.customersLoading;
+          if(eligible&&target&&target.getBoundingClientRect().top<window.innerHeight+420){
+            if(currentSearch)void loadMoreCustomerSearch();else void loadMoreAdminCustomers();
+          }
         },{passive:true});
       }
     }
@@ -1822,18 +1855,75 @@
       }
     }
 
+    async function loadMoreCustomerSearch(){
+      const searchTerm=state.query.trim();
+      if(state.role!=='barber'||state.section!=='clients'||!searchTerm
+        ||state.customerSearchTerm!==searchTerm||!state.customerSearchHasMore
+        ||!state.customerSearchCursorId||state.customerSearchLoadingMore)return;
+      const accountUid=state.user?.uid||'';
+      const barberUid=state.barberUid||'';
+      const searchSeq=state.customerSearchSeq;
+      customersPaginationObserver?.disconnect();customersPaginationObserver=null;
+      state.customerSearchLoadingMore=true;
+      let loaded=false;
+      try{
+        const page=await api('/api/customers/search',{method:'POST',body:{
+          search:searchTerm,source:state.customerSourceFilter,
+          cursorId:state.customerSearchCursorId,cursorValue:state.customerSearchCursorValue
+        }});
+        if(state.role!=='barber'||state.section!=='clients'||state.user?.uid!==accountUid
+          ||state.barberUid!==barberUid||state.query.trim()!==searchTerm
+          ||state.customerSearchSeq!==searchSeq||state.customerSearchTerm!==searchTerm)return;
+        const seen=new Set(state.customerSearchResults.map(customer=>customer.uid));
+        const next=(Array.isArray(page.customers)?page.customers:[]).filter(customer=>!seen.has(customer.uid));
+        state.customerSearchResults=[...state.customerSearchResults,...next];
+        state.customerSearchHasMore=page.hasMore===true;
+        state.customerSearchCursorId=String(page.cursorId||state.customerSearchCursorId);
+        state.customerSearchCursorValue=page.cursorValue??state.customerSearchCursorValue;
+        loaded=true;
+      }catch(error){
+        if(state.user?.uid===accountUid&&state.barberUid===barberUid
+          &&state.query.trim()===searchTerm&&state.customerSearchSeq===searchSeq){
+          state.customerSearchHasMore=false;
+          toast(userFacingError(error,'No se pudieron cargar más coincidencias. Revisá la conexión e intentá de nuevo.'),'error');
+        }
+      }finally{
+        state.customerSearchLoadingMore=false;
+        if(loaded&&state.section==='clients'&&state.user?.uid===accountUid&&state.barberUid===barberUid
+          &&state.query.trim()===searchTerm&&state.customerSearchSeq===searchSeq)renderApp();
+        else if(state.section==='clients')observeCustomersPagination();
+      }
+    }
+
     async function runCustomerSearch(term,target='clients'){
       const clean=String(term||'').trim();
       const isCut=target==='cut';
+      const numericOnly=/^[+\d\s().-]+$/.test(clean);
+      const digits=clean.replace(/\D/g,'');
+      const isTooShort=!clean||(numericOnly&&digits.length<3)||(isCut&&clean.length<2);
       const seq=isCut?++state.cutSearchSeq:++state.customerSearchSeq;
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
-      if(clean.length<2||(isCut&&/^[+\d\s().-]+$/.test(clean)&&clean.replace(/\D/g,'').length<3)){
+      if(isTooShort){
         if(isCut){state.cutSearchResults=[];state.cutSearchTerm='';}
-        else{state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;const holder=$('#customerResults');if(holder)holder.innerHTML=customerResultsMarkup(filteredCustomers());}
+        else{
+          state.customerSearchResults=null;state.customerSearchTerm='';
+          state.customerSearchLoading=false;state.customerSearchLoadingMore=false;
+          state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;
+          const holder=$('#customerResults');if(holder)holder.innerHTML=customerResultsMarkup(filteredCustomers());
+          observeCustomersPagination();
+        }
         return [];
       }
-      if(!isCut){state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm=clean;}
+      if(!isCut){
+        state.customerSearchLoading=true;
+        state.customerSearchLoadingMore=false;
+        state.customerSearchResults=[];
+        state.customerSearchTerm=clean;
+        state.customerSearchHasMore=false;
+        state.customerSearchCursorId='';
+        state.customerSearchCursorValue=null;
+      }
       try{
         const result=await api('/api/customers/search',{method:'POST',body:{search:clean,source:isCut?'all':state.customerSourceFilter}});
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return [];
@@ -1848,11 +1938,17 @@
         if(seq!==state.customerSearchSeq||state.query.trim()!==clean)return [];
         state.customerSearchResults=Array.isArray(result.customers)?result.customers:[];
         state.customerSearchTerm=clean;
+        state.customerSearchHasMore=result.hasMore===true;
+        state.customerSearchCursorId=String(result.cursorId||'');
+        state.customerSearchCursorValue=result.cursorValue??null;
         return state.customerSearchResults;
       }catch(error){
-        if(isCut){const holder=$('.cut-picker-list',modalRoot);if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';}
-        else if(seq===state.customerSearchSeq&&state.query.trim()===clean){
+        if(isCut){
+          const holder=$('.cut-picker-list',modalRoot);
+          if(holder&&$('#cutSearch',modalRoot))holder.innerHTML='<div class="empty-state"><strong>No se pudo buscar</strong><p>Revisá la conexión e intentá nuevamente.</p></div>';
+        }else if(seq===state.customerSearchSeq&&state.query.trim()===clean){
           state.customerSearchResults=[];state.customerSearchTerm=clean;
+          state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;
           toast(userFacingError(error,'No se pudo buscar clientes.'),'error');
         }
         return [];
@@ -1861,6 +1957,7 @@
           state.customerSearchLoading=false;
           const holder=$('#customerResults');
           if(holder&&state.section==='clients')holder.innerHTML=customerResultsMarkup(filteredCustomers());
+          observeCustomersPagination();
         }
       }
     }
@@ -1869,7 +1966,7 @@
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false;state.customersLoadingMore=false;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersRosterVersion=0;state.customersRosterData=null;state.customersRosterNeedsReload=false;state.customerSearchResults=null;state.customerSearchTerm='';state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.customers=[]; state.customersLoaded=false; state.customersLoading=false;state.customersLoadingMore=false;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersRosterVersion=0;state.customersRosterData=null;state.customersRosterNeedsReload=false;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
@@ -2520,15 +2617,26 @@
         state.customerSearchSeq++;
         if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);
         const term=String(state.query||'').trim();
-        if(term.length>=2){
-          state.customerSearchLoading=true;state.customerSearchResults=[];state.customerSearchTerm='';
-          const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup([]);
+        const numericOnly=/^[+\d\s().-]+$/.test(term);
+        const digits=term.replace(/\D/g,'');
+        const shouldSearch=term.length>=1&&!(numericOnly&&digits.length<3);
+        state.customerSearchResults=shouldSearch?[]:null;
+        state.customerSearchTerm='';
+        state.customerSearchLoading=shouldSearch;
+        state.customerSearchLoadingMore=false;
+        state.customerSearchHasMore=false;
+        state.customerSearchCursorId='';
+        state.customerSearchCursorValue=null;
+        const results=$('#customerResults');
+        if(shouldSearch){
+          if(results)results.innerHTML=customerResultsMarkup([]);
           state.customerSearchTimer=setTimeout(()=>{void runCustomerSearch(term,'clients');},350);
         }else{
-          state.customerSearchLoading=false;state.customerSearchResults=null;state.customerSearchTerm='';
-          const list=filteredCustomers();const results=$('#customerResults');if(results)results.innerHTML=customerResultsMarkup(list);
-
+          if(results)results.innerHTML=customerResultsMarkup(filteredCustomers());
+          observeCustomersPagination();
         }
+        const sort=$('#sortSelect');
+        if(sort)sort.disabled=term.length>=1;
       }
       else if(['settingDisplayName','settingWhatsapp','settingInstagram','settingMaps'].includes(target.id)||target.matches('[data-schedule-enabled], [data-day-mode], [data-start1], [data-end1], [data-start2], [data-end2]')){const root=target.closest('#profileEditForm')||modalRoot;const bar=$('.profile-progress span',root);const pct=profileCompletion({...state.barber,displayName:$('#settingDisplayName',root)?.value,whatsapp:argentinaLocalNumber($('#settingWhatsapp',root)?.value),instagramUsername:$('#settingInstagram',root)?.value,mapsUrl:$('#settingMaps',root)?.value,schedule:collectSchedule(root)});const pctLabel=$('.profile-completion > strong',root);if(bar)bar.style.width=pct+'%';if(pctLabel)pctLabel.textContent=pct+'%';}
     });

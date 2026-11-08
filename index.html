@@ -1770,6 +1770,45 @@
     }
     function saveAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.setItem(adminCustomersRetryKey(),JSON.stringify({retryAfter:state.customersRetryAfter,failures:state.customersLoadFailures}));}catch(_){}}
     function clearAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
+    function directoryRosterChangesRequireReload(changes){
+      const relevantSortField=state.sort==='cuts-desc'||state.sort==='cuts-asc'
+        ? 'totalCuts' : 'lastCutAt';
+      const currentById=new Map(state.customers.map(customer=>[customer.uid,customer]));
+      return (Array.isArray(changes)?changes:[]).some(event=>{
+        const action=String(event?.action||'updated');
+        if(['created','disabled','deleted'].includes(action)||event?.customer?.active===false)return true;
+        const fields=Array.isArray(event?.changedFields)?event.changedFields:null;
+        if(fields){
+          return fields.includes('active')||fields.includes('signupSource')||fields.includes(relevantSortField);
+        }
+        const previous=currentById.get(String(event?.customerId||event?.customer?.uid||''));
+        const next=event?.customer;
+        if(!previous||!next)return true;
+        return previous.active!==next.active
+          ||previous.signupSource!==next.signupSource
+          ||Number(previous.totalCuts||0)!==Number(next.totalCuts||0)
+          ||String(previous.lastCutAt||'')!==String(next.lastCutAt||'');
+      });
+    }
+
+    function invalidateCustomerDirectoryPages(){
+      clearAllAdminCustomersCaches();
+      state.customersLoadSeq++;
+      state.customersLoadPromise=null;
+      state.customersLoadQueryKey='';
+      state.customersLoading=false;
+      state.customersLoadingMore=false;
+      state.customers=[];
+      state.customersLoaded=false;
+      state.customersHasMore=false;
+      state.customersCursorId='';
+      state.customersCursorValue=null;
+      state.customersFirstPageCursorId='';
+      state.customersFirstPageCursorValue=null;
+      state.customersQueryKey='';
+      state.customersCacheSavedAt=0;
+    }
+
     async function applyCustomerRosterSnapshot(snapshot){
       if(state.role!=='barber'||state.barberUid!==state.user?.uid||!snapshot?.exists())return;
       const roster=snapshot.data()||{};
@@ -1783,11 +1822,11 @@
       const activeListSearch=state.section==='clients'&&activeQuery.length>=1
         &&!(activeNumericSearch&&activeQuery.replace(/\D/g,'').length<3)?activeQuery:'';
       const activeCutSearch=$('#cutSearch',modalRoot)?.value?.trim()||'';
+      let reloadDirectory=delta.requiresReload;
 
       if(changed){
-        // Repeated lookups may now have different results after any roster event,
-        // even when the complete directory page has not yet been loaded.
         api.clearCustomerSearchCache?.();
+        clearAllAdminCustomersCaches();
         state.customerSearchSeq++;
         state.cutSearchSeq++;
         state.customerSearchResults=null;
@@ -1800,16 +1839,25 @@
         state.cutSearchResults=[];
         state.cutSearchTerm='';
 
-        if(delta.requiresReload)state.customersRosterNeedsReload=true;
-        else if(delta.changes.length&&state.customersLoaded){
-          const previousById=new Map(state.customers.map(c=>[c.uid,c]));
+        if(!reloadDirectory&&delta.changes.length){
+          reloadDirectory=directoryRosterChangesRequireReload(delta.changes);
+        }
+        if(reloadDirectory){
+          state.customersRosterNeedsReload=true;
+          invalidateCustomerDirectoryPages();
+        }else if(delta.changes.length&&state.customersLoaded){
           state.customers=applyCustomerRosterChanges(state.customers,delta.changes)
-            .filter(customer=>customer&&customer.active!==false&&(state.customerSourceFilter==='all'||customer.signupSource===state.customerSourceFilter));
+            .filter(customer=>customer&&customer.active!==false
+              &&(state.customerSourceFilter==='all'||customer.signupSource===state.customerSourceFilter));
+          state.customersRosterNeedsReload=false;
           saveAdminCustomersCache();
         }
 
         if(state.section==='clients'){
-          if(activeListSearch){state.customerSearchLoading=true;state.customerSearchTerm=activeListSearch;}
+          if(activeListSearch){
+            state.customerSearchLoading=true;
+            state.customerSearchTerm=activeListSearch;
+          }
           renderApp();
           if(activeListSearch)void runCustomerSearch(activeListSearch,'clients');
         }
@@ -1824,8 +1872,10 @@
       }
 
       state.customersRosterVersion=version;
-      if(state.customersRosterNeedsReload&&state.section==='clients'&&!state.customersLoading){
-        void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>showErrorOnce('customer-roster-resync','No se pudo actualizar la lista de clientes. Seguimos mostrando la última copia disponible.',error));
+      if(state.customersRosterNeedsReload&&state.section==='clients'&&!activeListSearch&&!state.customersLoading){
+        void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+          showErrorOnce('customer-roster-resync','No se pudo actualizar la lista de clientes. Seguimos mostrando la última copia disponible.',error)
+        );
       }
     }
     async function ensureAdminCustomersLoaded({force=false,reset=false}={}){

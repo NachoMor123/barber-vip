@@ -213,7 +213,11 @@ test("customer directory queries only active records and caps each page", () => 
   assert.match(list, /customerDirectoryFilters\(ref, source\)/);
   assert.match(list, /limit\(pageSize\)/);
   assert.match(list, /Math\.min\(100, Number\(data\.pageSize\) \|\| 50\)/);
-  assert.match(list, /getCountFromServer/);
+  assert.doesNotMatch(list, /getCountFromServer|includeCount/);
+  assert.doesNotMatch(api, /getCountFromServer/);
+  assert.match(html, /function observeCustomersPagination/);
+  assert.doesNotMatch(html, /clientes cargados|Total de clientes|25\+ resultados/);
+  assert.doesNotMatch(html, /\.result-count/);
   assert.match(api, /where\('active', '==', true\)/);
   assert.match(html, /ADMIN_CUSTOMERS_PAGE_SIZE=50/);
   assert.match(html, /loadMoreAdminCustomers/);
@@ -295,12 +299,25 @@ test("customer detail keeps standard and custom rewards isolated by customer", (
   assert.doesNotMatch(update, /totalCuts|actualCutsRegistered|cycleCuts|cycleVersion|availableRewards|rewardReady/);
 });
 
-test("customer local state and cache are scoped to the authenticated identity", () => {
-  assert.match(html, /barberVipAdminCustomers:v2:/);
-  assert.match(html, /state\.user\?\.uid/);
-  assert.match(html, /cleanupContext\(\)/);
+test("customer local cache is versioned and cannot restore another barber or browser account", () => {
+  assert.match(html, /barberVipAdminCustomers:v3:/);
+  assert.match(html, /ownerUid:state\.user\.uid/);
+  assert.match(html, /barberUid:state\.barberUid/);
+  assert.match(html, /cached\?\.ownerUid!==state\.user\.uid/);
+  assert.match(html, /cached\?\.barberUid!==state\.barberUid/);
+  assert.match(html, /api\.resetSessionCache\?\.\(\)/);
   assert.match(html, /browserLocalPersistence/);
-  assert.match(html, /state\.customersTotalCount/);
+  assert.doesNotMatch(html, /customersTotalCount/);
+});
+
+test("directory pages are server-sorted and local updates preserve Firestore tie-break order", () => {
+  const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
+  const filtered = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(list, /orderBy\(sort\.field, sort\.direction\)/);
+  assert.match(list, /orderBy\(documentId\(\), sort\.direction\)/);
+  assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);
+  assert.match(filtered, /tie\(a,b,'desc'\)/);
+  assert.match(filtered, /tie\(a,b,'asc'\)/);
 });
 
 test("service worker and release package contain the customer roster module and Firestore indexes", () => {

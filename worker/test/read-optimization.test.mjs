@@ -75,7 +75,8 @@ test("customer directory loads one bounded page on demand and deduplicates reque
   const apiList = functionBody(api, "async function listCustomers", "async function searchCustomers");
   assert.match(apiList, /limit\(pageSize\)/);
   assert.match(apiList, /startAfter\(/);
-  assert.match(apiList, /getCountFromServer/);
+  assert.doesNotMatch(apiList, /getCountFromServer|includeCount/);
+  assert.doesNotMatch(api, /getCountFromServer/);
 
   const cutModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
   assert.doesNotMatch(cutModal, /ensureAdminCustomersLoaded|collection\(state\.db/);

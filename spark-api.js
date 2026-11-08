@@ -474,11 +474,21 @@ export function createSparkApi({ firebaseConfig, state }) {
         loginEmail, whatsapp, signupSource: 'admin',
         cutStyle: data.cutStyle, conversationPreference: data.conversationPreference, loyaltyOverride: override
       });
-      const batch = writeBatch(db());
-      batch.set(doc(db(), 'barbers', uid, 'customers', credential.user.uid), customer);
-      batch.set(doc(db(), 'userProfiles', credential.user.uid), { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
-      batch.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
-      await batch.commit();
+      const customerRef = doc(db(), 'barbers', uid, 'customers', credential.user.uid);
+      const profileRef = doc(db(), 'userProfiles', credential.user.uid);
+      const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+      const rosterCustomer = { ...customer, createdAt: new Date(), updatedAt: new Date() };
+      await runTransaction(db(), async transaction => {
+        const rosterSnap = await transaction.get(rosterRef);
+        const nextRoster = appendCustomerRosterChange(
+          rosterSnap.exists() ? rosterSnap.data() : null,
+          'created', rosterCustomer, new Date()
+        );
+        transaction.set(customerRef, customer);
+        transaction.set(profileRef, { uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp() });
+        transaction.set(lookupRef, { uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp() });
+        transaction.set(rosterRef, nextRoster);
+      });
       clearCustomerSearchCache();
       return { ok: true, customer: { ...customer, createdAt: new Date().toISOString() } };
     } catch (error) {
@@ -525,21 +535,37 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (data.loyaltyMode !== undefined) {
       updates.loyaltyOverride = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, state.barber || {});
     }
-    const batch = writeBatch(db());
-    batch.update(customerRef, updates);
-    if (newNormalized !== (existing.usernameNormalized || normalizeName(existing.fullName))) {
-      const oldId = await loginLookupId(uid, existing.usernameNormalized || normalizeName(existing.fullName));
+    const oldNormalized = existing.usernameNormalized || normalizeName(existing.fullName);
+    let oldLookupRef = null, newLookupRef = null;
+    if (newNormalized !== oldNormalized) {
+      const oldId = await loginLookupId(uid, oldNormalized);
       const newId = await loginLookupId(uid, newNormalized);
-      const newNameIndex = await getDoc(doc(db(), 'customerLoginLookup', newId));
+      newLookupRef = doc(db(), 'customerLoginLookup', newId);
+      const newNameIndex = await getDoc(newLookupRef);
       if (newNameIndex.exists() && newNameIndex.data().active !== false && newNameIndex.data().uid !== id) {
         throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
       }
-      batch.delete(doc(db(), 'customerLoginLookup', oldId));
-      batch.set(doc(db(), 'customerLoginLookup', newId), {
-        uid: id, barberUid: uid, email: existing.loginEmail, active: existing.active !== false, updatedAt: serverTimestamp()
-      });
+      oldLookupRef = doc(db(), 'customerLoginLookup', oldId);
     }
-    await batch.commit();
+
+    const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+    const rosterCustomer = { ...existing, ...updates, uid: id, updatedAt: new Date() };
+    await runTransaction(db(), async transaction => {
+      const rosterSnap = await transaction.get(rosterRef);
+      const nextRoster = appendCustomerRosterChange(
+        rosterSnap.exists() ? rosterSnap.data() : null,
+        'updated', rosterCustomer, new Date()
+      );
+      transaction.update(customerRef, updates);
+      if (oldLookupRef && newLookupRef) {
+        transaction.delete(oldLookupRef);
+        transaction.set(newLookupRef, {
+          uid: id, barberUid: uid, email: existing.loginEmail,
+          active: existing.active !== false, updatedAt: serverTimestamp()
+        });
+      }
+      transaction.set(rosterRef, nextRoster);
+    });
     clearCustomerSearchCache();
     return { ok: true, customer: { ...existing, ...updates, updatedAt: new Date().toISOString() } };
   }
@@ -552,16 +578,29 @@ export function createSparkApi({ firebaseConfig, state }) {
     const existing = state.customers?.find(c => c.uid === id) || (await getDoc(customerRef)).data();
     if (!existing) throw fail('No se encontró ese cliente.', 404);
     const normalized = existing.usernameNormalized || normalizeName(existing.fullName);
-    const batch = writeBatch(db());
-    batch.update(customerRef, {
-      active: false, disabledAt: serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: serverTimestamp()
+    const profileRef = doc(db(), 'userProfiles', id);
+    const rosterRef = doc(db(), 'barbers', uid, 'customerRoster', 'state');
+    const loginRef = normalized ? doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized)) : null;
+    const disabledAt = new Date();
+    const disabledCustomer = {
+      ...existing, uid: id, active: false, disabledAt,
+      usernameNormalized: null, whatsapp: '', updatedAt: disabledAt
+    };
+    await runTransaction(db(), async transaction => {
+      const rosterSnap = await transaction.get(rosterRef);
+      const nextRoster = appendCustomerRosterChange(
+        rosterSnap.exists() ? rosterSnap.data() : null,
+        'disabled', disabledCustomer, disabledAt
+      );
+      transaction.update(customerRef, {
+        active: false, disabledAt: serverTimestamp(), usernameNormalized: null, whatsapp: '', updatedAt: serverTimestamp()
+      });
+      transaction.set(profileRef, { disabled: true, updatedAt: serverTimestamp() }, { merge: true });
+      if (loginRef) transaction.set(loginRef, {
+        uid: id, barberUid: uid, email: existing.loginEmail || '', active: false, updatedAt: serverTimestamp()
+      }, { merge: true });
+      transaction.set(rosterRef, nextRoster);
     });
-    batch.set(doc(db(), 'userProfiles', id), { disabled: true, updatedAt: serverTimestamp() }, { merge: true });
-    if (normalized) {
-      const loginId = await loginLookupId(uid, normalized);
-      batch.set(doc(db(), 'customerLoginLookup', loginId), { uid: id, barberUid: uid, email: existing?.loginEmail || '', active: false, updatedAt: serverTimestamp() }, { merge: true });
-    }
-    await batch.commit();
     clearCustomerSearchCache();
     return { ok: true };
   }

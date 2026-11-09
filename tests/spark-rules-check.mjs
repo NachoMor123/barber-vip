@@ -95,7 +95,8 @@ try {
     totalCuts: 99, updatedAt: serverTimestamp()
   }));
   await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid, 'customers', customerUid), {
-    totalCuts: 1, actualCutsRegistered: 1, cycleCuts: 1, cycleVersion: 2, updatedAt: serverTimestamp()
+    totalCuts: 1, actualCutsRegistered: 1, cycleCuts: 1, cycleVersion: 2,
+    lastCutOperationId: 'visit-operation-test-001', updatedAt: serverTimestamp()
   }));
   console.log('PASS: customer cannot forge visits; barber can register visits');
 

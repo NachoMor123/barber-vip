@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v77-scroll-pagination-spinner';
+const CACHE_NAME = 'barber-vip-shell-v78-pagination-spinner-2500ms';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

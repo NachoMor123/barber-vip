@@ -1778,11 +1778,18 @@
       try{await promise;}finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid)state.customersLoading=false;}
     }
 
+    const CUSTOMER_PAGINATION_INDICATOR_MIN_MS=2500;
+    function keepCustomerPaginationIndicatorVisible(startedAt){
+      const remaining=CUSTOMER_PAGINATION_INDICATOR_MIN_MS-(Date.now()-startedAt);
+      return remaining>0?new Promise(resolve=>setTimeout(resolve,remaining)):Promise.resolve();
+    }
+
     async function loadMoreAdminCustomers(){
       const key=customerDirectoryQueryKey();
       if(state.role!=='barber'||state.customersLoadingMore||!state.customersLoaded||state.customersQueryKey!==key
         ||!state.customersHasMore||!state.customersCursorId||state.query.trim())return;
       const accountUid=state.user?.uid||'',barberUid=state.barberUid,requestSeq=state.customersLoadSeq;
+      const indicatorStartedAt=Date.now();
       customersPaginationObserver?.disconnect();customersPaginationObserver=null;state.customersLoadingMore=true;renderApp();
       try{
         const page=await api('/api/customers/list',{method:'POST',body:{pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE,cursorId:state.customersCursorId,cursorValue:state.customersCursorValue}});
@@ -1797,6 +1804,7 @@
           state.customersHasMore=false;toast(userFacingError(error,'No se pudieron actualizar más clientes. Revisá la conexión e intentá de nuevo.'),'error');
         }
       }finally{
+        await keepCustomerPaginationIndicatorVisible(indicatorStartedAt);
         if(state.customersLoadSeq===requestSeq&&state.user?.uid===accountUid&&state.barberUid===barberUid){
           state.customersLoadingMore=false;if(state.section==='clients')renderApp();else observeCustomersPagination();
         }
@@ -1811,6 +1819,7 @@
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
       const searchSeq=state.customerSearchSeq;
+      const indicatorStartedAt=Date.now();
       customersPaginationObserver?.disconnect();customersPaginationObserver=null;
       state.customerSearchLoadingMore=true;
       renderApp();
@@ -1836,10 +1845,11 @@
           toast(userFacingError(error,'No se pudieron cargar más coincidencias. Revisá la conexión e intentá de nuevo.'),'error');
         }
       }finally{
-        state.customerSearchLoadingMore=false;
+        await keepCustomerPaginationIndicatorVisible(indicatorStartedAt);
         if(state.section==='clients'&&state.role==='barber'&&state.user?.uid===accountUid&&state.barberUid===barberUid
-          &&state.query.trim()===searchTerm&&state.customerSearchSeq===searchSeq)renderApp();
-        else if(state.section==='clients')observeCustomersPagination();
+          &&state.query.trim()===searchTerm&&state.customerSearchSeq===searchSeq){
+          state.customerSearchLoadingMore=false;renderApp();
+        }else if(state.section==='clients')observeCustomersPagination();
       }
     }
 

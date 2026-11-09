@@ -186,7 +186,7 @@ test("create, edit and disable increment the revision inside the same Firestore 
 test("a visit updates the loaded directory locally without a redundant first-page read", () => {
   const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
   const ui = functionBody(html, "async function addCut(id, button)", "function contactClient");
-  const localUpdate = functionBody(html, "function applyCustomerVisitToDirectory", "function adminCustomersCacheKey");
+  const localUpdate = functionBody(html, "function applyCustomerVisitToDirectory", "function saveAdminCustomersCache");
   assert.match(visit, /transaction\.get\(customerRef\)/);
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /lastCutAt: now/);

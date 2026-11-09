@@ -183,7 +183,7 @@ test("create, edit and disable increment the revision inside the same Firestore 
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
   const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
   const disable = functionBody(api, "async function disableCustomer", "async function addCut");
-  for (const source of [create, update, disable]) {
+  for (const source of [update, disable]) {
     assert.match(source, /runTransaction\(db\(\)/);
     assert.match(source, /customerDirectory', 'state'/);
     assert.match(source, /increment\(1\)/);

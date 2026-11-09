@@ -212,6 +212,18 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /customerPhoneIndex/{phoneId} {
+        // Private phone uniqueness locks; only the owning professional can read them.
+        allow get: if isOwner(barberId);
+        allow list: if false;
+        allow create, update: if isOwner(barberId)
+          && request.resource.data.uid is string
+          && request.resource.data.barberUid == barberId
+          && request.resource.data.active is bool
+          && customerExistsAfter(barberId, request.resource.data.uid);
+        allow delete: if false;
+      }
+
       match /customerDirectory/{metaId} {
         // Private revision marker only. It contains no customer records.
         allow get: if metaId == 'state' && isOwner(barberId);

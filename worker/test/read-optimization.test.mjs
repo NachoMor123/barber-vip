@@ -89,11 +89,11 @@ test("the first directory page is 15 records, subsequent cursor pages are eight"
 test("scroll pagination shows a visible circular loader and removes redundant manual refresh", () => {
   const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
-  assert.match(markup, /customer-load-more-indicator/);
-  assert.match(markup, /state\\.customerSearchLoadingMore\\|\\|state\\.customersLoadingMore/);
-  assert.match(markup, /loading-spinner/);
-  assert.match(markup, /Cargando más coincidencias/);
-  assert.match(markup, /Cargando más clientes/);
+  assert.ok(markup.includes("customer-load-more-indicator"));
+  assert.ok(markup.includes("state.customerSearchLoadingMore||state.customersLoadingMore"));
+  assert.ok(markup.includes("loading-spinner"));
+  assert.ok(markup.includes("Cargando más coincidencias"));
+  assert.ok(markup.includes("Cargando más clientes"));
   assert.doesNotMatch(clients, /clients-refresh|refresh-clients/);
   assert.doesNotMatch(html, /clientsRefreshUntil|clientsRefreshCooldownTimer|startClientsRefreshCooldown|updateClientsRefreshControl|syncCustomerDirectory|clients-refresh-btn/);
 });
@@ -147,18 +147,18 @@ test("search and visit picker never read the full client collection", () => {
 test("the directory revision is watched only while Clients or quick visit search is open", () => {
   const listener = functionBody(html, "function startAdminCustomersListener()", "function markCustomerDirectoryChanged");
   const load = functionBody(html, "async function loadContext(me)", "async function resumeSession");
-  assert.match(listener, /onSnapshot\\(directoryRef/);
-  assert.match(listener, /remoteVersion/);
-  assert.match(listener, /api\\.clearCustomerSearchCache/);
-  assert.match(listener, /document\\.visibilityState/);
-  assert.match(listener, /isAdminCustomerDirectorySurfaceOpen/);
+  assert.ok(listener.includes("onSnapshot(directoryRef"));
+  assert.ok(listener.includes("remoteVersion"));
+  assert.ok(listener.includes("api.clearCustomerSearchCache"));
+  assert.ok(listener.includes("document.visibilityState"));
+  assert.ok(listener.includes("isAdminCustomerDirectorySurfaceOpen"));
   assert.doesNotMatch(listener, /onSnapshot\\(collection\\(.*customers/);
-  assert.match(load, /startAdminCustomersListener\\(\\)/);
+  assert.ok(load.includes("startAdminCustomersListener()"));
   assert.doesNotMatch(load, /onSnapshot\\(rosterRef/);
   assert.doesNotMatch(api, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(worker, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(rules, /customerRoster/);
-  assert.match(rules, /match \\/customerDirectory/);
+  assert.ok(rules.includes("match /customerDirectory"));
 });
 test("create, edit and disable increment the revision inside the same Firestore transaction", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");

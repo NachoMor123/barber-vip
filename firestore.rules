@@ -195,7 +195,7 @@ service cloud.firestore {
             'conversationPreference', 'loyaltyOverride',
             'totalCuts', 'actualCutsRegistered', 'cycleCuts', 'cycleVersion',
             'cyclePausedAtMax', 'availableRewards', 'rewardReady',
-            'lastCutAt', 'lastRewardAppliedLabel', 'lastRewardAppliedAt',
+            'lastCutAt', 'lastCutOperationId', 'lastRewardAppliedLabel', 'lastRewardAppliedAt',
             'lastRewardAppliedCut', 'lastRewardAppliedOnFinalMilestone',
             'active', 'disabledAt', 'updatedAt'
           ]);

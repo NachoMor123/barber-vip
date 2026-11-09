@@ -127,8 +127,8 @@ async function hashHex(value) {
 async function loginLookupId(barberUid, normalizedName) {
   return String(barberUid) + '_' + await hashHex(normalizedName);
 }
-async function phoneLookupId(barberUid, whatsapp) {
-  return String(barberUid) + '_phone_' + await hashHex(normalizePhone(whatsapp));
+async function phoneLookupId(whatsapp) {
+  return await hashHex(normalizePhone(whatsapp));
 }
 function customerDefaults({ uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, cutStyle = '', conversationPreference = '', loyaltyOverride = { mode: 'standard', rewards: [] } }) {
   return {
@@ -612,7 +612,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
 
     const lookupRef = doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized));
-    const phoneLookupRef = doc(db(), 'customerLoginLookup', await phoneLookupId(uid, whatsapp));
+    const phoneLookupRef = doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(whatsapp));
     const phoneQuery = query(
       collection(db(), 'barbers', uid, 'customers'),
       where('active', '==', true), where('whatsapp', '==', whatsapp), limit(1)
@@ -660,8 +660,8 @@ export function createSparkApi({ firebaseConfig, state }) {
           uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp()
         });
         transaction.set(phoneLookupRef, {
-          uid: credential.user.uid, barberUid: uid, email: loginEmail,
-          active: true, kind: 'phone', updatedAt: serverTimestamp()
+          uid: credential.user.uid, barberUid: uid,
+          active: true, updatedAt: serverTimestamp()
         });
         transaction.set(directoryRef, {
           version: increment(1), updatedAt: serverTimestamp()
@@ -692,7 +692,7 @@ export function createSparkApi({ firebaseConfig, state }) {
 
     const nextWhatsapp = data.whatsapp === undefined ? null : normalizePhone(data.whatsapp);
     const newPhoneLookupRef = nextWhatsapp
-      ? doc(db(), 'customerLoginLookup', await phoneLookupId(uid, nextWhatsapp))
+      ? doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(nextWhatsapp))
       : null;
     if (nextWhatsapp) {
       // Check pre-index/legacy customers before the transaction. The stable phone
@@ -733,7 +733,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (newPhoneLookupRef) newPhoneLookupSnap = await transaction.get(newPhoneLookupRef);
       let oldPhoneLookupRef = null, oldPhoneLookupSnap = null;
       if (phoneChanged && oldWhatsapp) {
-        oldPhoneLookupRef = doc(db(), 'customerLoginLookup', await phoneLookupId(uid, oldWhatsapp));
+        oldPhoneLookupRef = doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(oldWhatsapp));
         if (!newPhoneLookupRef || oldPhoneLookupRef.path !== newPhoneLookupRef.path) {
           oldPhoneLookupSnap = await transaction.get(oldPhoneLookupRef);
         }
@@ -773,14 +773,14 @@ export function createSparkApi({ firebaseConfig, state }) {
       }
       if (oldPhoneLookupRef && oldPhoneLookupSnap?.exists() && oldPhoneLookupSnap.data().uid === id) {
         transaction.set(oldPhoneLookupRef, {
-          uid: id, barberUid: uid, email: fresh.loginEmail || '',
-          active: false, kind: 'phone', updatedAt: serverTimestamp()
+          uid: id, barberUid: uid,
+          active: false, updatedAt: serverTimestamp()
         }, { merge: true });
       }
       if (newPhoneLookupRef) {
         transaction.set(newPhoneLookupRef, {
-          uid: id, barberUid: uid, email: fresh.loginEmail || '',
-          active: true, kind: 'phone', updatedAt: serverTimestamp()
+          uid: id, barberUid: uid,
+          active: true, updatedAt: serverTimestamp()
         }, { merge: true });
       }
       transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
@@ -821,7 +821,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const normalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
       const whatsapp = normalizePhone(fresh.whatsapp);
       const lookupRef = normalized ? doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized)) : null;
-      const phoneLookupRef = whatsapp ? doc(db(), 'customerLoginLookup', await phoneLookupId(uid, whatsapp)) : null;
+      const phoneLookupRef = whatsapp ? doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(whatsapp)) : null;
       const phoneLookupSnap = phoneLookupRef ? await transaction.get(phoneLookupRef) : null;
 
       transaction.update(customerRef, {
@@ -834,8 +834,8 @@ export function createSparkApi({ firebaseConfig, state }) {
       }, { merge: true });
       if (phoneLookupRef && phoneLookupSnap?.exists() && phoneLookupSnap.data().uid === id) {
         transaction.set(phoneLookupRef, {
-          uid: id, barberUid: uid, email: fresh.loginEmail || '',
-          active: false, kind: 'phone', updatedAt: serverTimestamp()
+          uid: id, barberUid: uid,
+          active: false, updatedAt: serverTimestamp()
         }, { merge: true });
       }
       transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });

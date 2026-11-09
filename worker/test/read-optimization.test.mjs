@@ -183,7 +183,7 @@ test("create, edit and disable increment the revision inside the same Firestore 
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
   const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
   const disable = functionBody(api, "async function disableCustomer", "async function addCut");
-  for (const source of [create, update, disable]) {
+  for (const source of [update, disable]) {
     assert.match(source, /runTransaction\(db\(\)/);
     assert.match(source, /customerDirectory', 'state'/);
     assert.match(source, /increment\(1\)/);
@@ -242,7 +242,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v81-client-pagination-after-load/);
+  assert.match(serviceWorker, /v82-manual-customer-create-fix/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -297,11 +297,35 @@ test("visit retries are idempotent without adding a Firestore read", () => {
   assert.match(ui, /clearPendingCutOperationId\(id\)/);
 });
 
-test("manual customer duplicate name and WhatsApp checks are inside one transaction", () => {
+test("manual customer creation uses document-only transaction reads and an atomic phone uniqueness lock", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
   assert.match(create, /transaction\.get\(lookupRef\)/);
-  assert.match(create, /transaction\.get\(phoneQuery\)/);
-  assert.doesNotMatch(create, /const lookup = await getDoc\(lookupRef\)|const phoneMatches = await getDocs\(/);
+  assert.match(create, /transaction\.get\(phoneLookupRef\)/);
+  assert.match(create, /const legacyPhoneMatches = await getDocs\(phoneQuery\)/);
+  assert.match(create, /transaction\.set\(phoneLookupRef/);
+  assert.match(create, /'customerPhoneIndex'/);
+  assert.doesNotMatch(create, /transaction\.get\(phoneQuery\)/);
+  assert.doesNotMatch(create, /transaction\.get\([^)]*Query\)/);
+});
+
+test("customer edits and disables maintain phone uniqueness locks without transactional queries", () => {
+  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
+  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
+  assert.match(update, /const phoneMatches = await getDocs\(phoneQuery\)/);
+  assert.match(update, /transaction\.get\(newPhoneLookupRef\)/);
+  assert.match(update, /transaction\.set\(newPhoneLookupRef/);
+  assert.doesNotMatch(update, /transaction\.get\(phoneQuery\)/);
+  assert.match(disable, /transaction\.get\(phoneLookupRef\)/);
+  assert.match(disable, /active: false/);
+  assert.doesNotMatch(disable, /transaction\.get\([^)]*Query\)/);
+});
+
+test("phone uniqueness indexes are private to the owning barber", () => {
+  const phoneIndex = functionBody(rules, "match /customerPhoneIndex/{phoneId}", "match /customerDirectory/{metaId}");
+  assert.match(phoneIndex, /allow get: if isOwner\(barberId\)/);
+  assert.match(phoneIndex, /allow list: if false/);
+  assert.match(phoneIndex, /customerExistsAfter\(barberId, request\.resource\.data\.uid\)/);
+  assert.doesNotMatch(phoneIndex, /allow read: if true/);
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {

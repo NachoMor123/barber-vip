@@ -127,6 +127,9 @@ async function hashHex(value) {
 async function loginLookupId(barberUid, normalizedName) {
   return String(barberUid) + '_' + await hashHex(normalizedName);
 }
+async function phoneLookupId(whatsapp) {
+  return await hashHex(normalizePhone(whatsapp));
+}
 function customerDefaults({ uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp, cutStyle = '', conversationPreference = '', loyaltyOverride = { mode: 'standard', rewards: [] } }) {
   return {
     uid, barberUid, fullName, usernameNormalized, loginEmail, whatsapp,
@@ -609,10 +612,17 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
 
     const lookupRef = doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized));
+    const phoneLookupRef = doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(whatsapp));
     const phoneQuery = query(
       collection(db(), 'barbers', uid, 'customers'),
       where('active', '==', true), where('whatsapp', '==', whatsapp), limit(1)
     );
+    // Legacy records may not have a phone index yet. Query them outside the
+    // transaction; transaction.get() in the Web SDK accepts document refs only.
+    const legacyPhoneMatches = await getDocs(phoneQuery);
+    if (!legacyPhoneMatches.empty) {
+      throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
+    }
 
     const override = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, barber);
     const loginEmail = 'cliente-' + crypto.randomUUID() + '@accounts.barbervip.app';
@@ -632,20 +642,26 @@ export function createSparkApi({ firebaseConfig, state }) {
       const profileRef = doc(db(), 'userProfiles', credential.user.uid);
       const directoryRef = doc(db(), 'barbers', uid, 'customerDirectory', 'state');
       await runTransaction(db(), async transaction => {
-        const [lookupSnap, phoneMatches] = await Promise.all([
+        const [lookupSnap, phoneLookupSnap] = await Promise.all([
           transaction.get(lookupRef),
-          transaction.get(phoneQuery)
+          transaction.get(phoneLookupRef)
         ]);
         if (lookupSnap.exists() && lookupSnap.data().active !== false) {
           throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
         }
-        if (!phoneMatches.empty) throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
+        if (phoneLookupSnap.exists() && phoneLookupSnap.data().active !== false) {
+          throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
+        }
         transaction.set(customerRef, customer);
         transaction.set(profileRef, {
           uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp()
         });
         transaction.set(lookupRef, {
           uid: credential.user.uid, barberUid: uid, email: loginEmail, active: true, updatedAt: serverTimestamp()
+        });
+        transaction.set(phoneLookupRef, {
+          uid: credential.user.uid, barberUid: uid,
+          active: true, updatedAt: serverTimestamp()
         });
         transaction.set(directoryRef, {
           version: increment(1), updatedAt: serverTimestamp()
@@ -674,6 +690,23 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
     }
 
+    const nextWhatsapp = data.whatsapp === undefined ? null : normalizePhone(data.whatsapp);
+    const newPhoneLookupRef = nextWhatsapp
+      ? doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(nextWhatsapp))
+      : null;
+    if (nextWhatsapp) {
+      // Check pre-index/legacy customers before the transaction. The stable phone
+      // document below serializes concurrent changes and prevents duplicate claims.
+      const phoneQuery = query(
+        collection(db(), 'barbers', uid, 'customers'),
+        where('active', '==', true), where('whatsapp', '==', nextWhatsapp), limit(2)
+      );
+      const phoneMatches = await getDocs(phoneQuery);
+      if (phoneMatches.docs.some(item => item.id !== id)) {
+        throw fail('Ya existe otro cliente activo con ese WhatsApp en este espacio profesional.');
+      }
+    }
+
     const updates = { updatedAt: serverTimestamp() };
     if (data.cutStyle !== undefined) updates.cutStyle = cleanText(data.cutStyle, 100);
     if (data.conversationPreference !== undefined) {
@@ -693,24 +726,17 @@ export function createSparkApi({ firebaseConfig, state }) {
       const fresh = { uid: id, ...customerSnap.data() };
       const oldNormalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
       const newNormalized = requestedName === null ? oldNormalized : normalizeName(requestedName);
-      if (requestedName !== null) {
-        updates.fullName = requestedName;
-        if (newNormalized !== oldNormalized) updates.usernameNormalized = newNormalized;
-      }
+      const oldWhatsapp = normalizePhone(fresh.whatsapp);
+      const phoneChanged = nextWhatsapp !== null && nextWhatsapp !== oldWhatsapp;
 
-      if (data.whatsapp !== undefined) {
-        const nextWhatsapp = normalizePhone(data.whatsapp);
-        if (nextWhatsapp !== normalizePhone(fresh.whatsapp)) {
-          const phoneQuery = query(
-            collection(db(), 'barbers', uid, 'customers'),
-            where('active', '==', true), where('whatsapp', '==', nextWhatsapp), limit(2)
-          );
-          const phoneMatches = await transaction.get(phoneQuery);
-          if (phoneMatches.docs.some(item => item.id !== id)) {
-            throw fail('Ya existe otro cliente activo con ese WhatsApp en este espacio profesional.');
-          }
+      let newPhoneLookupSnap = null;
+      if (newPhoneLookupRef) newPhoneLookupSnap = await transaction.get(newPhoneLookupRef);
+      let oldPhoneLookupRef = null, oldPhoneLookupSnap = null;
+      if (phoneChanged && oldWhatsapp) {
+        oldPhoneLookupRef = doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(oldWhatsapp));
+        if (!newPhoneLookupRef || oldPhoneLookupRef.path !== newPhoneLookupRef.path) {
+          oldPhoneLookupSnap = await transaction.get(oldPhoneLookupRef);
         }
-        updates.whatsapp = nextWhatsapp;
       }
 
       let oldLookupRef = null, newLookupRef = null;
@@ -723,6 +749,18 @@ export function createSparkApi({ firebaseConfig, state }) {
         }
       }
 
+      if (newPhoneLookupSnap?.exists()
+        && newPhoneLookupSnap.data().active !== false
+        && newPhoneLookupSnap.data().uid !== id) {
+        throw fail('Ya existe otro cliente activo con ese WhatsApp en este espacio profesional.');
+      }
+
+      if (requestedName !== null) {
+        updates.fullName = requestedName;
+        if (newNormalized !== oldNormalized) updates.usernameNormalized = newNormalized;
+      }
+      if (nextWhatsapp !== null) updates.whatsapp = nextWhatsapp;
+
       savedCustomer = { ...fresh, ...updates, uid: id, updatedAt: new Date() };
       transaction.update(customerRef, updates);
       if (oldLookupRef && newLookupRef) {
@@ -731,6 +769,18 @@ export function createSparkApi({ firebaseConfig, state }) {
         }, { merge: true });
         transaction.set(newLookupRef, {
           uid: id, barberUid: uid, email: fresh.loginEmail || '', active: true, updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+      if (oldPhoneLookupRef && oldPhoneLookupSnap?.exists() && oldPhoneLookupSnap.data().uid === id) {
+        transaction.set(oldPhoneLookupRef, {
+          uid: id, barberUid: uid,
+          active: false, updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+      if (newPhoneLookupRef) {
+        transaction.set(newPhoneLookupRef, {
+          uid: id, barberUid: uid,
+          active: true, updatedAt: serverTimestamp()
         }, { merge: true });
       }
       transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
@@ -769,7 +819,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       }
       const fresh = customerSnap.data();
       const normalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
+      const whatsapp = normalizePhone(fresh.whatsapp);
       const lookupRef = normalized ? doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized)) : null;
+      const phoneLookupRef = whatsapp ? doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(whatsapp)) : null;
+      const phoneLookupSnap = phoneLookupRef ? await transaction.get(phoneLookupRef) : null;
+
       transaction.update(customerRef, {
         active: false, disabledAt: serverTimestamp(), usernameNormalized: null,
         whatsapp: '', updatedAt: serverTimestamp()
@@ -778,6 +832,12 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (lookupRef) transaction.set(lookupRef, {
         uid: id, barberUid: uid, email: fresh.loginEmail || '', active: false, updatedAt: serverTimestamp()
       }, { merge: true });
+      if (phoneLookupRef && phoneLookupSnap?.exists() && phoneLookupSnap.data().uid === id) {
+        transaction.set(phoneLookupRef, {
+          uid: id, barberUid: uid,
+          active: false, updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
       transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
     });
     clearCustomerSearchCache();

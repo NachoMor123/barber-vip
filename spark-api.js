@@ -301,6 +301,11 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (barberData?.customerDirectoryFieldsMigratedAt) {
       return { ok: true, migrated: true, processed: 0, repaired: 0, cursorId: '' };
     }
+    // A suspended barber cannot update customer documents under the production rules.
+    // Avoid repeatedly scanning pages that cannot be repaired until the plan is active.
+    if (subscription(barberData).status === 'suspended') {
+      return { ok: true, migrated: false, skipped: true, processed: 0, repaired: 0, cursorId: '' };
+    }
 
     const pageSize = 150;
     const cursorId = String(barberData?.customerDirectoryFieldsMigrationCursor || '');

@@ -66,7 +66,7 @@ test("directory cache persists across logout and is scoped by both Firebase UIDs
   const logout = functionBody(html, "async function signOutAndReturn()", "function openCustomerModal");
   assert.doesNotMatch(logout, /clearAdminCustomersCache/);
   assert.match(html, /state\.customersLoadSeq/);
-  assert.match(html, /state\.customersDirectoryCheckSeq/);
+  assert.doesNotMatch(html, /customersDirectoryCheckSeq/);
 });
 
 test("the first directory page is 15 records, subsequent cursor pages are eight", () => {
@@ -83,6 +83,19 @@ test("the first directory page is 15 records, subsequent cursor pages are eight"
   assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);
   assert.doesNotMatch(list, /getCountFromServer|includeCount/);
   assert.match(html, /function observeCustomersPagination/);
+});
+
+
+test("scroll pagination shows a visible circular loader and removes redundant manual refresh", () => {
+  const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
+  const clients = functionBody(html, "function clientsView()", "function renderSettings()");
+  assert.ok(markup.includes("customer-load-more-indicator"));
+  assert.ok(markup.includes("state.customerSearchLoadingMore||state.customersLoadingMore"));
+  assert.ok(markup.includes("loading-spinner"));
+  assert.ok(markup.includes("Cargando más coincidencias"));
+  assert.ok(markup.includes("Cargando más clientes"));
+  assert.doesNotMatch(clients, /clients-refresh|refresh-clients/);
+  assert.doesNotMatch(html, /clientsRefreshUntil|clientsRefreshCooldownTimer|startClientsRefreshCooldown|updateClientsRefreshControl|syncCustomerDirectory|clients-refresh-btn/);
 });
 
 test("list order is deterministic by last visit, with never-visited customers retained", () => {
@@ -132,20 +145,21 @@ test("search and visit picker never read the full client collection", () => {
 });
 
 test("the directory revision is watched only while Clients or quick visit search is open", () => {
-  const sync = functionBody(html, "async function syncCustomerDirectory", "function adminCustomersRetryKey");
+  const listener = functionBody(html, "function startAdminCustomersListener()", "function markCustomerDirectoryChanged");
   const load = functionBody(html, "async function loadContext(me)", "async function resumeSession");
-  assert.match(sync, /getDoc\(doc\(state\.db,'barbers',barberUid,'customerDirectory','state'\)\)/);
-  assert.match(sync, /remoteVersion/);
-  assert.match(sync, /api\.clearCustomerSearchCache/);
-  assert.doesNotMatch(sync, /onSnapshot|setInterval|setTimeout/);
-  assert.match(load, /startAdminCustomersListener\(\)/);
-  assert.doesNotMatch(load, /onSnapshot\(rosterRef/);
+  assert.ok(listener.includes("onSnapshot(directoryRef"));
+  assert.ok(listener.includes("remoteVersion"));
+  assert.ok(listener.includes("api.clearCustomerSearchCache"));
+  assert.ok(listener.includes("document.visibilityState"));
+  assert.ok(listener.includes("isAdminCustomerDirectorySurfaceOpen"));
+  assert.equal(listener.includes("onSnapshot(collection("), false);
+  assert.ok(load.includes("startAdminCustomersListener()"));
+  assert.equal(load.includes("onSnapshot(rosterRef"), false);
   assert.doesNotMatch(api, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(worker, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(rules, /customerRoster/);
-  assert.match(rules, /match \/customerDirectory/);
+  assert.ok(rules.includes("match /customerDirectory"));
 });
-
 test("create, edit and disable increment the revision inside the same Firestore transaction", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
   const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
@@ -197,13 +211,13 @@ test("professional profile and loyalty settings use a separate cache scope", () 
     assert.match(source, /invalidateSessionCache\(\)/);
     assert.doesNotMatch(source, /clearCustomerSearchCache|customerDirectory/);
   }
-  const changed = functionBody(html, "function markCustomerDirectoryChanged", "async function syncCustomerDirectory");
+  const changed = functionBody(html, "function markCustomerDirectoryChanged", "function adminCustomersRetryKey");
   assert.match(changed, /invalidateCustomerDirectoryPages/);
   assert.match(changed, /api\.clearCustomerSearchCache/);
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v76-search-pagination/);
+  assert.match(serviceWorker, /v77-scroll-pagination-spinner/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -279,12 +293,12 @@ test("customer card snapshots refresh only the active account cache and revoke d
 
 
 test("barber listens only to one directory revision while Clients is visible", () => {
-  const listener = functionBody(html, "function startAdminCustomersListener()", "async function syncCustomerDirectory");
+  const listener = functionBody(html, "function startAdminCustomersListener()", "function markCustomerDirectoryChanged");
   const clear = html.slice(html.indexOf("const clearListeners ="), html.indexOf("const cleanupContext", html.indexOf("const clearListeners =")));
   const visibilityStart = html.indexOf("document.addEventListener('visibilitychange'");
   const visibilityEnd = html.indexOf("});", visibilityStart) + 3;
   const visibility = html.slice(visibilityStart, visibilityEnd);
-  const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='refresh-clients')"));
+  const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='load-more-clients')"));
   assert.match(listener, /onSnapshot\(directoryRef/);
   assert.match(listener, /isAdminCustomerDirectorySurfaceOpen/);
   assert.match(listener, /runCustomerSearch\(searchTerm,'cut'\)/);

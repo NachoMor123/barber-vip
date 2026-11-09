@@ -94,6 +94,12 @@ test("scroll pagination shows a visible circular loader and removes redundant ma
   assert.ok(markup.includes("loading-spinner"));
   assert.ok(markup.includes("Cargando más coincidencias"));
   assert.ok(markup.includes("Cargando más clientes"));
+  assert.match(html, /CUSTOMER_PAGINATION_INDICATOR_MIN_MS=2500/);
+  assert.match(html, /function keepCustomerPaginationIndicatorVisible\(startedAt\)/);
+  const listPagination = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  const searchPagination = functionBody(html, "async function loadMoreCustomerSearch()", "async function runCustomerSearch");
+  assert.match(listPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
+  assert.match(searchPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
   assert.doesNotMatch(clients, /clients-refresh|refresh-clients/);
   assert.doesNotMatch(html, /clientsRefreshUntil|clientsRefreshCooldownTimer|startClientsRefreshCooldown|updateClientsRefreshControl|syncCustomerDirectory|clients-refresh-btn/);
 });
@@ -217,7 +223,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v77-scroll-pagination-spinner/);
+  assert.match(serviceWorker, /v78-pagination-spinner-2500ms/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);

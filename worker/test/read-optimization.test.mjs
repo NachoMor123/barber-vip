@@ -447,7 +447,7 @@ test("barber listens only to one directory revision while Clients is visible", (
   const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='load-more-clients')"));
   assert.match(listener, /onSnapshot\(directoryRef/);
   assert.match(listener, /isAdminCustomerDirectorySurfaceOpen/);
-  assert.match(listener, /runCustomerSearch\(searchTerm,'cut'\)/);
+  assert.match(listener, /runCustomerSearch\(cutTerm,'cut'\)/);
   const quickModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
   assert.match(quickModal, /startAdminCustomersListener\(\)/);
   assert.match(listener, /document\.visibilityState!=='visible'/);

@@ -131,7 +131,8 @@ service cloud.firestore {
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
           'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
-          'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
+          'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt',
+          'customerDirectoryFieldsMigrationCursor', 'customerDirectoryFieldsMigratedAt', 'updatedAt'
         ])
         && request.resource.data.get('subscriptionExpiresAt', null) == resource.data.get('subscriptionExpiresAt', null)
         && request.resource.data.get('hasPaidSubscription', false) == resource.data.get('hasPaidSubscription', false)
@@ -142,7 +143,8 @@ service cloud.firestore {
           barberCanOperate(barberId)
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor',
-            'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt', 'updatedAt'
+            'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt',
+            'customerDirectoryFieldsMigrationCursor', 'customerDirectoryFieldsMigratedAt', 'updatedAt'
           ])
         ));
       allow delete: if false;

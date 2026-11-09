@@ -442,7 +442,7 @@ test("barber listens only to one directory revision while Clients is visible", (
   const listener = functionBody(html, "function startAdminCustomersListener()", "function markCustomerDirectoryChanged");
   const clear = html.slice(html.indexOf("const clearListeners ="), html.indexOf("const cleanupContext", html.indexOf("const clearListeners =")));
   const visibilityStart = html.indexOf("document.addEventListener('visibilitychange'");
-  const visibilityEnd = html.indexOf("});", visibilityStart) + 3;
+  const visibilityEnd = html.indexOf("window.addEventListener('pageshow'", visibilityStart);
   const visibility = html.slice(visibilityStart, visibilityEnd);
   const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='load-more-clients')"));
   assert.match(listener, /onSnapshot\(directoryRef/);
@@ -463,7 +463,9 @@ test("barber listens only to one directory revision while Clients is visible", (
   assert.doesNotMatch(listener, /onSnapshot\(collection\(.*customers/);
   assert.match(clear, /stopAdminCustomersListener\(\)/);
   assert.match(visibility, /stopAdminCustomersListener\(\)/);
+  assert.match(visibility, /syncFirestoreNetworkWithVisibility\(\)\.then/);
   assert.match(visibility, /startAdminCustomersListener\(\)/);
+  assert.ok(visibility.indexOf("syncFirestoreNetworkWithVisibility().then") < visibility.indexOf("startAdminCustomersListener()"));
   assert.match(nav, /stopAdminCustomersListener\(\)/);
   assert.match(nav, /startAdminCustomersListener\(\)/);
 });

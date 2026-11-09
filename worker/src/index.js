@@ -384,6 +384,7 @@ async function registerCustomerAccount(request, env) {
     availableRewards: [],
     rewardReady: false,
     active: true,
+    lastCutOperationId: null,
     createdAt: now,
     updatedAt: now,
     lastCutAt: null

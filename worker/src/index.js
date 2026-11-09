@@ -434,9 +434,11 @@ async function registerCustomerAccount(request, env) {
       const directoryWrite = {
         update: {
           name: currentDirectory?.name || firestoreResourceName(env, directoryPath),
-          fields: encodeFields({ version, updatedAt: now })
+          fields: encodeFields({
+            version, updatedAt: now, changeType: "upsert", customerId
+          })
         },
-        updateMask: { fieldPaths: ["version", "updatedAt"] },
+        updateMask: { fieldPaths: ["version", "updatedAt", "changeType", "customerId"] },
         currentDocument: currentDirectory?.updateTime
           ? { updateTime: currentDirectory.updateTime }
           : { exists: false }

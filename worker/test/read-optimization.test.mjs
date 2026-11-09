@@ -179,6 +179,23 @@ test("the directory revision is watched only while Clients or quick visit search
   assert.doesNotMatch(rules, /customerRoster/);
   assert.ok(rules.includes("match /customerDirectory"));
 });
+test("directory revisions carry a precise mutation descriptor for one-document synchronization", () => {
+  const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
+  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
+  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
+  const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
+  const migration = functionBody(api, "async function migrateCustomerDirectoryFieldsForBarber", "async function getMe");
+  assert.match(create, /changeType: 'upsert'/);
+  assert.match(create, /customerId: credential\.user\.uid/);
+  assert.match(update, /changeType: 'upsert', customerId: id/);
+  assert.match(disable, /changeType: 'remove', customerId: id/);
+  assert.match(visit, /changeType: 'upsert', customerId: id/);
+  assert.match(migration, /changeType: 'refresh', customerId: ''/);
+  assert.match(worker, /changeType: "upsert", customerId/);
+  assert.match(worker, /"changeType", "customerId"/);
+  assert.match(rules, /'changeType', 'customerId'/);
+});
+
 test("create, edit and disable increment the revision inside the same Firestore transaction", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
   const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
@@ -410,6 +427,11 @@ test("barber listens only to one directory revision while Clients is visible", (
   assert.match(listener, /state\.user\?\.uid!==accountUid/);
   assert.match(listener, /state\.barberUid!==barberUid/);
   assert.match(listener, /remoteVersion<=knownVersion/);
+  assert.match(listener, /changeType==='upsert'/);
+  assert.match(listener, /changeType==='remove'/);
+  assert.match(listener, /remoteVersion===knownVersion\+1/);
+  assert.match(listener, /getDoc\(customerRef\)/);
+  assert.match(listener, /Se detectó un cambio de clientes/);
   assert.match(listener, /ensureAdminCustomersLoaded/);
   assert.doesNotMatch(listener, /onSnapshot\(collection\(.*customers/);
   assert.match(clear, /stopAdminCustomersListener\(\)/);

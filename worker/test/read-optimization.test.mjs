@@ -264,6 +264,7 @@ test("legacy customer directory fields are repaired once in bounded pages", () =
   assert.match(migration, /customerDirectoryFieldsMigratedAt/);
   assert.match(getMe, /migrateCustomerDirectoryFieldsForBarber\(barber\)/);
   assert.match(migration, /version: increment\(1\)/);
+  assert.match(migration, /subscription\(barberData\)\.status === 'suspended'/);
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {

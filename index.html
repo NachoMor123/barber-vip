@@ -1805,7 +1805,7 @@
           ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==key||state.customersQueryKey!==key||state.query.trim())return;
         const incoming=Array.isArray(page.customers)?page.customers:[];
         if(!incoming.length){
-          emptyPage=true;state.customersHasMore=false;state.customersPageError='';
+          emptyPage=true;state.customersHasMore=false;state.customersPageError='';saveAdminCustomersCache();
         }else{
           const nextCursorId=String(page.cursorId||'');
           if(!nextCursorId||nextCursorId===cursorId)throw new Error('El cursor de clientes no avanzó. Conservamos la lista para que puedas reintentar.');

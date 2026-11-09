@@ -183,15 +183,21 @@ test("create, edit and disable increment the revision inside the same Firestore 
   assert.match(disable, /active: false/);
 });
 
-test("a visit uses two reads, updates lastCutAt and invalidates only the directory", () => {
+test("a visit updates the loaded directory locally without a redundant first-page read", () => {
   const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
   const ui = functionBody(html, "async function addCut(id, button)", "function contactClient");
+  const localUpdate = functionBody(html, "function applyCustomerVisitToDirectory", "function adminCustomersCacheKey");
   assert.match(visit, /transaction\.get\(customerRef\)/);
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /lastCutAt: now/);
   assert.match(visit, /transaction\.set\(directoryRef, \{ version: increment\(1\)/);
   assert.doesNotMatch(visit, /rosterRef|customerRoster/);
-  assert.match(ui, /markCustomerDirectoryChanged\(\{reorder:true\}\)/);
+  assert.match(localUpdate, /next\.sort\(compareCustomersByLastVisit\)/);
+  assert.match(localUpdate, /state\.customersCursorId=String\(last\?\.uid\|\|''\)/);
+  assert.match(localUpdate, /saveAdminCustomersCache\(\)/);
+  assert.doesNotMatch(localUpdate, /ensureAdminCustomersLoaded|api\(['"]\/api\/customers\/list/);
+  assert.match(ui, /applyCustomerVisitToDirectory\(result\.customer\)/);
+  assert.doesNotMatch(ui, /markCustomerDirectoryChanged\(\{reorder:true\}\)/);
 });
 
 test("direct client registration commits the revision with the customer documents", () => {
@@ -392,4 +398,22 @@ test("directory cache restores every page already seen up to a safe record cap a
   assert.match(restore, /state\.customers=cached\.customers\.filter/);
   assert.match(restore, /state\.customersCursorId=String\(cached\.cursorId\|\|''\)/);
   assert.match(restore, /state\.customersCursorValue=cached\.cursorValue\?\?null/);
+});
+
+test("first-page customer load failures never masquerade as an empty directory", () => {
+  const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "const CUSTOMER_PAGINATION_INDICATOR_MIN_MS");
+  const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
+  assert.match(loader, /state\.customersLoadError=failure\.message/);
+  assert.match(loader, /state\.customersLoadError=error\.message/);
+  assert.match(markup, /const firstPageError=!searchTerm\?String\(state\.customersLoadError\|\|''\):''/);
+  assert.match(markup, /No pudimos cargar tus clientes/);
+  assert.match(markup, /data-action="retry-load-clients"/);
+  assert.match(html, /action==='retry-load-clients'/);
+});
+
+test("returning to Clients refreshes when a quick-visit listener advanced the directory revision", () => {
+  const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='open-pip-help')"));
+  assert.match(nav, /directoryVersion!==cacheVersion/);
+  assert.match(nav, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
+  assert.match(nav, /!state\.customersLoaded/);
 });

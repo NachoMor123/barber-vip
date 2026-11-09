@@ -826,6 +826,7 @@ export function createSparkApi({ firebaseConfig, state }) {
 
   async function searchCustomers(data = {}) {
     const uid = currentUid();
+    const customersRef = collection(db(), 'barbers', uid, 'customers');
     const term = cleanText(data.search, 100);
     if (!term) return { ok: true, customers: [], hasMore: false, cursorId: '', cursorValue: null };
     const rawDigits = term.replace(/\D/g, '');
@@ -866,7 +867,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     ];
     if (cursorId) constraints.push(startAfter(cursorValue, cursorId));
     constraints.push(limit(pageSize));
-    const snap = await getDocs(query(ref, ...constraints));
+    const snap = await getDocs(query(customersRef, ...constraints));
     const customers = snap.docs.map(item => {
       const customer = { uid: item.id, ...item.data() };
       delete customer.isOnline;

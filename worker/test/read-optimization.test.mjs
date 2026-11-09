@@ -224,7 +224,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v79-customer-directory-repair/);
+  assert.match(serviceWorker, /v80-idempotent-visits/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -265,6 +265,25 @@ test("legacy customer directory fields are repaired once in bounded pages", () =
   assert.match(getMe, /migrateCustomerDirectoryFieldsForBarber\(barber\)/);
   assert.match(migration, /version: increment\(1\)/);
   assert.match(migration, /subscription\(barberData\)\.status === 'suspended'/);
+});
+
+test("visit retries are idempotent without adding a Firestore read", () => {
+  const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
+  const ui = functionBody(html, "async function addCut(id, button)", "function contactClient");
+  assert.match(visit, /transaction\.get\(customerRef\)/);
+  assert.match(visit, /customer\.lastCutOperationId === operationId/);
+  assert.match(visit, /lastCutOperationId: operationId/);
+  assert.match(visit, /outcome\.duplicate/);
+  assert.match(ui, /getPendingCutOperationId\(id\)/);
+  assert.match(ui, /operationId\}\}\)/);
+  assert.match(ui, /clearPendingCutOperationId\(id\)/);
+});
+
+test("manual customer duplicate name and WhatsApp checks are inside one transaction", () => {
+  const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
+  assert.match(create, /transaction\.get\(lookupRef\)/);
+  assert.match(create, /transaction\.get\(phoneQuery\)/);
+  assert.doesNotMatch(create, /const lookup = await getDoc\(lookupRef\)|const phoneMatches = await getDocs\(/);
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {

@@ -1649,7 +1649,8 @@
           if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
           return;
         }
-        const remoteVersion=snapshot.exists()?Math.max(0,Number(snapshot.data()?.version)||0):0;
+        const metadata=snapshot.exists()?snapshot.data()||:{};
+        const remoteVersion=Math.max(0,Number(metadata.version)||0);
         const knownVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
         if(snapshot.metadata?.fromCache===true){
           if(state.section==='clients'&&!state.customersLoaded)void ensureAdminCustomersLoaded({force:true,reset:true})
@@ -1663,20 +1664,51 @@
           return;
         }
         if(remoteVersion<=knownVersion)return;
+        const changeType=String(metadata.changeType||'refresh');
+        const changedId=String(metadata.customerId||'');
+        const oneChange=remoteVersion===knownVersion+1&&changedId.length>0;
+        if(oneChange&&changeType==='remove'){
+          applyCustomerRemovalToDirectory(changedId,{directoryVersion:remoteVersion});
+          if(state.section==='clients'&&state.query.trim())void runCustomerSearch(state.query.trim(),'clients');
+          return;
+        }
+        if(oneChange&&changeType==='upsert'){
+          const syncSeq=++state.customersDirectorySyncSeq;
+          const customerRef=doc(state.db,'barbers',barberUid,'customers',changedId);
+          void getDoc(customerRef).then(customerSnap=>{
+            if(state.user?.uid!==accountUid||state.barberUid!==barberUid
+              ||!isAdminCustomerDirectorySurfaceOpen()||document.visibilityState!=='visible'
+              ||state.customersDirectorySyncSeq!==syncSeq)return;
+            const latestVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
+            if(remoteVersion<=latestVersion)return;
+            if(customerSnap.exists()&&customerSnap.data()?.active!==false){
+              applyCustomerUpsertToDirectory({uid:customerSnap.id,...customerSnap.data()},{directoryVersion:remoteVersion});
+            }else{
+              applyCustomerRemovalToDirectory(changedId,{directoryVersion:remoteVersion});
+            }
+            if(state.section==='clients'&&state.query.trim())void runCustomerSearch(state.query.trim(),'clients');
+            else if(state.section==='clients')renderApp();
+          }).catch(error=>{
+            if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
+            showErrorOnce('customer-directory-single-sync','No pudimos actualizar un cambio puntual. Vamos a renovar la lista.',error);
+            invalidateCustomerDirectoryPages({preserveVisible:true});
+            if(state.section==='clients')void ensureAdminCustomersLoaded({force:true,reset:true}).catch(()=>{});
+          });
+          return;
+        }
+        // Several changes may have happened while the page was closed or backgrounded.
+        // In that case a fresh first page is safer than guessing how to patch the cursor.
         state.customersDirectoryVersion=remoteVersion;
         api.clearCustomerSearchCache?.();
-        if(state.section==='clients'){
-          const searchTerm=state.query.trim();
-          if(searchTerm){
-            state.customerSearchResults=null;state.customerSearchTerm='';
-            state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
-            void runCustomerSearch(searchTerm,'clients');
-          }else{
-            invalidateCustomerDirectoryPages({preserveVisible:true});
-            void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
-              toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
-            );
-          }
+        if(state.section==='clients'&&state.query.trim()){
+          state.customerSearchResults=null;state.customerSearchTerm='';
+          state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
+          void runCustomerSearch(state.query.trim(),'clients');
+        }else if(state.section==='clients'){
+          invalidateCustomerDirectoryPages({preserveVisible:true});
+          void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+            toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
+          );
         }else{
           const searchTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
           if(searchTerm)void runCustomerSearch(searchTerm,'cut');
@@ -1715,27 +1747,64 @@
     function applyCustomerVisitToDirectory(customer){
       const customerId=String(customer?.uid||'');
       if(!customerId)return;
-      const version=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
-      state.customersDirectoryVersion=version;
-      api.clearCustomerSearchCache?.();
       if(state.role!=='barber'||!state.user||!state.barberUid
         ||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey()){
         clearAllAdminCustomersCaches();
         state.customersCacheVersion=null;
         return;
       }
-      const next=state.customers.filter(item=>item&&item.uid!==customerId);
-      next.push({...customer,uid:customerId});
-      next.sort(compareCustomersByLastVisit);
-      state.customers=next;
-      state.customersCacheVersion=version;
-      const last=next[next.length-1]||null;
-      state.customersCursorId=String(last?.uid||'');
-      state.customersCursorValue=last?customerCursorValue(last):null;
-      const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
-      state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
-      state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
-      saveAdminCustomersCache();
+      applyCustomerUpsertToDirectory(customer);
+    }
+    function setAdminDirectoryVersion(version){
+      const next=Math.max(0,Number(version)||0);
+      state.customersDirectoryVersion=next;
+      state.customersCacheVersion=next;
+    }
+    function applyCustomerUpsertToDirectory(customer,{directoryVersion=null}={}){
+      const customerId=String(customer?.uid||'');
+      if(!customerId)return;
+      const complete=state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey();
+      if(complete){
+        const prior=state.customers.find(item=>item?.uid===customerId)||null;
+        let next=state.customers.filter(item=>item&&item.uid!==customerId);
+        const merged={...(prior||{}),...customer,uid:customerId};
+        if(prior||!state.customersHasMore||!next.length||compareCustomersByLastVisit(merged,next[next.length-1])<0){
+          const windowSize=state.customers.length;
+          next.push(merged);
+          next.sort(compareCustomersByLastVisit);
+          if(state.customersHasMore&&next.length>windowSize)next=next.slice(0,windowSize);
+          state.customers=next;
+          const last=next[next.length-1]||null;
+          if(state.customersHasMore&&last){
+            state.customersCursorId=String(last.uid||'');
+            state.customersCursorValue=customerCursorValue(last);
+          }
+          const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
+          state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
+          state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
+        }
+      }
+      const version=directoryVersion===null
+        ?Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1
+        :Math.max(0,Number(directoryVersion)||0);
+      setAdminDirectoryVersion(version);
+      api.clearCustomerSearchCache?.();
+      if(complete)saveAdminCustomersCache();
+    }
+    function applyCustomerRemovalToDirectory(customerId,{directoryVersion=null}={}){
+      const id=String(customerId||'');
+      if(!id)return;
+      if(state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey()){
+        state.customers=state.customers.filter(item=>item&&item.uid!==id);
+      }
+      if(Array.isArray(state.customerSearchResults))state.customerSearchResults=state.customerSearchResults.filter(item=>item?.uid!==id);
+      state.cutSearchResults=state.cutSearchResults.filter(item=>item?.uid!==id);
+      const version=directoryVersion===null
+        ?Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1
+        :Math.max(0,Number(directoryVersion)||0);
+      setAdminDirectoryVersion(version);
+      api.clearCustomerSearchCache?.();
+      if(state.customersLoaded)saveAdminCustomersCache();
     }
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
@@ -1778,20 +1847,18 @@
       state.customersFirstPageCursorValue=null;state.customersQueryKey='';state.customersCacheVersion=null;
       if(!preserveVisible){state.customers=[];state.customersLoaded=false;}
     }
-    function markCustomerDirectoryChanged({customer=null,reorder=false}={}){
-      const version=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
-      state.customersDirectoryVersion=version;api.clearCustomerSearchCache?.();
-      if(reorder){
-        const visible=state.role==='barber'&&state.section==='clients';
-        invalidateCustomerDirectoryPages({preserveVisible:visible});
-        if(visible&&!state.query.trim())void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
-          toast(userFacingError(error,'El cambio se guardó, pero no pudimos actualizar la primera página de clientes.'),'error'));
+    function markCustomerDirectoryChanged({customer=null,removeId=''}={}){
+      if(removeId){
+        applyCustomerRemovalToDirectory(removeId);
         return;
       }
-      if(customer&&state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey()){
-        state.customers=state.customers.map(item=>item.uid===customer.uid?{...item,...customer}:item);
-        state.customersCacheVersion=version;saveAdminCustomersCache();
-      }else{clearAllAdminCustomersCaches();state.customersCacheVersion=null;}
+      if(customer){
+        applyCustomerUpsertToDirectory(customer);
+        return;
+      }
+      clearAllAdminCustomersCaches();
+      state.customersCacheVersion=null;
+      state.customersDirectoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
     }
     function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
     function restoreAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');const retryAfter=Number(saved?.retryAfter);if(Number.isFinite(retryAfter)&&retryAfter>Date.now()&&retryAfter<=Date.now()+300000){state.customersRetryAfter=retryAfter;state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
@@ -2212,7 +2279,7 @@
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         const saved=result.customer?{...result.customer,uid:result.customer.uid||id}:null;
         state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
-        if(id)markCustomerDirectoryChanged({customer:saved});else markCustomerDirectoryChanged({reorder:true});
+        if(saved)markCustomerDirectoryChanged({customer:saved});
         modalRoot.innerHTML='';if(state.section==='clients')renderApp();
         const message=result.passwordResetFailed?'Los datos del cliente se guardaron, pero no se pudo cambiar la contraseña. Volvé a intentarlo.':(id?'Cliente actualizado.':'Cliente creado correctamente.');
         toast(message,result.passwordResetFailed?'error':'success');
@@ -2513,7 +2580,7 @@
               await api('/api/customers',{method:'DELETE',body:{customerId:id}});
               if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
               state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
-              markCustomerDirectoryChanged({reorder:true});modalRoot.innerHTML='';renderApp();
+              markCustomerDirectoryChanged({removeId:id});modalRoot.innerHTML='';renderApp();
               toast('Cliente dado de baja. El historial de visitas se conservó.','success');
             }catch(error){toast(userFacingError(error,'No se pudo dar de baja al cliente. Revisá la conexión.'),'error');if(button?.isConnected)button.disabled=false;}
           }

@@ -1554,7 +1554,7 @@
     }
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
-      if(state.role==='barber'&&state.section==='clients'){
+      if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen()){
         if(document.visibilityState==='hidden')stopAdminCustomersListener();
         else startAdminCustomersListener();
       }
@@ -1636,6 +1636,9 @@
       void maybeShowInstallPrompt();
     }
 
+    function isAdminCustomerDirectorySurfaceOpen(){
+      return state.role==='barber'&&(state.section==='clients'||Boolean($('#cutSearch',modalRoot)));
+    }
     function stopAdminCustomersListener(){
       const unsubscribe=state.customersUnsubscribe;
       state.customersUnsubscribe=null;
@@ -1643,14 +1646,14 @@
       if(typeof unsubscribe==='function'){try{unsubscribe();}catch(_){}}
     }
     function startAdminCustomersListener(){
-      if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible'
+      if(!isAdminCustomerDirectorySurfaceOpen()||document.visibilityState!=='visible'
         ||!state.user?.uid||!state.barberUid||state.customersListenerStarted)return;
       const accountUid=state.user.uid,barberUid=state.barberUid;
       const directoryRef=doc(state.db,'barbers',barberUid,'customerDirectory','state');
       state.customersListenerStarted=true;
       let unsubscribe=()=>{};
       unsubscribe=onSnapshot(directoryRef,snapshot=>{
-        if(state.role!=='barber'||state.section!=='clients'||document.visibilityState!=='visible'
+        if(!isAdminCustomerDirectorySurfaceOpen()||document.visibilityState!=='visible'
           ||state.user?.uid!==accountUid||state.barberUid!==barberUid){
           unsubscribe();
           if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
@@ -1659,11 +1662,11 @@
         const remoteVersion=snapshot.exists()?Math.max(0,Number(snapshot.data()?.version)||0):0;
         const knownVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
         if(snapshot.metadata?.fromCache===true){
-          if(!state.customersLoaded)void ensureAdminCustomersLoaded({force:true,reset:true})
+          if(state.section==='clients'&&!state.customersLoaded)void ensureAdminCustomersLoaded({force:true,reset:true})
             .catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
           return;
         }
-        if(!state.customersLoaded){
+        if(state.section==='clients'&&!state.customersLoaded){
           state.customersDirectoryVersion=remoteVersion;
           void ensureAdminCustomersLoaded({force:true,reset:true})
             .catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));
@@ -1672,16 +1675,21 @@
         if(remoteVersion<=knownVersion)return;
         state.customersDirectoryVersion=remoteVersion;
         api.clearCustomerSearchCache?.();
-        const searchTerm=state.query.trim();
-        if(searchTerm){
-          state.customerSearchResults=null;state.customerSearchTerm='';
-          state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
-          void runCustomerSearch(searchTerm,'clients');
+        if(state.section==='clients'){
+          const searchTerm=state.query.trim();
+          if(searchTerm){
+            state.customerSearchResults=null;state.customerSearchTerm='';
+            state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
+            void runCustomerSearch(searchTerm,'clients');
+          }else{
+            invalidateCustomerDirectoryPages({preserveVisible:true});
+            void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+              toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
+            );
+          }
         }else{
-          invalidateCustomerDirectoryPages({preserveVisible:true});
-          void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
-            toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
-          );
+          const searchTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
+          if(searchTerm)void runCustomerSearch(searchTerm,'cut');
         }
       },error=>{
         if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
@@ -1694,7 +1702,7 @@
     // A tiny revision document detects outside changes only when the section is
     // entered or refreshed. No customer-directory listener and no polling.
     const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=15;
-    const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=3;
+    const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=8;
     const ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150;
     function customerCursorValue(customer){
       const value=customer?.lastCutAt;
@@ -1780,6 +1788,7 @@
       state.customersDirectoryVersion=remoteVersion;
       const cacheVersion=Number(state.customersCacheVersion);
       const stale=!state.customersLoaded||!Number.isSafeInteger(cacheVersion)||cacheVersion!==remoteVersion;
+      if(stale)api.clearCustomerSearchCache?.();
       if(force||stale)await ensureAdminCustomersLoaded({force:true,reset:true});
       return true;
     }
@@ -2140,6 +2149,7 @@
           state.cutSearchTimer=setTimeout(()=>{void runCustomerSearch(term,'cut');},350);
         });
       }
+      startAdminCustomersListener();
     }
     async function saveCustomerForm(form) {
       const fd=new FormData(form),id=form.dataset.id;
@@ -2427,8 +2437,8 @@
         else if(action==='start-customer-signup'){void renderCustomerSignup();}
         else if(action==='cancel-customer-signup'){renderRoleMenu('customer');}
         else if(action==='start-customer-login'){renderLogin('customer');}
-        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';}}
-        else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';}
+        else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';if(state.section!=='clients')stopAdminCustomersListener();}}
+        else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';if(state.section!=='clients')stopAdminCustomersListener();}
         else if(action==='customer-entry'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-customer-access')?.scrollIntoView({behavior:'smooth',block:'start'}));}
         else if(action==='settings-profile'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-profile-section')?.scrollIntoView({behavior:'smooth',block:'start'}));}
         else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients')pendingLoad=Promise.resolve(startAdminCustomersListener());renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}

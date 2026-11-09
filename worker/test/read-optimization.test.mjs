@@ -69,12 +69,12 @@ test("directory cache persists across logout and is scoped by both Firebase UIDs
   assert.match(html, /state\.customersDirectoryCheckSeq/);
 });
 
-test("the first directory page is 15 records, subsequent cursor pages are three", () => {
+test("the first directory page is 15 records, subsequent cursor pages are eight", () => {
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
   const more = functionBody(html, "async function loadMoreAdminCustomers", "async function loadMoreCustomerSearch");
   const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
   assert.match(html, /ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=15/);
-  assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=3/);
+  assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=8/);
   assert.match(loader, /pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(more, /pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE/);
   assert.match(more, /cursorId:state\.customersCursorId/);
@@ -94,6 +94,13 @@ test("list order is deterministic by last visit, with never-visited customers re
   assert.match(list, /orderBy\(documentId\(\), 'desc'\)/);
   assert.match(list, /cursorValue/);
   assert.match(list, /last\.data\(\)\.lastCutAt/);
+});
+
+test("customer search declares its collection reference and cannot throw ReferenceError", () => {
+  const search = functionBody(api, "async function searchCustomers", "const apiRequest");
+  assert.match(search, /const customersRef\s*=\s*collection\(db\(\),\s*'barbers',\s*uid,\s*'customers'\)/);
+  assert.match(search, /query\(customersRef,\s*\.\.\.constraints\)/);
+  assert.doesNotMatch(search, /query\(ref,/);
 });
 
 test("name and WhatsApp searches are prefix-based and capped at five matches", () => {
@@ -124,11 +131,12 @@ test("search and visit picker never read the full client collection", () => {
   assert.doesNotMatch(visit, /getDocs\(|getCountFromServer|customerRoster/);
 });
 
-test("the directory revision replaces the roster and is checked only on Clients entry", () => {
+test("the directory revision is watched only while Clients or quick visit search is open", () => {
   const sync = functionBody(html, "async function syncCustomerDirectory", "function adminCustomersRetryKey");
   const load = functionBody(html, "async function loadContext(me)", "async function resumeSession");
   assert.match(sync, /getDoc\(doc\(state\.db,'barbers',barberUid,'customerDirectory','state'\)\)/);
   assert.match(sync, /remoteVersion/);
+  assert.match(sync, /api\.clearCustomerSearchCache/);
   assert.doesNotMatch(sync, /onSnapshot|setInterval|setTimeout/);
   assert.match(load, /startAdminCustomersListener\(\)/);
   assert.doesNotMatch(load, /onSnapshot\(rosterRef/);
@@ -175,6 +183,13 @@ test("direct client registration commits the revision with the customer document
   assert.match(signup, /for \(let attempt = 0; attempt < 5/);
 });
 
+test("direct signup writes normalized search fields and last-visit defaults", () => {
+  const signup = functionBody(worker, "async function registerCustomerAccount", "async function hmacHex");
+  assert.match(signup, /usernameNormalized:\s*normalizedName/);
+  assert.match(signup, /lastCutAt:\s*null/);
+  assert.match(signup, /customerDirectory\/state/);
+});
+
 test("professional profile and loyalty settings use a separate cache scope", () => {
   const profile = functionBody(api, "async function saveProfile(data)", "async function saveLoyalty(data)");
   const loyalty = functionBody(api, "async function saveLoyalty(data)", "apiRequest.resetSessionCache");
@@ -188,7 +203,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v75-visit-first/);
+  assert.match(serviceWorker, /v76-search-pagination/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -271,7 +286,10 @@ test("barber listens only to one directory revision while Clients is visible", (
   const visibility = html.slice(visibilityStart, visibilityEnd);
   const nav = html.slice(html.indexOf("else if(action==='nav')"), html.indexOf("else if(action==='refresh-clients')"));
   assert.match(listener, /onSnapshot\(directoryRef/);
-  assert.match(listener, /state\.section!=='clients'/);
+  assert.match(listener, /isAdminCustomerDirectorySurfaceOpen/);
+  assert.match(listener, /runCustomerSearch\(searchTerm,'cut'\)/);
+  const quickModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
+  assert.match(quickModal, /startAdminCustomersListener\(\)/);
   assert.match(listener, /document\.visibilityState!=='visible'/);
   assert.match(listener, /state\.user\?\.uid!==accountUid/);
   assert.match(listener, /state\.barberUid!==barberUid/);

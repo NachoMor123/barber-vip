@@ -1488,7 +1488,7 @@
       const list=filteredCustomers();
       const name=escapeHtml(state.barber?.displayName||'profesional');
       const actions='<button class="btn btn-soft" data-action="open-cut-modal">✦ Registrar visita</button><button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>';
-      return `${sectionHeading('CLIENTES',`${greetingForNow()}, ${name} 👋`,'Buscá por nombre o WhatsApp, revisá el progreso y administrá tus clientes.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
+      return `${sectionHeading('CLIENTES',`${greetingForNow()}, ${name} 👋`,'Los clientes con visita más reciente aparecen primero. Buscá por nombre o WhatsApp.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
     }
 
     function renderSettings() {

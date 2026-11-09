@@ -152,9 +152,9 @@ test("the directory revision is watched only while Clients or quick visit search
   assert.ok(listener.includes("api.clearCustomerSearchCache"));
   assert.ok(listener.includes("document.visibilityState"));
   assert.ok(listener.includes("isAdminCustomerDirectorySurfaceOpen"));
-  assert.doesNotMatch(listener, /onSnapshot\\(collection\\(.*customers/);
+  assert.equal(listener.includes("onSnapshot(collection("), false);
   assert.ok(load.includes("startAdminCustomersListener()"));
-  assert.doesNotMatch(load, /onSnapshot\\(rosterRef/);
+  assert.equal(load.includes("onSnapshot(rosterRef"), false);
   assert.doesNotMatch(api, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(worker, /customerRoster|appendCustomerRosterChange/);
   assert.doesNotMatch(rules, /customerRoster/);

@@ -230,10 +230,16 @@ service cloud.firestore {
         allow list, delete: if false;
         allow create, update: if metaId == 'state'
           && isOwner(barberId)
-          && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['version', 'updatedAt', 'changeType', 'customerId'])
           && request.resource.data.version is int
           && request.resource.data.version >= 0
-          && request.resource.data.updatedAt is timestamp;
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.get('changeType', 'refresh') in ['upsert', 'remove', 'refresh']
+          && request.resource.data.get('customerId', '') is string
+          && (
+            request.resource.data.get('changeType', 'refresh') == 'refresh'
+            || request.resource.data.get('customerId', '').size() > 0
+          );
       }
 
       match /cuts/{cutId} {

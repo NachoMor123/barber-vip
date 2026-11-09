@@ -457,36 +457,17 @@
     .services-editor-section{margin:6px 0 18px}.service-visibility-toggle{display:flex;align-items:center;gap:12px;margin:12px 0;padding:13px 14px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.025);cursor:pointer}.service-visibility-toggle input{width:18px;height:18px;accent-color:var(--accent);flex-shrink:0}.service-visibility-toggle span{display:grid;gap:4px}.service-visibility-toggle strong{font-size:12px}.service-visibility-toggle small{font-size:10px;line-height:1.5;color:var(--muted)}.service-editor-list{display:grid;gap:10px;margin:12px 0}.service-setting-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(120px,.75fr) minmax(80px,.45fr) 36px;gap:10px;align-items:end;padding:12px;border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);border-radius:13px;background:var(--panel2)}.service-setting-row label{display:grid;gap:6px;font-size:10px;color:var(--muted)}.service-setting-row .setting-input{width:100%;min-width:0}.service-active-label{display:flex!important;align-items:center;gap:7px;min-height:39px;white-space:nowrap}.service-active-label input{width:17px;height:17px;accent-color:var(--green)}.service-remove-btn{height:39px;min-width:36px;padding:0}.service-empty{padding:17px;border:1px dashed var(--line);border-radius:13px;color:var(--muted)}.service-empty strong{display:block;color:var(--text);font-size:12px}.service-empty p{font-size:11px;line-height:1.6;margin:6px 0 0}.service-list-card h3{margin:8px 0 14px;font-size:23px}.service-list-card .tiny{line-height:1.6;margin-top:13px}.customer-services-list{display:grid;gap:0}.customer-services-list .service-line{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}.customer-services-list .service-line:last-child{border-bottom:0}.customer-services-list .service-line strong{font-size:13px}.customer-services-list .service-line span{font-size:13px;font-weight:850;white-space:nowrap}
     @media(max-width:620px){.service-setting-row{grid-template-columns:minmax(0,1fr) minmax(100px,.75fr) 36px}.service-setting-row .service-active-label{grid-column:1 / 3;grid-row:2}.service-setting-row .service-remove-btn{grid-column:3;grid-row:2;justify-self:end}.service-setting-row .service-active-label{align-self:center}.customer-services-list .service-line{gap:9px}.customer-services-list .service-line strong{font-size:12px}}
 
-    .clients-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-    .clients-refresh-btn{gap:6px;white-space:nowrap;min-width:118px}
-    .clients-refresh-icon{font-size:19px;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:transform .25s}
-    .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
-    .clients-refresh-countdown{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11px}
-    @media(max-width:600px){.clients-head-actions{width:100%;justify-content:stretch}.clients-head-actions>.btn{flex:1;justify-content:center}.clients-refresh-btn{min-width:0}}
 
     .phone-input{display:flex;align-items:stretch;gap:0;min-width:0;width:100%}
     .phone-prefix{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;padding:0 13px;border:1px solid rgba(91,160,255,.28);border-right:0;border-radius:12px 0 0 12px;background:rgba(91,160,255,.09);color:#d4eaff;font-weight:850;font-size:12px;letter-spacing:.02em;white-space:nowrap}
     .phone-input input{min-width:0;flex:1;border-top-left-radius:0!important;border-bottom-left-radius:0!important}
     @media(max-width:600px){.phone-prefix{padding-inline:10px}}
 </style>
-  <style id="barber-vip-clients-refresh-fix">
-    /* The customer counter owns the compact manual refresh control; Create client stays full width. */
+  <style id="barber-vip-clients-create-layout">
     .main-area > .page-head .clients-create-btn{display:flex!important;width:100%!important;max-width:none!important;min-width:0!important;min-height:54px!important;justify-content:center!important;align-items:center!important;padding:14px 18px!important;font-size:14px!important;font-weight:900!important;letter-spacing:.01em!important}
-    .clients-toolbar-actions{display:inline-flex!important;align-items:center!important;justify-content:flex-end!important;gap:8px!important;margin-left:auto!important;flex:0 0 auto!important;white-space:nowrap!important}
-    .clients-toolbar-actions .result-count{margin:0!important;white-space:nowrap!important}
-    .toolbar .clients-refresh-btn{position:relative!important;display:inline-grid!important;place-items:center!important;flex:0 0 30px!important;width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;margin:0!important;border-radius:50%!important;overflow:visible!important;line-height:1!important;background:#050b18!important;border:1px solid rgba(79,151,255,.85)!important;color:#dcecff!important;box-shadow:0 0 11px rgba(52,120,255,.14)!important}
-    .toolbar .clients-refresh-btn:disabled{opacity:.9!important;cursor:wait!important}
-    .toolbar .clients-refresh-icon{display:block!important;font-size:18px!important;line-height:1!important;transition:transform .16s ease!important}
-    .toolbar .clients-refresh-btn:not(:disabled):hover .clients-refresh-icon{transform:rotate(-35deg)}
-    .toolbar .clients-refresh-btn.is-busy .clients-refresh-icon{animation:clientsRefreshSpin .8s linear infinite!important}
-    .toolbar .clients-refresh-countdown{position:absolute!important;right:-6px!important;top:-6px!important;display:grid!important;place-items:center!important;min-width:15px!important;width:15px!important;height:15px!important;padding:0!important;border:1px solid rgba(147,199,255,.95)!important;border-radius:50%!important;background:#12336d!important;color:#fff!important;font-size:9px!important;line-height:1!important;font-weight:950!important;font-variant-numeric:tabular-nums!important;box-shadow:0 2px 7px rgba(0,0,0,.45)!important}
-    .toolbar .clients-refresh-countdown:empty{display:none!important}
-    @keyframes clientsRefreshSpin{to{transform:rotate(360deg)}}
-    @media(max-width:600px){
-      .main-area > .page-head .clients-create-btn{width:100%!important;min-height:54px!important}
-      .clients-toolbar-actions{margin-left:auto!important}
-    }
-    @media(prefers-reduced-motion:reduce){.toolbar .clients-refresh-btn.is-busy .clients-refresh-icon{animation:none!important}}
+    .customer-load-more-indicator{display:flex;align-items:center;justify-content:center;gap:10px;min-height:62px;padding:16px 12px 22px;color:var(--muted);font-size:11px;font-weight:700}
+    .customer-load-more-indicator .loading-spinner{width:18px;height:18px;flex:0 0 18px;border-width:2px}
+    @media(max-width:600px){.main-area > .page-head .clients-create-btn{width:100%!important;min-height:54px!important}}
   </style>
   <style id="barber-vip-final-dashboard-v1">
     .quick-actions-section{width:100%;max-width:1080px;margin:26px auto 30px!important}
@@ -792,7 +773,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null, customersDirectoryCheckSeq:0, customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', query:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false, clientsRefreshUntil:0 };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', query:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -800,33 +781,9 @@
     let installPhase = 'prompt'; // prompt | waiting | installed | manual fallback
     let installVerificationTimer = null;
     const BRAND_ACCENT = '#3478ff';
-    let clientsRefreshCooldownTimer = null;
     let customersPaginationObserver = null;
     let customerScrollFallbackBound = false;
     let paymentRequestInFlight = false;
-    function updateClientsRefreshControl(){
-      const remaining=Math.max(0,Math.ceil((Number(state.clientsRefreshUntil||0)-Date.now())/1000));
-      state.clientsRefreshUntil=remaining?state.clientsRefreshUntil:0;
-      $$('.clients-refresh-btn').forEach(button=>{
-        const counter=$('.clients-refresh-countdown',button);
-        button.disabled=remaining>0||state.customersLoading;
-        button.classList.toggle('is-busy',remaining>0);
-        if(counter)counter.textContent=remaining?String(remaining):'';
-        button.setAttribute('aria-label',remaining?`Podés actualizar de nuevo en ${remaining} segundos`:'Actualizar lista de clientes');
-        button.title=remaining?`Disponible en ${remaining} segundos`:'Actualizar lista de clientes';
-      });
-    }
-    function startClientsRefreshCooldown(){
-      if(Date.now()<Number(state.clientsRefreshUntil||0))return false;
-      state.clientsRefreshUntil=Date.now()+10000;
-      updateClientsRefreshControl();
-      if(clientsRefreshCooldownTimer)clearInterval(clientsRefreshCooldownTimer);
-      clientsRefreshCooldownTimer=setInterval(()=>{
-        updateClientsRefreshControl();
-        if(!state.clientsRefreshUntil){clearInterval(clientsRefreshCooldownTimer);clientsRefreshCooldownTimer=null;}
-      },1000);
-      return true;
-    }
 
     const logo = `<span class="brand-icon"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 1.5C17.2 8.8 23.2 14.8 30.5 16C23.2 17.2 17.2 23.2 16 30.5C14.8 23.2 8.8 17.2 1.5 16C8.8 14.8 14.8 8.8 16 1.5Z" fill="#238bff" stroke="#8fd9ff" stroke-width=".7"/><path d="M16 5.2C17 10.5 21.5 15 26.8 16C21.5 17 17 21.5 16 26.8C15 21.5 10.5 17 5.2 16C10.5 15 15 10.5 16 5.2Z" fill="#b8eaff" fill-opacity=".3"/><path d="M22.1 8.2 27.9 4.2 24.8 11Z" fill="#54baff"/><path d="m9.9 23.8-5.8 4 3.1-6.8Z" fill="#126cf2"/></svg></span>`;
     const brand = `<span class="brand">${logo}<span>Barber VIP</span></span>`;
@@ -1168,7 +1125,7 @@
     }
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
-    const clearListeners = () => { stopAdminCustomersListener(); api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customersDirectoryCheckSeq++;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
+    const clearListeners = () => { stopAdminCustomersListener(); api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
     const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
@@ -1486,7 +1443,7 @@
       if(state.customerSearchLoading&&searchTerm.length>=2&&!list.length)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Buscando clientes…</strong><p>Buscando coincidencias.</p></div>`;
       if(list.length){
         const sentinel=searchActive&&state.customerSearchHasMore?'<div id="customerSearchLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>':(!searchTerm&&state.customersHasMore?'<div id="customerLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>':'');
-        const loadingMore=state.customerSearchLoadingMore?'<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando más coincidencias…</strong></div>':(state.customersLoadingMore?'<div class="customer-load-sentinel" role="status" aria-label="Cargando más clientes"></div>':'');
+        const loadingMore=(state.customerSearchLoadingMore||state.customersLoadingMore)?`<div class="customer-load-more-indicator" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>${state.customerSearchLoadingMore?'Cargando más coincidencias…':'Cargando más clientes…'}</span></div>`:'';
         return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>${loadingMore}${sentinel}`;
       }
       const heading=searchTerm?'No encontramos coincidencias':'Todavía no hay clientes';
@@ -1498,7 +1455,7 @@
     function clientsView() {
       const list=filteredCustomers();
       const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
-      return `${sectionHeading('TU COMUNIDAD','Clientes','Los clientes con visita más reciente aparecen primero. Buscá por nombre o WhatsApp.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"><span class="clients-toolbar-actions"><button type="button" class="clients-refresh-btn ${state.customersLoading?'is-busy':''}" data-action="refresh-clients" title="Actualizar lista de clientes" aria-label="Actualizar lista de clientes" ${state.customersLoading||Date.now()<Number(state.clientsRefreshUntil||0)?'disabled':''}><span class="clients-refresh-icon" aria-hidden="true">↻</span><span class="clients-refresh-countdown" aria-hidden="true">${Date.now()<Number(state.clientsRefreshUntil||0)?Math.max(1,Math.ceil((state.clientsRefreshUntil-Date.now())/1000)):''}</span></button></span></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
+      return `${sectionHeading('TU COMUNIDAD','Clientes','Los clientes con visita más reciente aparecen primero. Buscá por nombre o WhatsApp.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
     }
 
     function renderSettings() {
@@ -1770,28 +1727,6 @@
         state.customersCacheVersion=version;saveAdminCustomersCache();
       }else{clearAllAdminCustomersCaches();state.customersCacheVersion=null;}
     }
-    async function syncCustomerDirectory({force=false}={}){
-      if(state.role!=='barber'||state.section!=='clients'||!state.user||!state.barberUid)return false;
-      const accountUid=state.user.uid,barberUid=state.barberUid,seq=++state.customersDirectoryCheckSeq;
-      let snapshot;
-      try{snapshot=await getDoc(doc(state.db,'barbers',barberUid,'customerDirectory','state'));}
-      catch(error){
-        if(state.customersLoaded){console.warn('[Barber VIP] Keeping cached directory; revision check failed.',error?.message||error);return false;}
-        throw error;
-      }
-      if(state.user?.uid!==accountUid||state.barberUid!==barberUid||state.customersDirectoryCheckSeq!==seq)return false;
-      if(snapshot.metadata?.fromCache===true){
-        if(!state.customersLoaded)await ensureAdminCustomersLoaded({force:true,reset:true});
-        return state.customersLoaded;
-      }
-      const remoteVersion=snapshot.exists()?Math.max(0,Number(snapshot.data()?.version)||0):0;
-      state.customersDirectoryVersion=remoteVersion;
-      const cacheVersion=Number(state.customersCacheVersion);
-      const stale=!state.customersLoaded||!Number.isSafeInteger(cacheVersion)||cacheVersion!==remoteVersion;
-      if(stale)api.clearCustomerSearchCache?.();
-      if(force||stale)await ensureAdminCustomersLoaded({force:true,reset:true});
-      return true;
-    }
     function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
     function restoreAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');const retryAfter=Number(saved?.retryAfter);if(Number.isFinite(retryAfter)&&retryAfter>Date.now()&&retryAfter<=Date.now()+300000){state.customersRetryAfter=retryAfter;state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
     function saveAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{localStorage.setItem(adminCustomersRetryKey(),JSON.stringify({retryAfter:state.customersRetryAfter,failures:state.customersLoadFailures}));}catch(_){}}
@@ -1979,7 +1914,7 @@
     function saveSectionPreference(role,section){try{if(state.user?.uid)localStorage.setItem(sectionPreferenceKey(role,state.user.uid),section);}catch(_){}}
 
     async function loadContext(me) {
-      clearListeners(); state.customers=[];state.customersLoaded=false;state.customersLoading=false;state.customersLoadingMore=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customersDirectoryCheckSeq++;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
+      clearListeners(); state.customers=[];state.customersLoaded=false;state.customersLoading=false;state.customersLoadingMore=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
@@ -2453,19 +2388,6 @@
         else if(action==='install-app'){await startInstallPrompt();}
         else if(action==='install-help'){installHelpExpanded=true;renderInstallGate();}
         else if(action==='continue-installed-browser'){installPhase='browser-allowed';setInstallGateLock(false);modalRoot.innerHTML='';}
-        else if(action==='refresh-clients'){
-          if(!startClientsRefreshCooldown())return;
-          updateClientsRefreshControl();
-          try{
-            await syncCustomerDirectory({force:true});
-            if(state.role==='barber'&&state.section==='clients')renderApp();
-            toast('Lista de clientes actualizada.','success');
-          }catch(error){
-            console.warn('[Barber VIP] Manual customer refresh failed:',error?.message||error);
-            if(state.role==='barber'&&state.section==='clients')renderApp();
-            toast(userFacingError(error,'No se pudo actualizar la lista. Revisá tu conexión e intentá de nuevo.'),'error');
-          }finally{updateClientsRefreshControl();}
-        }
         else if(action==='load-more-clients'){await loadMoreAdminCustomers();}
         else if(action==='new-client'){openCustomerModal();}
         else if(action==='edit-client'){openCustomerModal(button.dataset.id);}

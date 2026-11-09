@@ -1529,7 +1529,7 @@
 
     let firestoreBackgroundPause=false;
     let firestoreNetworkTransition=Promise.resolve();
-    function syncFirestoreNetworkWithVisibility(){
+    function syncFirestoreNetworkWithVisibility({forceResume=false}={}){
       if(!state.db)return firestoreNetworkTransition;
       firestoreNetworkTransition=firestoreNetworkTransition.catch(()=>{}).then(async()=>{
         if(!state.db)return;
@@ -1537,25 +1537,53 @@
           if(!firestoreBackgroundPause){await disableNetwork(state.db);firestoreBackgroundPause=true;}
           return;
         }
-        if(firestoreBackgroundPause){await enableNetwork(state.db);firestoreBackgroundPause=false;}
-        if(document.visibilityState==='hidden'){await disableNetwork(state.db);firestoreBackgroundPause=true;}
+        // On mobile the app can return from an external checkout without a full reload.
+        // Force enableNetwork on persisted-page restoration even if the local flag was lost.
+        if(firestoreBackgroundPause||forceResume){
+          await enableNetwork(state.db);
+          firestoreBackgroundPause=false;
+        }
+        if(document.visibilityState==='hidden'){
+          await disableNetwork(state.db);
+          firestoreBackgroundPause=true;
+        }
       });
       return firestoreNetworkTransition;
     }
+    function resumePaymentReturnSession(){
+      if(!new URLSearchParams(location.search).has('payment'))return;
+      const current=state.auth?.currentUser;
+      if(!current||state.manualLogin)return;
+      if(state.user?.uid===current.uid&&state.role)api.resetSessionCache?.();
+      renderLoading();
+      void resumeSession(current);
+    }
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
-      if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen()){
-        if(document.visibilityState==='hidden')stopAdminCustomersListener();
-        else startAdminCustomersListener();
-      }
-      void syncFirestoreNetworkWithVisibility().catch(error=>{
-        if(document.visibilityState==='hidden'){
+      if(document.visibilityState==='hidden'){
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())stopAdminCustomersListener();
+        void syncFirestoreNetworkWithVisibility().catch(error=>{
           firestoreBackgroundPause=false;
           console.warn('[Barber VIP] No se pudo pausar Firestore en segundo plano.',error?.message||error);
-          return;
-        }
+        });
+        return;
+      }
+      // Re-enable Firestore before reconnecting the listener or resuming the session.
+      void syncFirestoreNetworkWithVisibility().then(()=>{
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        resumePaymentReturnSession();
+      }).catch(error=>{
         console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
         showErrorOnce('firestore-resume','No se pudo reanudar la sincronización. Revisá tu conexión y recargá Barber VIP.',error);
+      });
+    });
+    window.addEventListener('pageshow',event=>{
+      if(!event.persisted||!state.db)return;
+      void syncFirestoreNetworkWithVisibility({forceResume:true}).then(()=>{
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        resumePaymentReturnSession();
+      }).catch(error=>{
+        showErrorOnce('firestore-pageshow','No se pudo reanudar la conexión. Revisá tu conexión e intentá nuevamente.',error);
       });
     });
 
@@ -1649,7 +1677,7 @@
           if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
           return;
         }
-        const metadata=snapshot.exists()?snapshot.data()||:{};
+        const metadata=snapshot.exists()?(snapshot.data()||{}):{};
         const remoteVersion=Math.max(0,Number(metadata.version)||0);
         const knownVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
         if(snapshot.metadata?.fromCache===true){
@@ -2175,7 +2203,12 @@
     }
     async function resumeSession(user) {
       if(!user||state.manualLogin||!firebaseReady)return;
+      if(state.resumingSessionUid===user.uid)return;
+      state.resumingSessionUid=user.uid;
       try {
+        // Firebase may still be paused after the mobile PWA was sent to an external
+        // payment app. Restore Firestore before attempting any document reads.
+        await syncFirestoreNetworkWithVisibility({forceResume:document.visibilityState==='visible'});
         let me;
         try { me=await api('/api/me'); }
         catch(error) {
@@ -2185,14 +2218,16 @@
             await api('/api/profile',{method:'POST',body:JSON.stringify({action:'ensure',displayName:user.displayName||user.email?.split('@')[0]||'Profesional'})});
             me=await api('/api/me');
           } else if(isRetryableError(error)) {
-            // Mercado Pago returns to the same origin after an external checkout.
-            // Refresh the Firebase token and retry once before showing a session error.
+            // A transient mobile return can leave both the Firebase token and Firestore
+            // transport stale. Re-enable the transport first, then refresh the token once.
+            await syncFirestoreNetworkWithVisibility({forceResume:true});
             await user.getIdToken(true);
             me=await api('/api/me');
           } else {
             throw error;
           }
         }
+        if(state.auth?.currentUser?.uid!==user.uid)return;
         await loadContext(me);
       } catch(error) {
         const message=userFacingError(error,'No se pudo recuperar tu sesión. Revisá la conexión e intentá nuevamente.');
@@ -2205,6 +2240,8 @@
         }
         cleanupContext(); await signOut(state.auth).catch(()=>{}); renderLanding();
         toast(message,'error');
+      } finally {
+        if(state.resumingSessionUid===user.uid)state.resumingSessionUid='';
       }
     }
 

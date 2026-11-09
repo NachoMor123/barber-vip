@@ -296,6 +296,77 @@ export function createSparkApi({ firebaseConfig, state }) {
     return profile;
   }
 
+  async function migrateCustomerDirectoryFieldsForBarber(barberData = {}) {
+    const uid = currentUid();
+    if (barberData?.customerDirectoryFieldsMigratedAt) {
+      return { ok: true, migrated: true, processed: 0, repaired: 0, cursorId: '' };
+    }
+
+    const pageSize = 150;
+    const cursorId = String(barberData?.customerDirectoryFieldsMigrationCursor || '');
+    const customersRef = collection(db(), 'barbers', uid, 'customers');
+    const pageQuery = cursorId
+      ? query(customersRef, orderBy(documentId()), startAfter(cursorId), limit(pageSize))
+      : query(customersRef, orderBy(documentId()), limit(pageSize));
+    const snapshot = await getDocs(pageQuery);
+    const batch = writeBatch(db());
+    let repaired = 0;
+
+    for (const customerDoc of snapshot.docs) {
+      const customer = customerDoc.data() || {};
+      const updates = {};
+
+      // orderBy('lastCutAt') excludes documents where the field is absent.
+      // Normalize legacy records once so they remain part of every page.
+      if (customer.lastCutAt !== null && typeof customer.lastCutAt?.toDate !== 'function') {
+        const parsed = dateOf(customer.lastCutAt);
+        updates.lastCutAt = parsed ? Timestamp.fromDate(parsed) : null;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(customer, 'active')) {
+        updates.active = customer.disabledAt ? false : true;
+      }
+      const inactive = customer.active === false || updates.active === false;
+      if (inactive) {
+        if (customer.usernameNormalized !== null) updates.usernameNormalized = null;
+        if (customer.whatsapp !== '') updates.whatsapp = '';
+      } else {
+        const normalizedName = normalizeName(customer.fullName);
+        if (normalizedName && customer.usernameNormalized !== normalizedName) {
+          updates.usernameNormalized = normalizedName;
+        }
+        const normalizedWhatsapp = normalizePhone(customer.whatsapp);
+        if (normalizedWhatsapp !== String(customer.whatsapp || '')) {
+          updates.whatsapp = normalizedWhatsapp;
+        }
+      }
+
+      if (Object.keys(updates).length) {
+        batch.update(customerDoc.ref, updates);
+        repaired++;
+      }
+    }
+
+    const last = snapshot.docs.at(-1);
+    const completed = snapshot.size < pageSize;
+    batch.update(doc(db(), 'barbers', uid), {
+      customerDirectoryFieldsMigrationCursor: completed ? null : last.id,
+      ...(completed ? { customerDirectoryFieldsMigratedAt: serverTimestamp() } : {}),
+      updatedAt: serverTimestamp()
+    });
+    if (repaired) {
+      batch.set(doc(db(), 'barbers', uid, 'customerDirectory', 'state'), {
+        version: increment(1), updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+    await batch.commit();
+
+    return {
+      ok: true, migrated: completed, processed: snapshot.size, repaired,
+      cursorId: completed ? '' : last.id
+    };
+  }
+
   async function getMe() {
     const uid = currentUid();
     if (cachedMe && cachedUid === uid) return cachedMe;
@@ -315,6 +386,15 @@ export function createSparkApi({ firebaseConfig, state }) {
           if (migration.cursorId) barber.sparkLoginIndexMigrationCursor = migration.cursorId;
         } catch (error) {
           console.warn('[Barber VIP] La preparación de accesos continuará desde el último bloque guardado.', error?.message || error);
+        }
+      }
+      if (!barber.customerDirectoryFieldsMigratedAt) {
+        try {
+          const migration = await migrateCustomerDirectoryFieldsForBarber(barber);
+          if (migration.migrated) barber.customerDirectoryFieldsMigratedAt = true;
+          if (migration.cursorId) barber.customerDirectoryFieldsMigrationCursor = migration.cursorId;
+        } catch (error) {
+          console.warn('[Barber VIP] La reparación del directorio continuará desde el último bloque guardado.', error?.message || error);
         }
       }
       if (!barber.sparkPublicCodeReadyAt || !barber.sparkPublicMetaReadyAt) {

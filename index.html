@@ -1422,6 +1422,12 @@
           state.cutSearchResults=state.cutSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
           // lastCutAt is the only global order field. Refresh the bounded first page.
           markCustomerDirectoryChanged({reorder:true});
+        }else if(result.customer&&result.duplicate){
+          const mergeCustomer=customer=>customer.uid===id?{...customer,...result.customer,uid:id}:customer;
+          state.customers=state.customers.map(mergeCustomer);
+          if(Array.isArray(state.customerSearchResults))state.customerSearchResults=state.customerSearchResults.map(mergeCustomer);
+          state.cutSearchResults=state.cutSearchResults.map(mergeCustomer);
+          if(state.customersLoaded)saveAdminCustomersCache();
         }
         toast(result.message||(result.duplicate?'La visita ya estaba registrada. No se sumó nuevamente.':'Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)){

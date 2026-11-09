@@ -77,7 +77,8 @@ test("the first directory page is 15 records, subsequent cursor pages are eight"
   assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=8/);
   assert.match(loader, /pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(more, /pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE/);
-  assert.match(more, /cursorId:state\.customersCursorId/);
+  assert.match(more, /const cursorId=String\(state\.customersCursorId\)/);
+  assert.match(more, /cursorId,cursorValue/);
   assert.match(list, /Math\.min\(15, Number\(data\.pageSize\) \|\| 15\)/);
   assert.match(list, /limit\(pageSize\)/);
   assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);

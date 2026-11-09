@@ -102,7 +102,14 @@ try {
   await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
     sparkLoginIndexMigrationCursor: 'CUSTOMER-250', updatedAt: serverTimestamp()
   }));
-  console.log('PASS: barber can persist only the resumable login-index migration cursor');
+  await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
+    customerDirectoryFieldsMigrationCursor: 'CUSTOMER-150', updatedAt: serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
+    customerDirectoryFieldsMigrationCursor: null,
+    customerDirectoryFieldsMigratedAt: serverTimestamp(), updatedAt: serverTimestamp()
+  }));
+  console.log('PASS: barber can persist resumable one-time customer directory field repair');
 
   await assertSucceeds(updateDoc(doc(barberDb, 'barbers', barberUid), {
     displayName: 'Nombre actualizado', updatedAt: serverTimestamp()

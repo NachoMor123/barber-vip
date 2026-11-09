@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v79-customer-directory-repair';
+const CACHE_NAME = 'barber-vip-shell-v80-idempotent-visits';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

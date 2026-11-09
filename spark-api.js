@@ -366,7 +366,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     });
     if (repaired) {
       batch.set(doc(db(), 'barbers', uid, 'customerDirectory', 'state'), {
-        version: increment(1), updatedAt: serverTimestamp()
+        version: increment(1), updatedAt: serverTimestamp(), changeType: 'refresh', customerId: ''
       }, { merge: true });
     }
     await batch.commit();
@@ -664,7 +664,8 @@ export function createSparkApi({ firebaseConfig, state }) {
           active: true, updatedAt: serverTimestamp()
         });
         transaction.set(directoryRef, {
-          version: increment(1), updatedAt: serverTimestamp()
+          version: increment(1), updatedAt: serverTimestamp(), changeType: 'upsert',
+          customerId: credential.user.uid
         }, { merge: true });
       });
       clearCustomerSearchCache();
@@ -783,7 +784,9 @@ export function createSparkApi({ firebaseConfig, state }) {
           active: true, updatedAt: serverTimestamp()
         }, { merge: true });
       }
-      transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+      transaction.set(directoryRef, {
+        version: increment(1), updatedAt: serverTimestamp(), changeType: 'upsert', customerId: id
+      }, { merge: true });
     });
 
     let passwordResetFailed = false;
@@ -838,7 +841,9 @@ export function createSparkApi({ firebaseConfig, state }) {
           active: false, updatedAt: serverTimestamp()
         }, { merge: true });
       }
-      transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+      transaction.set(directoryRef, {
+        version: increment(1), updatedAt: serverTimestamp(), changeType: 'remove', customerId: id
+      }, { merge: true });
     });
     clearCustomerSearchCache();
     return { ok: true };
@@ -922,7 +927,9 @@ export function createSparkApi({ firebaseConfig, state }) {
         updatedAt: now
       };
       transaction.update(customerRef, updates);
-      transaction.set(directoryRef, { version: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+      transaction.set(directoryRef, {
+        version: increment(1), updatedAt: serverTimestamp(), changeType: 'upsert', customerId: id
+      }, { merge: true });
       resultCustomer = {
         ...customer, ...updates, totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2,
         loyaltyProgramId: customer.loyaltyProgramId || program.id,

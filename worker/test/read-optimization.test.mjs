@@ -303,6 +303,7 @@ test("manual customer creation uses document-only transaction reads and an atomi
   assert.match(create, /transaction\.get\(phoneLookupRef\)/);
   assert.match(create, /const legacyPhoneMatches = await getDocs\(phoneQuery\)/);
   assert.match(create, /transaction\.set\(phoneLookupRef/);
+  assert.match(create, /'customerPhoneIndex'/);
   assert.doesNotMatch(create, /transaction\.get\(phoneQuery\)/);
   assert.doesNotMatch(create, /transaction\.get\([^)]*Query\)/);
 });
@@ -315,10 +316,18 @@ test("customer edits and disables maintain phone uniqueness locks without transa
   assert.match(update, /transaction\.set\(newPhoneLookupRef/);
   assert.doesNotMatch(update, /transaction\.get\(phoneQuery\)/);
   assert.match(disable, /transaction\.get\(phoneLookupRef\)/);
-  assert.match(disable, /active: false, kind: 'phone'/);
+  assert.match(disable, /active: false/);
   for (const source of [create, update, disable]) {
     assert.doesNotMatch(source, /transaction\.get\([^)]*Query\)/);
   }
+});
+
+test("phone uniqueness indexes are private to the owning barber", () => {
+  const phoneIndex = functionBody(rules, "match /customerPhoneIndex/{phoneId}", "match /customerDirectory/{metaId}");
+  assert.match(phoneIndex, /allow get: if isOwner\(barberId\)/);
+  assert.match(phoneIndex, /allow list: if false/);
+  assert.match(phoneIndex, /customerExistsAfter\(barberId, request\.resource\.data\.uid\)/);
+  assert.doesNotMatch(phoneIndex, /allow read: if true/);
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {

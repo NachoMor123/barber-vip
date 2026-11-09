@@ -223,13 +223,46 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v78-pagination-spinner-2500ms/);
+  assert.match(serviceWorker, /v79-customer-directory-repair/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
   assert.doesNotMatch(rules, /customerRoster/);
   await assert.rejects(access(join(root, "customer-roster.js")), error => error && error.code === "ENOENT");
   await assert.rejects(access(join(root, "customer-roster.mjs")), error => error && error.code === "ENOENT");
+});
+
+
+test("null lastCutAt cursors advance without reusing the previous page timestamp", () => {
+  const more = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  assert.match(more, /Object\.prototype\.hasOwnProperty\.call\(page,'cursorValue'\)\?page\.cursorValue:state\.customersCursorValue/);
+  assert.doesNotMatch(more, /page\.cursorValue\?\?state\.customersCursorValue/);
+  assert.match(api, /lastCutAt: null/);
+});
+
+test("failed customer pages keep their cursor and expose an explicit retry", () => {
+  const list = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  const search = functionBody(html, "async function loadMoreCustomerSearch()", "async function runCustomerSearch");
+  const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
+  assert.match(list, /customersPageError='No pudimos cargar/);
+  assert.match(search, /customerSearchPageError='No pudimos cargar/);
+  assert.doesNotMatch(list.slice(list.indexOf("}catch(error)"), list.indexOf("}finally")), /customersHasMore=false/);
+  assert.doesNotMatch(search.slice(search.indexOf("}catch(error)"), search.indexOf("}finally")), /customerSearchHasMore=false/);
+  assert.match(markup, /data-action=\"\$\{retryAction\}\"/);
+  assert.match(html, /retry-more-clients/);
+  assert.match(html, /retry-more-search/);
+});
+
+test("legacy customer directory fields are repaired once in bounded pages", () => {
+  const migration = functionBody(api, "async function migrateCustomerDirectoryFieldsForBarber", "async function getMe");
+  const getMe = functionBody(api, "async function getMe()", "async function ensureBarberProfile");
+  assert.match(migration, /orderBy\(documentId\(\)\)/);
+  assert.match(migration, /limit\(pageSize\)/);
+  assert.match(migration, /lastCutAt/);
+  assert.match(migration, /usernameNormalized/);
+  assert.match(migration, /customerDirectoryFieldsMigratedAt/);
+  assert.match(getMe, /migrateCustomerDirectoryFieldsForBarber\(barber\)/);
+  assert.match(migration, /version: increment\(1\)/);
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {

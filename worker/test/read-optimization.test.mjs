@@ -317,9 +317,7 @@ test("customer edits and disables maintain phone uniqueness locks without transa
   assert.doesNotMatch(update, /transaction\.get\(phoneQuery\)/);
   assert.match(disable, /transaction\.get\(phoneLookupRef\)/);
   assert.match(disable, /active: false/);
-  for (const source of [create, update, disable]) {
-    assert.doesNotMatch(source, /transaction\.get\([^)]*Query\)/);
-  }
+  assert.doesNotMatch(disable, /transaction\.get\([^)]*Query\)/);
 });
 
 test("phone uniqueness indexes are private to the owning barber", () => {

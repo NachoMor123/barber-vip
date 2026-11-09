@@ -92,11 +92,11 @@ test("initial directory page attaches scroll pagination after loading completes"
   const request = loader.slice(loader.indexOf("try{"), loader.indexOf("}catch(error){"));
   const finalizer = loader.slice(loader.indexOf("}finally{"));
   const observer = functionBody(html, "function observeCustomersPagination()", "function renderApp()");
-  assert.doesNotMatch(request, /renderApp\\(\\)/);
-  assert.match(finalizer, /state\\.customersLoading=false/);
-  assert.match(finalizer, /if\\(state\\.section==='clients'&&document\\.visibilityState==='visible'\\)renderApp\\(\\)/);
+  assert.doesNotMatch(request, /renderApp\(\)/);
+  assert.match(finalizer, /state\.customersLoading=false/);
+  assert.match(finalizer, /if\(state\.section==='clients'&&document\.visibilityState==='visible'\)renderApp\(\)/);
   assert.ok(finalizer.indexOf("state.customersLoading=false") < finalizer.indexOf("renderApp()"));
-  assert.match(observer, /!state\\.customersLoading/);
+  assert.match(observer, /!state\.customersLoading/);
 });
 
 test("scroll pagination shows a visible circular loader and removes redundant manual refresh", () => {

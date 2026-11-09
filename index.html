@@ -1828,7 +1828,6 @@
           state.customersQueryKey=key;state.customersCacheVersion=Math.max(0,Number(state.customersDirectoryVersion)||0);
           state.customersLoadError='';
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();saveAdminCustomersCache();
-          if(state.section==='clients'&&document.visibilityState==='visible')renderApp();
         }catch(error){
           if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid
             ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==key)return;
@@ -1841,9 +1840,12 @@
           throw failure;
         }finally{
           if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid){
+            // Arm the scroll observer only after loading is false. Rendering sooner
+            // makes observeCustomersPagination() skip the sentinel and leaves the
+            // initial 15 records without automatic pagination until a later repaint.
             state.customersLoading=false;
             if(state.customersLoadQueryKey===key)state.customersLoadQueryKey='';
-            if(state.section==='clients'&&state.customersLoadError)renderApp();
+            if(state.section==='clients'&&document.visibilityState==='visible')renderApp();
           }
         }
       })();

@@ -724,6 +724,10 @@
       .quick-action small{font-size:9px!important}
     }
   </style>
+  <style id="barbervip-two-section-admin-nav">
+    .mobile-nav{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .mobile-nav .nav-btn{min-width:0}
+  </style>
 </head>
 <body>
   <div class="bg-orb"></div><div class="bg-orb two"></div>
@@ -775,7 +779,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersPageError:'', customersLoadError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', query:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersPageError:'', customersLoadError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'clients', query:'', resumingSessionUid:'', customersDirectorySyncSeq:0, unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1128,7 +1132,7 @@
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
     const clearListeners = () => { stopAdminCustomersListener(); api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.customerSearchPageError='';state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
-    const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='home'; state.customerSection='home'; state.query=''; state.loadError=false; };
+    const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='clients'; state.customerSection='home'; state.query=''; state.loadError=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
     function renderSessionError(message){
@@ -1321,10 +1325,6 @@
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function metricCard(label,value,icon,caption='') { return `<div class="metric-card"><div class="metric-head"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-caption">${caption}</div></div>`; }
-    function dashboardView() {
-      return `${sectionHeading('RESUMEN DE TU ACTIVIDAD',`${greetingForNow()}, ${escapeHtml(state.barber?.displayName||'profesional')} 👋`,'Convertí cada visita en una razón para volver.','<button class="btn btn-primary" data-action="open-cut-modal">✦ Registrar visita</button>')}<section class="quick-actions-section"><div class="quick-section-head"><div><span class="eyebrow">⚡ ACCESO DIRECTO</span><h2>Accesos rápidos</h2><p>Lo que más usás, siempre a mano.</p></div></div><div class="quick-actions"><button class="quick-action" data-action="new-client"><span>＋</span><strong>Crear cliente</strong><small>Sumá una persona a tu comunidad.</small></button><button class="quick-action" data-action="open-cut-modal"><span>✦</span><strong>Registrar visita</strong><small>Elegí un cliente y registrá su visita.</small></button><button class="quick-action" data-action="customer-entry"><span>⌁</span><strong>Ingresar cliente</strong><small>Compartí el enlace, código o QR de acceso.</small></button><button class="quick-action" data-action="settings-profile"><span>⚙️</span><strong>Configuración</strong><small>Editá tus datos profesionales y beneficios.</small></button></div></section>`;
-    }
-
     // Renderizado del cliente sin consultas nuevas: se reutiliza el snapshot ya cargado.
     function clientRow(c){
       const id=String(c?.uid||'');
@@ -1486,8 +1486,9 @@
     }
     function clientsView() {
       const list=filteredCustomers();
-      const actions=`<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>`;
-      return `${sectionHeading('TU COMUNIDAD','Clientes','Los clientes con visita más reciente aparecen primero. Buscá por nombre o WhatsApp.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
+      const name=escapeHtml(state.barber?.displayName||'profesional');
+      const actions='<button class="btn btn-soft" data-action="open-cut-modal">✦ Registrar visita</button><button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>';
+      return `${sectionHeading('CLIENTES',`${greetingForNow()}, ${name} 👋`,'Los clientes con visita más reciente aparecen primero. Buscá por nombre o WhatsApp.',actions)}<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="${escapeHtml(state.query)}"></div><div id="customerResults">${customerResultsMarkup(list)}</div>`;
     }
 
     function renderSettings() {
@@ -1528,7 +1529,7 @@
 
     let firestoreBackgroundPause=false;
     let firestoreNetworkTransition=Promise.resolve();
-    function syncFirestoreNetworkWithVisibility(){
+    function syncFirestoreNetworkWithVisibility({forceResume=false}={}){
       if(!state.db)return firestoreNetworkTransition;
       firestoreNetworkTransition=firestoreNetworkTransition.catch(()=>{}).then(async()=>{
         if(!state.db)return;
@@ -1536,31 +1537,59 @@
           if(!firestoreBackgroundPause){await disableNetwork(state.db);firestoreBackgroundPause=true;}
           return;
         }
-        if(firestoreBackgroundPause){await enableNetwork(state.db);firestoreBackgroundPause=false;}
-        if(document.visibilityState==='hidden'){await disableNetwork(state.db);firestoreBackgroundPause=true;}
+        // On mobile the app can return from an external checkout without a full reload.
+        // Force enableNetwork on persisted-page restoration even if the local flag was lost.
+        if(firestoreBackgroundPause||forceResume){
+          await enableNetwork(state.db);
+          firestoreBackgroundPause=false;
+        }
+        if(document.visibilityState==='hidden'){
+          await disableNetwork(state.db);
+          firestoreBackgroundPause=true;
+        }
       });
       return firestoreNetworkTransition;
     }
+    function resumePaymentReturnSession(){
+      if(!new URLSearchParams(location.search).has('payment'))return;
+      const current=state.auth?.currentUser;
+      if(!current||state.manualLogin)return;
+      if(state.user?.uid===current.uid&&state.role)api.resetSessionCache?.();
+      renderLoading();
+      void resumeSession(current);
+    }
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
-      if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen()){
-        if(document.visibilityState==='hidden')stopAdminCustomersListener();
-        else startAdminCustomersListener();
-      }
-      void syncFirestoreNetworkWithVisibility().catch(error=>{
-        if(document.visibilityState==='hidden'){
+      if(document.visibilityState==='hidden'){
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())stopAdminCustomersListener();
+        void syncFirestoreNetworkWithVisibility().catch(error=>{
           firestoreBackgroundPause=false;
           console.warn('[Barber VIP] No se pudo pausar Firestore en segundo plano.',error?.message||error);
-          return;
-        }
+        });
+        return;
+      }
+      // Re-enable Firestore before reconnecting the listener or resuming the session.
+      void syncFirestoreNetworkWithVisibility().then(()=>{
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        resumePaymentReturnSession();
+      }).catch(error=>{
         console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
         showErrorOnce('firestore-resume','No se pudo reanudar la sincronización. Revisá tu conexión y recargá Barber VIP.',error);
+      });
+    });
+    window.addEventListener('pageshow',event=>{
+      if(!event.persisted||!state.db)return;
+      void syncFirestoreNetworkWithVisibility({forceResume:true}).then(()=>{
+        if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        resumePaymentReturnSession();
+      }).catch(error=>{
+        showErrorOnce('firestore-pageshow','No se pudo reanudar la conexión. Revisá tu conexión e intentá nuevamente.',error);
       });
     });
 
 
     function adminShell() {
-      return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='home'?dashboardView():state.section==='clients'?clientsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('home','▦','Inicio')}${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
+      return `<div class="app-shell"><aside class="sidebar">${brand}<div class="sidebar-label">TU ESPACIO</div><nav class="nav-list">${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Configuración')}</nav><div class="sidebar-bottom"><div class="sidebar-user"><div class="avatar">${escapeHtml(nameInitials(state.barber?.displayName))}</div><div style="min-width:0;flex:1"><strong>${escapeHtml(state.barber?.displayName||'Administrador')}</strong><small>${escapeHtml(state.barber?.barberName||'Barber VIP')}</small></div><button class="text-link" data-action="logout" aria-label="Cerrar sesión">Salir</button></div></div></aside><main class="main-area"><header class="topbar"><div class="topbar-context"><span class="top-date">${new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}</span></div><div class="topbar-actions"><button class="btn btn-danger topbar-logout" data-action="logout">↪ Salir</button></div></header>${state.section==='clients'?clientsView():renderSettings()}</main></div><nav class="mobile-nav">${navItem('clients','♙','Clientes')}${navItem('settings','⚙','Ajustes')}</nav>${pipEnabled()?'<button class="pip-fab" data-action="open-pip-help" aria-label="Abrir ayuda Pip">✦ <span>Pip</span></button>':''}`;
     }
     function navItem(section,icon,label,badge='') { return `<button class="nav-btn ${state.section===section?'active':''}" data-action="nav" data-section="${section}"><span class="nav-ico">${icon}</span><span>${label}</span>${badge?`<span class="nav-badge">${badge}</span>`:''}</button>`; }
 
@@ -1648,7 +1677,8 @@
           if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
           return;
         }
-        const remoteVersion=snapshot.exists()?Math.max(0,Number(snapshot.data()?.version)||0):0;
+        const metadata=snapshot.exists()?(snapshot.data()||{}):{};
+        const remoteVersion=Math.max(0,Number(metadata.version)||0);
         const knownVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
         if(snapshot.metadata?.fromCache===true){
           if(state.section==='clients'&&!state.customersLoaded)void ensureAdminCustomersLoaded({force:true,reset:true})
@@ -1662,23 +1692,59 @@
           return;
         }
         if(remoteVersion<=knownVersion)return;
+        const changeType=String(metadata.changeType||'refresh');
+        const changedId=String(metadata.customerId||'');
+        const oneChange=remoteVersion===knownVersion+1&&changedId.length>0;
+        if(oneChange&&changeType==='remove'){
+          applyCustomerRemovalToDirectory(changedId,{directoryVersion:remoteVersion});
+          const cutTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
+          if(cutTerm)void runCustomerSearch(cutTerm,'cut');
+          else if(state.section==='clients'&&state.query.trim())void runCustomerSearch(state.query.trim(),'clients');
+          else if(state.section==='clients')renderApp();
+          return;
+        }
+        if(oneChange&&changeType==='upsert'){
+          const syncSeq=++state.customersDirectorySyncSeq;
+          const customerRef=doc(state.db,'barbers',barberUid,'customers',changedId);
+          void getDoc(customerRef).then(customerSnap=>{
+            if(state.user?.uid!==accountUid||state.barberUid!==barberUid
+              ||!isAdminCustomerDirectorySurfaceOpen()||document.visibilityState!=='visible'
+              ||state.customersDirectorySyncSeq!==syncSeq)return;
+            const latestVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
+            if(remoteVersion<=latestVersion)return;
+            if(customerSnap.exists()&&customerSnap.data()?.active!==false){
+              applyCustomerUpsertToDirectory({uid:customerSnap.id,...customerSnap.data()},{directoryVersion:remoteVersion});
+            }else{
+              applyCustomerRemovalToDirectory(changedId,{directoryVersion:remoteVersion});
+            }
+            const cutTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
+            if(cutTerm)void runCustomerSearch(cutTerm,'cut');
+            else if(state.section==='clients'&&state.query.trim())void runCustomerSearch(state.query.trim(),'clients');
+            else if(state.section==='clients')renderApp();
+          }).catch(error=>{
+            if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
+            showErrorOnce('customer-directory-single-sync','No pudimos actualizar un cambio puntual. Vamos a renovar la lista.',error);
+            invalidateCustomerDirectoryPages({preserveVisible:true});
+            if(state.section==='clients')void ensureAdminCustomersLoaded({force:true,reset:true}).catch(()=>{});
+          });
+          return;
+        }
+        // Several changes may have happened while the page was closed or backgrounded.
+        // In that case a fresh first page is safer than guessing how to patch the cursor.
         state.customersDirectoryVersion=remoteVersion;
         api.clearCustomerSearchCache?.();
-        if(state.section==='clients'){
-          const searchTerm=state.query.trim();
-          if(searchTerm){
-            state.customerSearchResults=null;state.customerSearchTerm='';
-            state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
-            void runCustomerSearch(searchTerm,'clients');
-          }else{
-            invalidateCustomerDirectoryPages({preserveVisible:true});
-            void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
-              toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
-            );
-          }
-        }else{
-          const searchTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
-          if(searchTerm)void runCustomerSearch(searchTerm,'cut');
+        const cutTerm=$('#cutSearch',modalRoot)?.value?.trim()||'';
+        if(cutTerm){
+          void runCustomerSearch(cutTerm,'cut');
+        }else if(state.section==='clients'&&state.query.trim()){
+          state.customerSearchResults=null;state.customerSearchTerm='';
+          state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.customerSearchHasMore=false;
+          void runCustomerSearch(state.query.trim(),'clients');
+        }else if(state.section==='clients'){
+          invalidateCustomerDirectoryPages({preserveVisible:true});
+          void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+            toast(userFacingError(error,'Se detectó un cambio de clientes, pero no pudimos actualizar la lista.'),'error')
+          );
         }
       },error=>{
         if(state.customersUnsubscribe===unsubscribe){state.customersUnsubscribe=null;state.customersListenerStarted=false;}
@@ -1714,27 +1780,64 @@
     function applyCustomerVisitToDirectory(customer){
       const customerId=String(customer?.uid||'');
       if(!customerId)return;
-      const version=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
-      state.customersDirectoryVersion=version;
-      api.clearCustomerSearchCache?.();
       if(state.role!=='barber'||!state.user||!state.barberUid
         ||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey()){
         clearAllAdminCustomersCaches();
         state.customersCacheVersion=null;
         return;
       }
-      const next=state.customers.filter(item=>item&&item.uid!==customerId);
-      next.push({...customer,uid:customerId});
-      next.sort(compareCustomersByLastVisit);
-      state.customers=next;
-      state.customersCacheVersion=version;
-      const last=next[next.length-1]||null;
-      state.customersCursorId=String(last?.uid||'');
-      state.customersCursorValue=last?customerCursorValue(last):null;
-      const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
-      state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
-      state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
-      saveAdminCustomersCache();
+      applyCustomerUpsertToDirectory(customer);
+    }
+    function setAdminDirectoryVersion(version){
+      const next=Math.max(0,Number(version)||0);
+      state.customersDirectoryVersion=next;
+      state.customersCacheVersion=next;
+    }
+    function applyCustomerUpsertToDirectory(customer,{directoryVersion=null}={}){
+      const customerId=String(customer?.uid||'');
+      if(!customerId)return;
+      const complete=state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey();
+      if(complete){
+        const prior=state.customers.find(item=>item?.uid===customerId)||null;
+        let next=state.customers.filter(item=>item&&item.uid!==customerId);
+        const merged={...(prior||{}),...customer,uid:customerId};
+        if(prior||!state.customersHasMore||!next.length||compareCustomersByLastVisit(merged,next[next.length-1])<0){
+          const windowSize=state.customers.length;
+          next.push(merged);
+          next.sort(compareCustomersByLastVisit);
+          if(state.customersHasMore&&next.length>windowSize)next=next.slice(0,windowSize);
+          state.customers=next;
+          const last=next[next.length-1]||null;
+          if(state.customersHasMore&&last){
+            state.customersCursorId=String(last.uid||'');
+            state.customersCursorValue=customerCursorValue(last);
+          }
+          const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
+          state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
+          state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
+        }
+      }
+      const version=directoryVersion===null
+        ?Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1
+        :Math.max(0,Number(directoryVersion)||0);
+      setAdminDirectoryVersion(version);
+      api.clearCustomerSearchCache?.();
+      if(complete)saveAdminCustomersCache();
+    }
+    function applyCustomerRemovalToDirectory(customerId,{directoryVersion=null}={}){
+      const id=String(customerId||'');
+      if(!id)return;
+      if(state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey()){
+        state.customers=state.customers.filter(item=>item&&item.uid!==id);
+      }
+      if(Array.isArray(state.customerSearchResults))state.customerSearchResults=state.customerSearchResults.filter(item=>item?.uid!==id);
+      state.cutSearchResults=state.cutSearchResults.filter(item=>item?.uid!==id);
+      const version=directoryVersion===null
+        ?Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1
+        :Math.max(0,Number(directoryVersion)||0);
+      setAdminDirectoryVersion(version);
+      api.clearCustomerSearchCache?.();
+      if(state.customersLoaded)saveAdminCustomersCache();
     }
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
@@ -1777,20 +1880,18 @@
       state.customersFirstPageCursorValue=null;state.customersQueryKey='';state.customersCacheVersion=null;
       if(!preserveVisible){state.customers=[];state.customersLoaded=false;}
     }
-    function markCustomerDirectoryChanged({customer=null,reorder=false}={}){
-      const version=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
-      state.customersDirectoryVersion=version;api.clearCustomerSearchCache?.();
-      if(reorder){
-        const visible=state.role==='barber'&&state.section==='clients';
-        invalidateCustomerDirectoryPages({preserveVisible:visible});
-        if(visible&&!state.query.trim())void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
-          toast(userFacingError(error,'El cambio se guardó, pero no pudimos actualizar la primera página de clientes.'),'error'));
+    function markCustomerDirectoryChanged({customer=null,removeId=''}={}){
+      if(removeId){
+        applyCustomerRemovalToDirectory(removeId);
         return;
       }
-      if(customer&&state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey()){
-        state.customers=state.customers.map(item=>item.uid===customer.uid?{...item,...customer}:item);
-        state.customersCacheVersion=version;saveAdminCustomersCache();
-      }else{clearAllAdminCustomersCaches();state.customersCacheVersion=null;}
+      if(customer){
+        applyCustomerUpsertToDirectory(customer);
+        return;
+      }
+      clearAllAdminCustomersCaches();
+      state.customersCacheVersion=null;
+      state.customersDirectoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
     }
     function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
     function restoreAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');const retryAfter=Number(saved?.retryAfter);if(Number.isFinite(retryAfter)&&retryAfter>Date.now()&&retryAfter<=Date.now()+300000){state.customersRetryAfter=retryAfter;state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}
@@ -2025,7 +2126,7 @@
     async function loadContext(me) {
       clearListeners(); state.customers=[];state.customersLoaded=false;state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.customerSearchPageError='';state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersCacheSavedAt=0;state.customersLoadFailures=0;state.customersRetryAfter=0;state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;state.customersQueryKey='';state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; state.subscriptionPrice=Number(me.subscriptionPrice)||SUBSCRIPTION_PRICE_ARS; state.user=state.auth.currentUser; state.role=me.role; state.barberUid=me.barberUid;restoreAdminCustomersRetryGuard(); state.loadError=false; startRelativeTimeClock();
       if(me.role==='barber') {
-        state.section=readSectionPreference('barber',me.uid,['home','clients','settings'],'home');
+        state.section=readSectionPreference('barber',me.uid,['clients','settings'],'clients');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
         // One revision check when Clients opens; never keep a directory listener active.
         if(state.section==='clients')startAdminCustomersListener();
@@ -2107,7 +2208,12 @@
     }
     async function resumeSession(user) {
       if(!user||state.manualLogin||!firebaseReady)return;
+      if(state.resumingSessionUid===user.uid)return;
+      state.resumingSessionUid=user.uid;
       try {
+        // Firebase may still be paused after the mobile PWA was sent to an external
+        // payment app. Restore Firestore before attempting any document reads.
+        await syncFirestoreNetworkWithVisibility({forceResume:document.visibilityState==='visible'});
         let me;
         try { me=await api('/api/me'); }
         catch(error) {
@@ -2117,14 +2223,16 @@
             await api('/api/profile',{method:'POST',body:JSON.stringify({action:'ensure',displayName:user.displayName||user.email?.split('@')[0]||'Profesional'})});
             me=await api('/api/me');
           } else if(isRetryableError(error)) {
-            // Mercado Pago returns to the same origin after an external checkout.
-            // Refresh the Firebase token and retry once before showing a session error.
+            // A transient mobile return can leave both the Firebase token and Firestore
+            // transport stale. Re-enable the transport first, then refresh the token once.
+            await syncFirestoreNetworkWithVisibility({forceResume:true});
             await user.getIdToken(true);
             me=await api('/api/me');
           } else {
             throw error;
           }
         }
+        if(state.auth?.currentUser?.uid!==user.uid)return;
         await loadContext(me);
       } catch(error) {
         const message=userFacingError(error,'No se pudo recuperar tu sesión. Revisá la conexión e intentá nuevamente.');
@@ -2137,6 +2245,8 @@
         }
         cleanupContext(); await signOut(state.auth).catch(()=>{}); renderLanding();
         toast(message,'error');
+      } finally {
+        if(state.resumingSessionUid===user.uid)state.resumingSessionUid='';
       }
     }
 
@@ -2211,7 +2321,7 @@
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
         const saved=result.customer?{...result.customer,uid:result.customer.uid||id}:null;
         state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
-        if(id)markCustomerDirectoryChanged({customer:saved});else markCustomerDirectoryChanged({reorder:true});
+        if(saved)markCustomerDirectoryChanged({customer:saved});
         modalRoot.innerHTML='';if(state.section==='clients')renderApp();
         const message=result.passwordResetFailed?'Los datos del cliente se guardaron, pero no se pudo cambiar la contraseña. Volvé a intentarlo.':(id?'Cliente actualizado.':'Cliente creado correctamente.');
         toast(message,result.passwordResetFailed?'error':'success');
@@ -2483,9 +2593,7 @@
         else if(action==='start-customer-login'){renderLogin('customer');}
         else if(action==='go-home'||action==='close-modal'){if(action==='go-home'){try{localStorage.removeItem('barberVipStartSignup');history.replaceState(null,'',location.pathname);renderLanding();}catch(_){renderLanding();}}else{modalRoot.innerHTML='';if(state.section!=='clients')stopAdminCustomersListener();}}
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';if(state.section!=='clients')stopAdminCustomersListener();}
-        else if(action==='customer-entry'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-customer-access')?.scrollIntoView({behavior:'smooth',block:'start'}));}
-        else if(action==='settings-profile'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-profile-section')?.scrollIntoView({behavior:'smooth',block:'start'}));}
-        else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients'){pendingLoad=Promise.resolve(startAdminCustomersListener());const directoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0),cacheVersion=Math.max(0,Number(state.customersCacheVersion)||0);if(!state.customersLoaded||directoryVersion!==cacheVersion){state.customersLoadError='';pendingLoad=pendingLoad.then(()=>ensureAdminCustomersLoaded({force:true,reset:true})).catch(error=>toast(userFacingError(error,'No se pudieron actualizar los clientes. Conservamos los datos disponibles; reintentá desde Clientes.'),'error'));}}renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
+        else if(action==='nav'){const previousSection=state.section,nextSection=['clients','settings'].includes(button.dataset.section)?button.dataset.section:'clients';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients'){pendingLoad=Promise.resolve(startAdminCustomersListener());const directoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0),cacheVersion=Math.max(0,Number(state.customersCacheVersion)||0);if(!state.customersLoaded||directoryVersion!==cacheVersion){state.customersLoadError='';pendingLoad=pendingLoad.then(()=>ensureAdminCustomersLoaded({force:true,reset:true})).catch(error=>toast(userFacingError(error,'No se pudieron actualizar los clientes. Conservamos los datos disponibles; reintentá desde Clientes.'),'error'));}}renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
@@ -2514,7 +2622,7 @@
               await api('/api/customers',{method:'DELETE',body:{customerId:id}});
               if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
               state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
-              markCustomerDirectoryChanged({reorder:true});modalRoot.innerHTML='';renderApp();
+              markCustomerDirectoryChanged({removeId:id});modalRoot.innerHTML='';renderApp();
               toast('Cliente dado de baja. El historial de visitas se conservó.','success');
             }catch(error){toast(userFacingError(error,'No se pudo dar de baja al cliente. Revisá la conexión.'),'error');if(button?.isConnected)button.disabled=false;}
           }

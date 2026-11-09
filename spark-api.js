@@ -135,6 +135,7 @@ function customerDefaults({ uid, barberUid, fullName, usernameNormalized, loginE
     loyaltyOverride,
     totalCuts: 0, actualCutsRegistered: 0, cycleCuts: 0, cycleVersion: 2,
     cyclePausedAtMax: false, availableRewards: [], rewardReady: false, active: true,
+    lastCutOperationId: null,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(), lastCutAt: null
   };
 }
@@ -188,6 +189,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const safeCustomer = { ...customer };
       delete safeCustomer.loginEmail;
       delete safeCustomer.usernameNormalized;
+      delete safeCustomer.lastCutOperationId;
       for (const field of ['createdAt', 'updatedAt', 'lastCutAt', 'lastRewardAppliedAt']) {
         const value = safeCustomer[field];
         if (value && typeof value.toDate === 'function') safeCustomer[field] = value.toDate().toISOString();
@@ -607,15 +609,10 @@ export function createSparkApi({ firebaseConfig, state }) {
     if (!validPhone(data.whatsapp)) throw fail('Ingresá un WhatsApp argentino válido, con característica y número completo.');
 
     const lookupRef = doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized));
-    const lookup = await getDoc(lookupRef);
-    if (lookup.exists() && lookup.data().active !== false) {
-      throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
-    }
-    const phoneMatches = await getDocs(query(
+    const phoneQuery = query(
       collection(db(), 'barbers', uid, 'customers'),
       where('active', '==', true), where('whatsapp', '==', whatsapp), limit(1)
-    ));
-    if (!phoneMatches.empty) throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
+    );
 
     const override = normalizeOverride(data.loyaltyMode, data.loyaltyRewards, barber);
     const loginEmail = 'cliente-' + crypto.randomUUID() + '@accounts.barbervip.app';
@@ -635,10 +632,14 @@ export function createSparkApi({ firebaseConfig, state }) {
       const profileRef = doc(db(), 'userProfiles', credential.user.uid);
       const directoryRef = doc(db(), 'barbers', uid, 'customerDirectory', 'state');
       await runTransaction(db(), async transaction => {
-        const lookupSnap = await transaction.get(lookupRef);
+        const [lookupSnap, phoneMatches] = await Promise.all([
+          transaction.get(lookupRef),
+          transaction.get(phoneQuery)
+        ]);
         if (lookupSnap.exists() && lookupSnap.data().active !== false) {
           throw fail('Ya existe un cliente activo con ese nombre en este espacio profesional.');
         }
+        if (!phoneMatches.empty) throw fail('Ya existe un cliente activo con ese WhatsApp en este espacio profesional.');
         transaction.set(customerRef, customer);
         transaction.set(profileRef, {
           uid: credential.user.uid, role: 'customer', barberUid: uid, createdAt: serverTimestamp()
@@ -787,6 +788,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const uid = currentUid();
     const id = cleanText(data.customerId, 100);
     if (!id) throw fail('Elegí un cliente.');
+    const operationId = cleanText(data.operationId, 100) || crypto.randomUUID();
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
     const barberRef = doc(db(), 'barbers', uid);
     const directoryRef = doc(db(), 'barbers', uid, 'customerDirectory', 'state');
@@ -801,6 +803,11 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (!barberSnap.exists()) throw fail('No se encontró el perfil profesional.');
       const customer = customerSnap.data();
       const freshBarber = barberSnap.data();
+      if (customer.lastCutOperationId === operationId) {
+        resultCustomer = { ...customer, uid: id };
+        outcome = { appliedReward: null, cycleReset: false, duplicate: true };
+        return;
+      }
       if (subscription(freshBarber).status === 'suspended') {
         throw fail('La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.', 402);
       }
@@ -847,7 +854,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       const updates = {
         totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2,
         cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
-        lastCutAt: now,
+        lastCutAt: now, lastCutOperationId: operationId,
         lastRewardAppliedLabel: appliedReward ? cleanText(appliedReward.label || labelReward(appliedReward.discount), 50) : null,
         lastRewardAppliedAt: appliedReward ? now : null,
         lastRewardAppliedCut: appliedReward ? Number(appliedReward.cut || 0) : null,
@@ -865,6 +872,9 @@ export function createSparkApi({ firebaseConfig, state }) {
       outcome = { appliedReward, cycleReset: appliedOnFinalMilestone };
     });
 
+    if (outcome.duplicate) {
+      return { ok: true, customer: resultCustomer, message: 'Esta visita ya estaba registrada. No se sumó nuevamente.', duplicate: true };
+    }
     let message = 'Visita registrada correctamente.';
     if (outcome.appliedReward) {
       message = 'Visita registrada. ' + (outcome.appliedReward.label || labelReward(outcome.appliedReward.discount))

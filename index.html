@@ -775,7 +775,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersPageError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', query:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersPageError:'', customersLoadError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'home', query:'', unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1380,12 +1380,29 @@
       ];
       return Math.round(checks.filter(Boolean).length/checks.length*100);
     }
+    function pendingCutOperationKey(customerId){
+      return 'barberVipPendingCut:v1:'+encodeURIComponent(String(state.user?.uid||''))+':'+encodeURIComponent(String(state.barberUid||''))+':'+encodeURIComponent(String(customerId||''));
+    }
+    function getPendingCutOperationId(customerId){
+      try{
+        const saved=JSON.parse(localStorage.getItem(pendingCutOperationKey(customerId))||'null');
+        return typeof saved?.operationId==='string'&&saved.operationId.length>=16?saved.operationId:'';
+      }catch(_){return '';}
+    }
+    function savePendingCutOperationId(customerId,operationId){
+      try{localStorage.setItem(pendingCutOperationKey(customerId),JSON.stringify({operationId,savedAt:Date.now()}));}catch(_){}
+    }
+    function clearPendingCutOperationId(customerId){
+      try{localStorage.removeItem(pendingCutOperationKey(customerId));}catch(_){}
+    }
     async function addCut(id, button) {
       state.cutSaving=state.cutSaving||{};
       if(state.cutSaving[id])return;
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
       state.cutSaving[id]=true;
+      const operationId=getPendingCutOperationId(id)||crypto.randomUUID();
+      savePendingCutOperationId(id,operationId);
       const originalLabel=button?.textContent||'＋ Sumar visita';
       if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Registrando…';}
       try {
@@ -1394,18 +1411,26 @@
           ||state.cutSearchResults.find(x=>x.uid===id);
         if(!c){toast('No se encontró al cliente seleccionado. Volvé a buscarlo y probá de nuevo.','error');return;}
         const searchTerm=$('#cutSearch',modalRoot)?.value||'';
-        const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id}});
+        const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id,operationId}});
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
-        if(result.customer){
+        clearPendingCutOperationId(id);
+        if(result.customer&&!result.duplicate){
           api.clearCustomerSearchCache?.();
           state.customerSearchResults=Array.isArray(state.customerSearchResults)
             ?state.customerSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x)
             :state.customerSearchResults;
           state.cutSearchResults=state.cutSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
-          // lastCutAt is the only global order field. Refresh the bounded first page.
-          markCustomerDirectoryChanged({reorder:true});
+          // lastCutAt changes the global order; apply the returned document locally.
+          // The transaction already advanced the directory revision, so avoid rereading page one.
+          applyCustomerVisitToDirectory(result.customer);
+        }else if(result.customer&&result.duplicate){
+          const mergeCustomer=customer=>customer.uid===id?{...customer,...result.customer,uid:id}:customer;
+          state.customers=state.customers.map(mergeCustomer);
+          if(Array.isArray(state.customerSearchResults))state.customerSearchResults=state.customerSearchResults.map(mergeCustomer);
+          state.cutSearchResults=state.cutSearchResults.map(mergeCustomer);
+          if(state.customersLoaded)saveAdminCustomersCache();
         }
-        toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
+        toast(result.message||(result.duplicate?'La visita ya estaba registrada. No se sumó nuevamente.':'Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)){
           openCutModal();
           const search=$('#cutSearch',modalRoot);
@@ -1441,16 +1466,18 @@
     function customerResultsMarkup(list) {
       const searchTerm=state.query.trim();
       const searchActive=searchTerm.length>=2&&state.customerSearchTerm===searchTerm&&Array.isArray(state.customerSearchResults);
+      const firstPageError=!searchTerm?String(state.customersLoadError||''):'';
       if(state.customersLoading&&!state.customersLoaded)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Cargando clientes…</strong><p>Preparando tu comunidad.</p></div>`;
       if(state.customerSearchLoading&&searchTerm.length>=2&&!list.length)return `<div class="empty-state customer-loading-state" role="status"><span class="loading-spinner" aria-hidden="true"></span><strong>Buscando clientes…</strong><p>Buscando coincidencias.</p></div>`;
       if(list.length){
-        const pageError=searchActive?state.customerSearchPageError:(!searchTerm?state.customersPageError:'');
+        const pageError=searchActive?state.customerSearchPageError:(!searchTerm?(state.customersPageError||firstPageError):'');
         const sentinel=!pageError&&searchActive&&state.customerSearchHasMore?'<div id="customerSearchLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>':(!pageError&&!searchTerm&&state.customersHasMore?'<div id="customerLoadSentinel" class="customer-load-sentinel" aria-hidden="true"></div>':'');
         const loadingMore=(state.customerSearchLoadingMore||state.customersLoadingMore)?`<div class="customer-load-more-indicator" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>${state.customerSearchLoadingMore?'Cargando más coincidencias…':'Cargando más clientes…'}</span></div>`:'';
-        const retryAction=searchActive?'retry-more-search':'retry-more-clients';
+        const retryAction=searchActive?'retry-more-search':(firstPageError?'retry-load-clients':'retry-more-clients');
         const retryMarkup=pageError?`<div class="customer-page-retry" role="alert"><span>${escapeHtml(pageError)}</span><button class="btn btn-soft btn-mini" type="button" data-action="${retryAction}">Reintentar</button></div>`:'';
         return `<div class="client-list">${list.map(c=>clientRow(c)).join('')}</div>${loadingMore}${retryMarkup}${sentinel}`;
       }
+      if(firstPageError)return `<div class="empty-state" role="alert"><strong>No pudimos cargar tus clientes</strong><p>${escapeHtml(firstPageError)}</p><button class="btn btn-primary" type="button" data-action="retry-load-clients">Reintentar</button></div>`;
       const heading=searchTerm?'No encontramos coincidencias':'Todavía no hay clientes';
       const digits=searchTerm.replace(/\D/g,'');
       const numericOnly=/^[+\d\s().-]+$/.test(searchTerm);
@@ -1676,6 +1703,39 @@
       return 'barberVipAdminCustomers:v5:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
     }
     function customerDirectoryQueryKey(){return 'lastCut-desc-v1';}
+    function compareCustomersByLastVisit(a,b){
+      const aDate=asDate(a?.lastCutAt),bDate=asDate(b?.lastCutAt);
+      if(aDate&&bDate&&aDate.getTime()!==bDate.getTime())return bDate.getTime()-aDate.getTime();
+      if(aDate&&!bDate)return -1;
+      if(!aDate&&bDate)return 1;
+      const aId=String(a?.uid||''),bId=String(b?.uid||'');
+      return aId===bId?0:(aId>bId?-1:1);
+    }
+    function applyCustomerVisitToDirectory(customer){
+      const customerId=String(customer?.uid||'');
+      if(!customerId)return;
+      const version=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
+      state.customersDirectoryVersion=version;
+      api.clearCustomerSearchCache?.();
+      if(state.role!=='barber'||!state.user||!state.barberUid
+        ||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey()){
+        clearAllAdminCustomersCaches();
+        state.customersCacheVersion=null;
+        return;
+      }
+      const next=state.customers.filter(item=>item&&item.uid!==customerId);
+      next.push({...customer,uid:customerId});
+      next.sort(compareCustomersByLastVisit);
+      state.customers=next;
+      state.customersCacheVersion=version;
+      const last=next[next.length-1]||null;
+      state.customersCursorId=String(last?.uid||'');
+      state.customersCursorValue=last?customerCursorValue(last):null;
+      const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
+      state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
+      state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
+      saveAdminCustomersCache();
+    }
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
       const savedAt=Date.now();state.customersCacheSavedAt=savedAt;
@@ -1712,7 +1772,7 @@
     function clearAllAdminCustomersCaches(){clearAdminCustomersCache();}
     function invalidateCustomerDirectoryPages({preserveVisible=false}={}){
       clearAllAdminCustomersCaches();state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';
-      state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.customerSearchPageError='';state.customersHasMore=false;
+      state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.customersLoadError='';state.customerSearchPageError='';state.customersHasMore=false;
       state.customersCursorId='';state.customersCursorValue=null;state.customersFirstPageCursorId='';
       state.customersFirstPageCursorValue=null;state.customersQueryKey='';state.customersCacheVersion=null;
       if(!preserveVisible){state.customers=[];state.customersLoaded=false;}
@@ -1741,19 +1801,20 @@
       if(state.role!=='barber'||document.visibilityState!=='visible')return;
       const key=customerDirectoryQueryKey();
       if(state.customersLoadPromise&&state.customersLoadQueryKey===key)return state.customersLoadPromise;
-      if(reset||state.customersQueryKey!==key){
-        state.customersHasMore=false;state.customersCursorId='';state.customersCursorValue=null;
-        state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersQueryKey=key;force=true;
-      }
+      if(reset||state.customersQueryKey!==key)force=true;
       if(state.customersLoaded&&state.customersQueryKey===key&&!force)return;
       if(Date.now()<Number(state.customersRetryAfter||0)){
         if(state.customersLoaded)return;
         const seconds=Math.max(1,Math.ceil((state.customersRetryAfter-Date.now())/1000));
         const error=new Error(`La lista está temporalmente protegida para evitar consultas repetidas. Probá nuevamente en ${seconds} segundos.`);
-        error.status=429;error.retryable=true;throw error;
+        error.status=429;error.retryable=true;error.retryAfterMs=state.customersRetryAfter-Date.now();
+        state.customersLoadError=error.message;
+        if(state.section==='clients')renderApp();
+        throw error;
       }
       const accountUid=state.user?.uid||'',barberUid=state.barberUid,requestSeq=++state.customersLoadSeq;
       const hadLoaded=state.customersLoaded&&state.customersQueryKey===key;
+      state.customersLoadError='';
       state.customersLoadQueryKey=key;state.customersLoading=true;
       const promise=(async()=>{
         try{
@@ -1763,8 +1824,9 @@
           state.customers=Array.isArray(page.customers)?page.customers:[];
           state.customersLoaded=true;state.customersHasMore=page.hasMore===true;
           state.customersCursorId=String(page.cursorId||'');state.customersCursorValue=page.cursorValue??null;
-          state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=state.customersCursorValue;
+          state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=page.cursorValue??null;
           state.customersQueryKey=key;state.customersCacheVersion=Math.max(0,Number(state.customersDirectoryVersion)||0);
+          state.customersLoadError='';
           state.customersLoadFailures=0;state.customersRetryAfter=0;clearAdminCustomersRetryGuard();saveAdminCustomersCache();
           if(state.section==='clients'&&document.visibilityState==='visible')renderApp();
         }catch(error){
@@ -1774,9 +1836,15 @@
           state.customersLoaded=hadLoaded;state.customersLoadFailures=Math.min(6,(Number(state.customersLoadFailures)||0)+1);
           state.customersRetryAfter=Date.now()+Math.min(300000,10000*Math.pow(2,state.customersLoadFailures-1));saveAdminCustomersRetryGuard();
           const failure=new Error(hadLoaded?'No se pudo actualizar la lista. Seguimos mostrando la última copia guardada.':'No se pudieron cargar los clientes. Revisá tu conexión e intentá nuevamente.');
-          failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;throw failure;
+          failure.retryable=true;failure.retryAfterMs=state.customersRetryAfter-Date.now();failure.cause=error;
+          state.customersLoadError=failure.message;
+          throw failure;
         }finally{
-          if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid){state.customersLoading=false;if(state.customersLoadQueryKey===key)state.customersLoadQueryKey='';}
+          if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid){
+            state.customersLoading=false;
+            if(state.customersLoadQueryKey===key)state.customersLoadQueryKey='';
+            if(state.section==='clients'&&state.customersLoadError)renderApp();
+          }
         }
       })();
       state.customersLoadPromise=promise;
@@ -2415,7 +2483,7 @@
         else if(action==='backdrop-close'&&event.target===button){modalRoot.innerHTML='';if(state.section!=='clients')stopAdminCustomersListener();}
         else if(action==='customer-entry'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-customer-access')?.scrollIntoView({behavior:'smooth',block:'start'}));}
         else if(action==='settings-profile'){state.section='settings';saveSectionPreference('barber','settings');renderApp();requestAnimationFrame(()=>$('#settings-profile-section')?.scrollIntoView({behavior:'smooth',block:'start'}));}
-        else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients')pendingLoad=Promise.resolve(startAdminCustomersListener());renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
+        else if(action==='nav'){const previousSection=state.section,nextSection=['home','clients','settings'].includes(button.dataset.section)?button.dataset.section:'home';state.section=nextSection;if(previousSection==='clients'&&nextSection!=='clients')stopAdminCustomersListener();saveSectionPreference('barber',state.section);state.query='';window.scrollTo(0,0);let pendingLoad=null;if(state.role==='barber'&&state.section==='clients'&&previousSection!=='clients'){pendingLoad=Promise.resolve(startAdminCustomersListener());const directoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0),cacheVersion=Math.max(0,Number(state.customersCacheVersion)||0);if(!state.customersLoaded||directoryVersion!==cacheVersion){state.customersLoadError='';pendingLoad=pendingLoad.then(()=>ensureAdminCustomersLoaded({force:true,reset:true})).catch(error=>toast(userFacingError(error,'No se pudieron actualizar los clientes. Conservamos los datos disponibles; reintentá desde Clientes.'),'error'));}}renderApp();window.scrollTo(0,0);if(pendingLoad)await pendingLoad;if(state.role==='barber'&&state.section===nextSection)renderApp();}
         else if(action==='open-pip-help'){openPipHelp();}
         else if(action==='download-pip-guide'){await downloadPipStrategiesPdf();}
         else if(action==='pip-topic'){showPipTopic(button.dataset.topic||'start');}
@@ -2428,6 +2496,7 @@
         else if(action==='install-help'){installHelpExpanded=true;renderInstallGate();}
         else if(action==='continue-installed-browser'){installPhase='browser-allowed';setInstallGateLock(false);modalRoot.innerHTML='';}
         else if(action==='load-more-clients'){await loadMoreAdminCustomers();}
+        else if(action==='retry-load-clients'){state.customersRetryAfter=0;state.customersLoadFailures=0;state.customersLoadError='';clearAdminCustomersRetryGuard();await ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>toast(userFacingError(error,'No se pudieron cargar los clientes.'),'error'));}
         else if(action==='retry-more-clients'){state.customersPageError='';await loadMoreAdminCustomers();}
         else if(action==='retry-more-search'){state.customerSearchPageError='';await loadMoreCustomerSearch();}
         else if(action==='new-client'){openCustomerModal();}

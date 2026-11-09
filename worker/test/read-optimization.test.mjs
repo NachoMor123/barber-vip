@@ -215,15 +215,17 @@ test("create, edit and disable increment the revision inside the same Firestore 
 test("a visit updates the loaded directory locally without a redundant first-page read", () => {
   const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
   const ui = functionBody(html, "async function addCut(id, button)", "function contactClient");
-  const localUpdate = functionBody(html, "function applyCustomerVisitToDirectory", "function saveAdminCustomersCache");
+  const localUpdate = functionBody(html, "function applyCustomerVisitToDirectory", "function setAdminDirectoryVersion");
+  const merge = functionBody(html, "function applyCustomerUpsertToDirectory", "function applyCustomerRemovalToDirectory");
   assert.match(visit, /transaction\.get\(customerRef\)/);
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /lastCutAt: now/);
-  assert.match(visit, /transaction\.set\(directoryRef, \{ version: increment\(1\)/);
+  assert.match(visit, /transaction\.set\(directoryRef,\s*\{\s*version: increment\(1\)/);
+  assert.match(visit, /changeType: 'upsert', customerId: id/);
   assert.doesNotMatch(visit, /rosterRef|customerRoster/);
-  assert.match(localUpdate, /next\.sort\(compareCustomersByLastVisit\)/);
-  assert.match(localUpdate, /state\.customersCursorId=String\(last\?\.uid\|\|''\)/);
-  assert.match(localUpdate, /saveAdminCustomersCache\(\)/);
+  assert.match(localUpdate, /applyCustomerUpsertToDirectory\(customer\)/);
+  assert.match(merge, /compareCustomersByLastVisit/);
+  assert.match(merge, /saveAdminCustomersCache\(\)/);
   assert.doesNotMatch(localUpdate, /ensureAdminCustomersLoaded|api\(['"]\/api\/customers\/list/);
   assert.match(ui, /applyCustomerVisitToDirectory\(result\.customer\)/);
   assert.doesNotMatch(ui, /markCustomerDirectoryChanged\(\{reorder:true\}\)/);
@@ -254,8 +256,10 @@ test("professional profile and loyalty settings use a separate cache scope", () 
     assert.doesNotMatch(source, /clearCustomerSearchCache|customerDirectory/);
   }
   const changed = functionBody(html, "function markCustomerDirectoryChanged", "function adminCustomersRetryKey");
-  assert.match(changed, /invalidateCustomerDirectoryPages/);
-  assert.match(changed, /api\.clearCustomerSearchCache/);
+  assert.match(changed, /applyCustomerRemovalToDirectory/);
+  assert.match(changed, /applyCustomerUpsertToDirectory/);
+  assert.doesNotMatch(changed, /invalidateCustomerDirectoryPages/);
+  assert.match(changed, /clearAllAdminCustomersCaches/);
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
@@ -369,6 +373,29 @@ test("the three customer composite indexes cover visit ordering and both search 
   assert.ok(fields.some(value => value.includes("active:ASCENDING") && value.includes("whatsapp:ASCENDING")));
 });
 
+
+test("barber workspace uses Clients and Settings as the only navigation sections", () => {
+  assert.match(html, /navItem\('clients'/);
+  assert.match(html, /navItem\('settings'/);
+  assert.doesNotMatch(html, /navItem\('home'/);
+  assert.match(html, /readSectionPreference\('barber',me\.uid,\['clients','settings'\],'clients'\)/);
+  const clients = functionBody(html, "function clientsView()", "function renderSettings()");
+  assert.match(clients, /greetingForNow\(\)/);
+  assert.match(clients, /data-action="open-cut-modal"/);
+  assert.match(clients, /data-action="new-client"/);
+  assert.match(html, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/);
+});
+
+test("mobile checkout return restores Firestore before resuming the barber session", () => {
+  const sync = functionBody(html, "function syncFirestoreNetworkWithVisibility", "function adminShell");
+  const resume = functionBody(html, "async function resumeSession", "async function signOutAndReturn");
+  assert.match(sync, /forceResume/);
+  assert.match(sync, /await enableNetwork\(state\.db\)/);
+  assert.match(sync, /resumePaymentReturnSession/);
+  assert.ok(resume.indexOf("await syncFirestoreNetworkWithVisibility") < resume.indexOf("api('/api/me')"));
+  assert.match(resume, /state\.resumingSessionUid/);
+  assert.match(html, /window\.addEventListener\('pageshow'/);
+});
 
 test("customer card cache is persistent and namespaced by customer UID plus barber UID", () => {
   const key = functionBody(api, "function customerCardCacheKey", "function readCustomerCardCache");

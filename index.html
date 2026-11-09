@@ -1325,7 +1325,7 @@
     function dateTimeLocalInput(value){const d=asDate(value);if(!d)return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
     function sectionHeading(eyebrow,title,description,actions='') { return `<div class="page-head"><div><div class="page-eyebrow">${eyebrow}</div><h2 class="page-title">${title}</h2><p class="page-desc">${description}</p></div><div class="page-actions">${actions}</div></div>`; }
     function metricCard(label,value,icon,caption='') { return `<div class="metric-card"><div class="metric-head"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-caption">${caption}</div></div>`; }
-    // Renderizado del cliente sin consultas nuevas:    // Renderizado del cliente sin consultas nuevas: se reutiliza el snapshot ya cargado.
+    // Renderizado del cliente sin consultas nuevas: se reutiliza el snapshot ya cargado.
     function clientRow(c){
       const id=String(c?.uid||'');
       const name=String(c?.fullName||'Cliente sin nombre');
@@ -1698,6 +1698,7 @@
         if(oneChange&&changeType==='remove'){
           applyCustomerRemovalToDirectory(changedId,{directoryVersion:remoteVersion});
           if(state.section==='clients'&&state.query.trim())void runCustomerSearch(state.query.trim(),'clients');
+          else if(state.section==='clients')renderApp();
           return;
         }
         if(oneChange&&changeType==='upsert'){

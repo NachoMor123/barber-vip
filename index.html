@@ -1380,12 +1380,29 @@
       ];
       return Math.round(checks.filter(Boolean).length/checks.length*100);
     }
+    function pendingCutOperationKey(customerId){
+      return 'barberVipPendingCut:v1:'+encodeURIComponent(String(state.user?.uid||''))+':'+encodeURIComponent(String(state.barberUid||''))+':'+encodeURIComponent(String(customerId||''));
+    }
+    function getPendingCutOperationId(customerId){
+      try{
+        const saved=JSON.parse(localStorage.getItem(pendingCutOperationKey(customerId))||'null');
+        return typeof saved?.operationId==='string'&&saved.operationId.length>=16?saved.operationId:'';
+      }catch(_){return '';}
+    }
+    function savePendingCutOperationId(customerId,operationId){
+      try{localStorage.setItem(pendingCutOperationKey(customerId),JSON.stringify({operationId,savedAt:Date.now()}));}catch(_){}
+    }
+    function clearPendingCutOperationId(customerId){
+      try{localStorage.removeItem(pendingCutOperationKey(customerId));}catch(_){}
+    }
     async function addCut(id, button) {
       state.cutSaving=state.cutSaving||{};
       if(state.cutSaving[id])return;
       const accountUid=state.user?.uid||'';
       const barberUid=state.barberUid||'';
       state.cutSaving[id]=true;
+      const operationId=getPendingCutOperationId(id)||crypto.randomUUID();
+      savePendingCutOperationId(id,operationId);
       const originalLabel=button?.textContent||'＋ Sumar visita';
       if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Registrando…';}
       try {
@@ -1394,9 +1411,10 @@
           ||state.cutSearchResults.find(x=>x.uid===id);
         if(!c){toast('No se encontró al cliente seleccionado. Volvé a buscarlo y probá de nuevo.','error');return;}
         const searchTerm=$('#cutSearch',modalRoot)?.value||'';
-        const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id}});
+        const result=await api('/api/cuts',{method:'POST',body:{action:'add',customerId:id,operationId}});
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
-        if(result.customer){
+        clearPendingCutOperationId(id);
+        if(result.customer&&!result.duplicate){
           api.clearCustomerSearchCache?.();
           state.customerSearchResults=Array.isArray(state.customerSearchResults)
             ?state.customerSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x)
@@ -1405,7 +1423,7 @@
           // lastCutAt is the only global order field. Refresh the bounded first page.
           markCustomerDirectoryChanged({reorder:true});
         }
-        toast(result.message||('Visita registrada para '+c.fullName+'.'),'success');
+        toast(result.message||(result.duplicate?'La visita ya estaba registrada. No se sumó nuevamente.':'Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)){
           openCutModal();
           const search=$('#cutSearch',modalRoot);

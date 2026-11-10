@@ -1722,12 +1722,19 @@
           return;
         }
         if(oneChange&&changeType==='upsert'){
-          const customerIsVisible=state.customersLoaded
+          const directoryComplete=state.customersLoaded
             &&state.customersQueryKey===customerDirectoryQueryKey()
+            &&state.customersHasMore===false;
+          const customerIsVisible=state.section==='clients'&&!state.query.trim()
+            &&!modalRoot.querySelector('.modal-backdrop')
+            &&directoryComplete===false
             &&state.customers.some((customer,index)=>index<Math.max(0,Number(state.customersVisibleCount)||0)&&customer?.uid===changedId);
-          if(!customerIsVisible){
-            // No document read for a client that is not currently loaded. A click on
-            // "Mostrar más" will refresh page one and continue from the new cursor.
+          const canFillFirstPage=directoryComplete
+            &&state.customers.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE
+            &&Math.max(0,Number(state.customersVisibleCount)||0)>=state.customers.length;
+          if(!customerIsVisible&&!canFillFirstPage){
+            // Do not read off-screen, search-covered, or not-yet-unlocked customers.
+            // Search or the next bounded page fetches their current record on demand.
             state.customersDirectoryVersion=remoteVersion;
             state.customersDirectoryRefreshPending=true;
             adminCustomersRefreshOnNextEntry=true;
@@ -1779,8 +1786,8 @@
     // document, not the customer collection, and it is disconnected on exit/background.
     // A tiny revision document detects outside changes only when the section is
     // entered or refreshed. No customer-directory listener and no polling.
-    const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=10;
-    const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5;
+    const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=13;
+    const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=6;
     const ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150;
     function customerCursorValue(customer){
       const value=customer?.lastCutAt;
@@ -1813,27 +1820,37 @@
       if(!customerId)return;
       const complete=state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey();
       const priorIndex=complete?state.customers.findIndex(item=>item?.uid===customerId):-1;
-      const cacheCurrent=priorIndex>=0&&priorIndex<Math.max(0,Number(state.customersVisibleCount)||0);
+      const visibleCount=Math.max(0,Number(state.customersVisibleCount)||0);
+      let cacheCurrent=priorIndex>=0&&priorIndex<visibleCount;
       if(cacheCurrent){
         const next=state.customers.slice();
         const prior=next[priorIndex]||{};
         next[priorIndex]={...prior,...customer,uid:customerId};
         next.sort(compareCustomersByLastVisit);
         state.customers=next;
-        const last=next[next.length-1]||null;
+      }else if(complete&&priorIndex<0&&state.customersHasMore===false
+        &&state.customers.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE&&visibleCount>=state.customers.length){
+        // The full directory is known to fit on the first page. We can safely
+        // insert a returned new customer without querying Firestore again.
+        state.customers=[...state.customers,{...customer,uid:customerId}].sort(compareCustomersByLastVisit);
+        state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length);
+        cacheCurrent=true;
+      }else{
+        // An unseen/off-screen row may alter global ordering. Defer the bounded
+        // refresh until search, "Mostrar más", or the next Clients entry.
+        adminCustomersDirectoryRefreshPending=true;
+        adminCustomersRefreshOnNextEntry=true;
+        state.customersHasMore=true;
+      }
+      if(cacheCurrent){
+        const last=state.customers[state.customers.length-1]||null;
         if(state.customersHasMore&&last){
           state.customersCursorId=String(last.uid||'');
           state.customersCursorValue=customerCursorValue(last);
         }
-        const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
+        const firstPageLast=state.customers[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length)-1]||null;
         state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
         state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
-      }else{
-        // Do not change the current page for an off-screen or new customer.
-        // Search returns its fresh record; the next directory page refreshes ordering.
-        adminCustomersDirectoryRefreshPending=true;
-        adminCustomersRefreshOnNextEntry=true;
-        state.customersHasMore=true;
       }
       const version=directoryVersion===null
         ?Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1
@@ -1882,6 +1899,7 @@
       const cursorValue=cacheTruncated?customerCursorValue(cacheLastCustomer):state.customersCursorValue;
       try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({
         ownerUid:state.user.uid,barberUid:state.barberUid,savedAt,
+        firstPageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,
         customers:cachedCustomers,hasMore:cacheTruncated||state.customersHasMore,
         cursorId,cursorValue,
         directoryVersion:Math.max(0,Number(state.customersCacheVersion)||0),queryKey:customerDirectoryQueryKey()
@@ -1896,6 +1914,8 @@
           ||!Number.isFinite(savedAt)||savedAt>Date.now()+60000||!Number.isSafeInteger(version)||version<0
           ||cached.queryKey!==customerDirectoryQueryKey())return false;
         const restored=cached.customers.filter(c=>c&&typeof c.uid==='string'&&(!c.barberUid||c.barberUid===state.barberUid));
+        const needsExpandedFirstPageRefresh=Number(cached.firstPageSize||0)!==ADMIN_CUSTOMERS_FIRST_PAGE_SIZE
+          &&restored.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE&&cached.hasMore===true;
         state.customers=restored.slice(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS);
         state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length);
         state.customersLoaded=true;state.customersCacheSavedAt=savedAt;
@@ -1908,10 +1928,12 @@
         state.customersQueryKey=customerDirectoryQueryKey();
         state.customersDirectoryVersion=version;state.customersCacheVersion=version;
         adminCustomersAwaitingEntrySnapshot=true;
-        adminCustomersDirectoryRefreshPending=false;
+        adminCustomersDirectoryRefreshPending=needsExpandedFirstPageRefresh;
+        adminCustomersRefreshOnNextEntry=needsExpandedFirstPageRefresh;
         state.customersLoadingMoreFromCache=false;
-        // Normalize older caches to the bounded multi-page format.
-        saveAdminCustomersCache();
+        // Preserve legacy ten-row caches until a server revision confirms or
+        // refreshes the expanded thirteen-row first page.
+        if(!needsExpandedFirstPageRefresh)saveAdminCustomersCache();
         return true;
       }catch(_){return false;}
     }
@@ -2002,7 +2024,7 @@
       try{await promise;}finally{if(state.customersLoadPromise===promise)state.customersLoadPromise=null;if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid)state.customersLoading=false;}
     }
 
-    const CUSTOMER_PAGINATION_INDICATOR_MIN_MS=3500;
+    const CUSTOMER_PAGINATION_INDICATOR_MIN_MS=3000;
     function keepCustomerPaginationIndicatorVisible(startedAt){
       const remaining=CUSTOMER_PAGINATION_INDICATOR_MIN_MS-(Date.now()-startedAt);
       return remaining>0?new Promise(resolve=>setTimeout(resolve,remaining)):Promise.resolve();
@@ -2128,7 +2150,7 @@
       renderApp();
       try{
         const page=await api('/api/customers/search',{method:'POST',body:{
-          search:searchTerm,minDigits:4,cursorId,cursorValue
+          search:searchTerm,minDigits:4,pageSize:6,cursorId,cursorValue
         }});
         if(state.role!=='barber'||state.section!=='clients'||state.user?.uid!==accountUid
           ||state.barberUid!==barberUid||state.query.trim()!==searchTerm
@@ -2179,6 +2201,13 @@
           state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;
           const holder=$('#customerResults');if(holder)holder.innerHTML=customerResultsMarkup(filteredCustomers());
           observeCustomersPagination();
+          // Returning to the unfiltered roster flushes deferred off-screen changes
+          // with a single bounded first-page query, never a full collection scan.
+          if(!clean&&state.section==='clients'&&adminCustomersDirectoryRefreshPending){
+            void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+              toast(userFacingError(error,'No se pudieron actualizar los clientes.'),'error')
+            );
+          }
         }
         return [];
       }
@@ -2193,7 +2222,7 @@
         state.customerSearchCursorValue=null;
       }
       try{
-        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,minDigits:isCut?3:4}});
+        const result=await api('/api/customers/search',{method:'POST',body:{search:clean,minDigits:isCut?3:4,pageSize:6}});
         if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return [];
         if(isCut){
           if(seq!==state.cutSearchSeq||!$('#cutSearch',modalRoot))return [];

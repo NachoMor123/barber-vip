@@ -1010,7 +1010,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const cursorValue = data.cursorValue === null || data.cursorValue === undefined
       ? '' : cleanText(data.cursorValue, 120);
     if (cursorId && !cursorValue) throw fail('No se pudo continuar la búsqueda. Volvé a escribir el dato.', 400);
-    const pageSize = Math.max(1, Math.min(5, Number(data.pageSize) || 5));
+    const pageSize = Math.max(1, Math.min(6, Number(data.pageSize) || 6));
     const cacheKey = [uid, field, prefix, cursorValue, cursorId, requiredDigits].join('|');
     const cached = customerSearchCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {

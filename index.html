@@ -1774,7 +1774,6 @@
     // entered or refreshed. No customer-directory listener and no polling.
     const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=10;
     const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5;
-    const ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150;
     function customerCursorValue(customer){
       const value=customer?.lastCutAt;
       if(value&&typeof value.toDate==='function')return value.toDate().toISOString();
@@ -1821,7 +1820,6 @@
         const firstPageLast=next[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,next.length)-1]||null;
         state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
         state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
-        if(state.section==='clients')adminCustomersRefreshOnNextEntry=true;
       }else{
         // Never inject a new or not-yet-loaded customer into the current page.
         // It will be returned with fresh fields by search or cursor pagination.
@@ -1914,6 +1912,19 @@
       state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
       state.customerSearchCursorId='';state.customerSearchCursorValue=null;
       saveAdminCustomersCache();
+    }
+    function markCustomerDirectoryChanged({customer=null,removeId=''}={}){
+      if(removeId){
+        applyCustomerRemovalToDirectory(removeId);
+        return;
+      }
+      if(customer){
+        applyCustomerUpsertToDirectory(customer);
+        return;
+      }
+      adminCustomersDirectoryRefreshPending=true;
+      adminCustomersRefreshOnNextEntry=true;
+      state.customersDirectoryVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0)+1;
     }
     function adminCustomersRetryKey(){return `barberVipCustomersRetry:v1:${String(state.user?.uid||'')}:${String(state.barberUid||'')}`;}
     function restoreAdminCustomersRetryGuard(){if(!state.user||!state.barberUid)return;try{const saved=JSON.parse(localStorage.getItem(adminCustomersRetryKey())||'null');const retryAfter=Number(saved?.retryAfter);if(Number.isFinite(retryAfter)&&retryAfter>Date.now()&&retryAfter<=Date.now()+300000){state.customersRetryAfter=retryAfter;state.customersLoadFailures=Math.max(0,Math.min(6,Number(saved.failures)||0));}else localStorage.removeItem(adminCustomersRetryKey());}catch(_){}}

@@ -1899,6 +1899,7 @@
         return true;
       }catch(_){return false;}
     }
+    function clearAdminCustomersCache(){try{localStorage.removeItem(adminCustomersCacheKey());}catch(_){}}
     function resetAdminCustomersToFirstPage(){
       if(state.role!=='barber'||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
       const hadAdditionalPages=state.customers.length>ADMIN_CUSTOMERS_FIRST_PAGE_SIZE;

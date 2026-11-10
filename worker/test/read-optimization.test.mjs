@@ -49,7 +49,8 @@ test("Clients keeps the real latest-visit order and a single centered create act
   assert.doesNotMatch(api, /customerListSort|customerDirectoryFilters|signupSource/);
   assert.match(list, /where\('active', '==', true\)/);
   assert.match(list, /orderBy\('lastCutAt', 'desc'\)/);
-  assert.match(clients, /Mostramos los 10 clientes con visita más reciente/);
+  assert.match(clients, /Tus clientes, ordenados por última visita/);
+  assert.doesNotMatch(clients, /Mostramos los 10|cinco más|cargá cinco/);
   assert.match(clients, /data-action="new-client"/);
   assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
   assert.doesNotMatch(clients, /Más visitas totales|Menos visitas totales|Todos los orígenes/);
@@ -104,8 +105,8 @@ test("five-record pagination uses an explicit button and a 3.5-second loading in
   const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
   assert.ok(markup.includes("customer-load-more-indicator"));
-  assert.ok(markup.includes("Mostrar 5 clientes más"));
-  assert.ok(markup.includes("Mostrar 5 resultados más"));
+  assert.ok(markup.includes("Mostrar más"));
+  assert.doesNotMatch(markup, /Mostrar 5|cinco más/);
   assert.ok(markup.includes("load-more-clients"));
   assert.ok(markup.includes("load-more-search"));
   assert.ok(markup.includes("Cargando más coincidencias"));
@@ -116,6 +117,8 @@ test("five-record pagination uses an explicit button and a 3.5-second loading in
   const searchPagination = functionBody(html, "async function loadMoreCustomerSearch()", "async function runCustomerSearch");
   assert.match(listPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
   assert.match(searchPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
+  assert.match(clients, /Tus clientes, ordenados por última visita/);
+  assert.doesNotMatch(clients, /Mostramos los 10|cinco más|cargá cinco/);
   assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
   assert.doesNotMatch(html, /customerLoadSentinel|customerSearchLoadSentinel/);
   assert.doesNotMatch(html, /clientsRefreshUntil|clientsRefreshCooldownTimer|startClientsRefreshCooldown|updateClientsRefreshControl|syncCustomerDirectory|clients-refresh-btn/);
@@ -533,6 +536,17 @@ test("an off-page customer mutation is deferred without reading that customer do
   assert.match(merge, /priorIndex=complete\?state\.customers\.findIndex/);
   assert.match(merge, /if\(cacheCurrent\)/);
   assert.match(merge, /adminCustomersDirectoryRefreshPending=true/);
+});
+
+
+test("a page is discarded when a directory revision changes while it is loading", () => {
+  const more = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  assert.match(more, /directoryChangedDuringRequest=\(\)=>/);
+  assert.match(more, /if\(directoryChangedDuringRequest\(\)\)\{deferStalePage\(\);return;\}/);
+  assert.match(more, /adminCustomersDirectoryRefreshPending=true/);
+  assert.match(more, /La lista cambió mientras se actualizaba/);
+  assert.match(more, /refreshFirstPage=adminCustomersDirectoryRefreshPending/);
+  assert.match(more, /customersDirectoryVersion\)\|\|0\)>Math\.max\(0,Number\(state\.customersCacheVersion/);
 });
 
 test("backgrounding and returning to the PWA resets the barber list to ten without losing its cache", () => {

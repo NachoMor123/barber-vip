@@ -244,7 +244,7 @@ test("direct client registration commits the revision with the customer document
   assert.match(signup, /customerDirectory\/state/);
   assert.match(signup, /fsGet\(env, directoryPath\)/);
   assert.match(signup, /directoryWrite/);
-  assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, directoryWrite\]\)/);
+  assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, phoneLookupWrite, directoryWrite\]\)/);
   assert.doesNotMatch(signup, /customerRoster|signupSource/);
   assert.match(signup, /for \(let attempt = 0; attempt < 5/);
 });
@@ -541,11 +541,13 @@ test("leaving Clients resets pagination depth and re-entry checks one revision d
 
 test("a customer outside the unlocked page is deferred without reading its document", () => {
   const listener = functionBody(html, "function startAdminCustomersListener()", "// Subscribe only while the Clients view");
-  const hiddenBranchStart = listener.indexOf("if(!customerIsVisible)");
+  const hiddenBranchStart = listener.indexOf("if(!customerIsVisible&&!canFillFirstPage)");
   const targetedRead = listener.indexOf("void getDoc(customerRef)");
   assert.ok(hiddenBranchStart >= 0);
   assert.ok(targetedRead > hiddenBranchStart);
   const hiddenBranch = listener.slice(hiddenBranchStart, listener.indexOf("const syncSeq", hiddenBranchStart));
+  assert.match(hiddenBranch, /adminCustomersDirectoryRefreshPending=true/);
+  assert.match(hiddenBranch, /adminCustomersRefreshOnNextEntry=true/);
   assert.doesNotMatch(hiddenBranch, /getDoc\(customerRef\)/);
   assert.match(hiddenBranch, /state\.customersDirectoryRefreshPending=true/);
   assert.match(hiddenBranch, /adminCustomersRefreshOnNextEntry=true/);

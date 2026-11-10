@@ -1490,7 +1490,7 @@
         const retryMarkup=pageError?'<div class="customer-page-retry" role="alert"><span>'+escapeHtml(pageError)+'</span><button class="btn btn-soft btn-mini" type="button" data-action="'+retryAction+'">Reintentar</button></div>':'';
         const canLoadMore=!pageError&&(searchActive?state.customerSearchHasMore:(!searchTerm&&state.customersHasMore));
         const loadMoreAction=searchActive?'load-more-search':'load-more-clients';
-        const loadMoreLabel=searchActive?'Mostrar 5 resultados más':'Mostrar 5 clientes más';
+        const loadMoreLabel='Mostrar más';
         const loadMoreMarkup=canLoadMore&&!loadingMore
           ?'<div class="customer-pagination-actions"><button class="btn btn-soft" type="button" data-action="'+loadMoreAction+'">'+loadMoreLabel+'</button></div>':'';
         return '<div class="client-list">'+list.map(c=>clientRow(c)).join('')+'</div>'+loadingMore+retryMarkup+loadMoreMarkup;
@@ -1506,7 +1506,7 @@
       const list=filteredCustomers();
       const name=escapeHtml(state.barber?.displayName||'profesional');
       const actions='<button class="btn btn-primary clients-create-btn" data-action="new-client">＋ Crear cliente</button>';
-      return sectionHeading('CLIENTES',greetingForNow()+', '+name+' 👋','Mostramos los 10 clientes con visita más reciente. Buscá por nombre o WhatsApp, o cargá cinco más cuando los necesites.',actions)
+      return sectionHeading('CLIENTES',greetingForNow()+', '+name+' 👋','Tus clientes, ordenados por última visita. Buscá por nombre o WhatsApp.',actions)
         +'<div class="toolbar"><input id="clientSearch" class="searchbox" autocomplete="off" data-lpignore="true" placeholder="⌕  Buscar por nombre o WhatsApp…" value="'+escapeHtml(state.query)+'"></div>'
         +'<div id="customerResults">'+customerResultsMarkup(list)+'</div>';
     }
@@ -2006,7 +2006,8 @@
       if(state.role!=='barber'||state.customersLoadingMore||!state.customersLoaded||state.customersQueryKey!==key
         ||!state.customersHasMore||!state.customersCursorId||state.query.trim())return;
       const accountUid=state.user?.uid||'',barberUid=state.barberUid,requestSeq=state.customersLoadSeq;
-      const refreshFirstPage=adminCustomersDirectoryRefreshPending;
+      const refreshFirstPage=adminCustomersDirectoryRefreshPending
+        ||Math.max(0,Number(state.customersDirectoryVersion)||0)>Math.max(0,Number(state.customersCacheVersion)||0);
       const refreshVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
       let cursorId=String(state.customersCursorId),cursorValue=state.customersCursorValue;
       const indicatorStartedAt=Date.now();
@@ -2017,10 +2018,19 @@
       const requestStillCurrent=()=>state.role==='barber'&&state.user?.uid===accountUid
         &&state.barberUid===barberUid&&state.customersLoadSeq===requestSeq
         &&customerDirectoryQueryKey()===key&&state.customersQueryKey===key&&!state.query.trim();
+      const directoryChangedDuringRequest=()=>Math.max(0,Number(state.customersDirectoryVersion)||0,
+        Number(state.customersCacheVersion)||0)>refreshVersion;
+      const deferStalePage=()=>{
+        adminCustomersDirectoryRefreshPending=true;
+        adminCustomersRefreshOnNextEntry=true;
+        state.customersPageError='La lista cambió mientras se actualizaba. Tocá Reintentar para ver los datos más recientes.';
+        emptyPage=true;
+      };
       try{
         if(refreshFirstPage){
           const first=await api('/api/customers/list',{method:'POST',body:{pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE}});
           if(!requestStillCurrent())return;
+          if(directoryChangedDuringRequest()){deferStalePage();return;}
           const firstCustomers=Array.isArray(first.customers)?first.customers:[];
           state.customers=firstCustomers;
           state.customersLoaded=true;state.customersQueryKey=key;
@@ -2044,6 +2054,7 @@
         }
         const page=await api('/api/customers/list',{method:'POST',body:{pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE,cursorId,cursorValue}});
         if(!requestStillCurrent())return;
+        if(directoryChangedDuringRequest()){deferStalePage();return;}
         const incoming=Array.isArray(page.customers)?page.customers:[];
         if(!incoming.length){
           emptyPage=true;state.customersHasMore=false;state.customersPageError='';saveAdminCustomersCache();
@@ -2060,7 +2071,7 @@
         }
       }catch(error){
         if(requestStillCurrent()){
-          state.customersPageError='No pudimos cargar los siguientes clientes. La lista anterior sigue disponible; podés reintentar.';
+          if(!state.customersPageError)state.customersPageError='No pudimos cargar los siguientes clientes. La lista anterior sigue disponible; podés reintentar.';
           console.warn('[Barber VIP] Falló la siguiente página de clientes.',error?.message||error);
         }
       }finally{

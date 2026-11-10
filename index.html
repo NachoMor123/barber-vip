@@ -1727,7 +1727,7 @@
             &&state.customers.some((customer,index)=>index<Math.max(0,Number(state.customersVisibleCount)||0)&&customer?.uid===changedId);
           if(!customerIsVisible){
             // No document read for a client that is not currently loaded. A click on
-            // "Mostrar 5 clientes más" will re-read page one and continue from its new cursor.
+            // "Mostrar más" will refresh page one and continue from the new cursor.
             state.customersDirectoryVersion=remoteVersion;
             state.customersDirectoryRefreshPending=true;
             adminCustomersRefreshOnNextEntry=true;

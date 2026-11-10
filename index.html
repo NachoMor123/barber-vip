@@ -789,7 +789,7 @@
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
     const appRoot = $('#app'), modalRoot = $('#modal-root');
-    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersPageError:'', customersLoadError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'clients', query:'', resumingSessionUid:'', customersDirectorySyncSeq:0, unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
+    const state = { auth:null, db:null, user:null, role:null, barberUid:null, barber:null, customer:null, customerSection:'home', customers:[], customersVisibleCount:0, customersLoaded:false, customersLoading:false, customersLoadingMore:false, customersLoadingMoreFromCache:false, customersPageError:'', customersLoadError:'', customersLoadPromise:null, customersLoadSeq:0, customersLoadQueryKey:'', customersLoadFailures:0, customersRetryAfter:0, customersHasMore:false, customersCursorId:'', customersCursorValue:null, customersFirstPageCursorId:'', customersFirstPageCursorValue:null, customersQueryKey:'', customersDirectoryVersion:null, customersCacheVersion:null,  customerSearchResults:null, customerSearchTerm:'', customerSearchLoading:false, customerSearchLoadingMore:false, customerSearchPageError:'', customerSearchHasMore:false, customerSearchCursorId:'', customerSearchCursorValue:null, customerSearchSeq:0, customerSearchTimer:null, cutSearchResults:[], cutSearchTerm:'', cutSearchSeq:0, cutSearchTimer:null, relativeTimeTimer:null, subscriptionPrice:8000, pendingVerificationEmail:'', pendingSignup:null, section:'clients', query:'', resumingSessionUid:'', customersDirectorySyncSeq:0, unsubscribers:[], draftRewards:[], manualLogin:false, loadError:false, authResolved:false };
     let firebaseReady = false;
     let observedAuthUid = '';
     let deferredInstallPrompt = null;
@@ -1144,7 +1144,7 @@
     const applyTheme = theme => { document.documentElement.style.setProperty('--accent',BRAND_ACCENT); document.documentElement.style.setProperty('--accent2','#72b8ff'); let density='comfortable'; try{density=localStorage.getItem('barberVipDensity')||theme?.density||'comfortable';}catch(_){} document.body.dataset.density=density==='compact'?'compact':'comfortable'; };
     const api = createSparkApi({ firebaseConfig, state });
     const clearListeners = () => { stopAdminCustomersListener(); api.resetSessionCache?.(); const listeners=Array.isArray(state.unsubscribers)?state.unsubscribers:[];listeners.forEach(fn=>{try{if(typeof fn==='function')fn();}catch(_){}});state.unsubscribers=[];state.customersLoaded=false;state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.customerSearchPageError='';state.customersFirstPageCursorId='';state.customersFirstPageCursorValue=null;state.customersDirectoryVersion=null;state.customersCacheVersion=null;state.customerSearchSeq++;state.cutSearchSeq++;if(state.customerSearchTimer)clearTimeout(state.customerSearchTimer);if(state.cutSearchTimer)clearTimeout(state.cutSearchTimer);state.customerSearchTimer=null;state.cutSearchTimer=null;state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchLoading=false;state.customerSearchLoadingMore=false;state.customerSearchHasMore=false;state.customerSearchCursorId='';state.customerSearchCursorValue=null;state.cutSearchResults=[];state.cutSearchTerm=''; };
-    const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.section='clients'; state.customerSection='home'; state.query=''; state.loadError=false; adminCustomersAwaitingEntrySnapshot=false; adminCustomersRefreshOnNextEntry=false; adminCustomersDirectoryRefreshPending=false; };
+    const cleanupContext = () => { clearListeners(); if(state.relativeTimeTimer){clearInterval(state.relativeTimeTimer);state.relativeTimeTimer=null;} state.user=null; state.role=null; state.barberUid=null; state.barber=null; state.customer=null; state.customers=[]; state.customersVisibleCount=0; state.customersLoadingMoreFromCache=false; state.section='clients'; state.customerSection='home'; state.query=''; state.loadError=false; adminCustomersAwaitingEntrySnapshot=false; adminCustomersRefreshOnNextEntry=false; adminCustomersDirectoryRefreshPending=false; };
 
     function renderLoading() { appRoot.innerHTML = `<main class="loading-view"><section class="loading-card"><div class="loading-symbol">✦</div><strong>Retomando tu espacio</strong><p>Estamos cargando tus datos…</p></section></main>`; }
     function renderSessionError(message){
@@ -1244,7 +1244,8 @@
         if(state.customerSearchTerm!==term||!Array.isArray(state.customerSearchResults))return [];
         return state.customerSearchResults.filter(customer=>customer&&customer.active!==false);
       }
-      return (Array.isArray(state.customers)?state.customers:[]).filter(customer=>customer&&customer.active!==false);
+      const visibleCount=Math.max(0,Number(state.customersVisibleCount)||0);
+      return (Array.isArray(state.customers)?state.customers:[]).filter(customer=>customer&&customer.active!==false).slice(0,visibleCount);
     }
 
     function clientStatus(c) { if(rewardForNextVisit(c).length)return ['Descuento para esta visita','good']; if(!Number(c.totalCuts||0))return ['Sin visitas','warn']; return ['Cliente activo','good']; }
@@ -1485,10 +1486,10 @@
         const pageError=searchActive?state.customerSearchPageError:(!searchTerm?(state.customersPageError||firstPageError):'');
         const loadingMore=(state.customerSearchLoadingMore||state.customersLoadingMore)
           ?'<div class="customer-load-more-indicator" role="status" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>'
-            +(state.customerSearchLoadingMore?'Cargando más coincidencias…':'Cargando más clientes…')+'</span></div>':'';
+            +(state.customerSearchLoadingMore?'Cargando más coincidencias…':(state.customersLoadingMoreFromCache?'Mostrando más clientes…':'Cargando más clientes…'))+'</span></div>':'';
         const retryAction=searchActive?'retry-more-search':(firstPageError?'retry-load-clients':'retry-more-clients');
         const retryMarkup=pageError?'<div class="customer-page-retry" role="alert"><span>'+escapeHtml(pageError)+'</span><button class="btn btn-soft btn-mini" type="button" data-action="'+retryAction+'">Reintentar</button></div>':'';
-        const canLoadMore=!pageError&&(searchActive?state.customerSearchHasMore:(!searchTerm&&state.customersHasMore));
+        const canLoadMore=!pageError&&(searchActive?state.customerSearchHasMore:(!searchTerm&&(state.customersVisibleCount<state.customers.length||state.customersHasMore)));
         const loadMoreAction=searchActive?'load-more-search':'load-more-clients';
         const loadMoreLabel='Mostrar más';
         const loadMoreMarkup=canLoadMore&&!loadingMore
@@ -1721,10 +1722,10 @@
           return;
         }
         if(oneChange&&changeType==='upsert'){
-          const customerIsLoaded=state.customersLoaded
+          const customerIsVisible=state.customersLoaded
             &&state.customersQueryKey===customerDirectoryQueryKey()
-            &&state.customers.some(customer=>customer?.uid===changedId);
-          if(!customerIsLoaded){
+            &&state.customers.some((customer,index)=>index<Math.max(0,Number(state.customersVisibleCount)||0)&&customer?.uid===changedId);
+          if(!customerIsVisible){
             // No document read for a client that is not currently loaded. A click on
             // "Mostrar 5 clientes más" will re-read page one and continue from its new cursor.
             state.customersDirectoryVersion=remoteVersion;
@@ -1780,6 +1781,7 @@
     // entered or refreshed. No customer-directory listener and no polling.
     const ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=10;
     const ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5;
+    const ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150;
     function customerCursorValue(customer){
       const value=customer?.lastCutAt;
       if(value&&typeof value.toDate==='function')return value.toDate().toISOString();
@@ -1811,7 +1813,7 @@
       if(!customerId)return;
       const complete=state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey();
       const priorIndex=complete?state.customers.findIndex(item=>item?.uid===customerId):-1;
-      const cacheCurrent=priorIndex>=0;
+      const cacheCurrent=priorIndex>=0&&priorIndex<Math.max(0,Number(state.customersVisibleCount)||0);
       if(cacheCurrent){
         const next=state.customers.slice();
         const prior=next[priorIndex]||{};
@@ -1827,8 +1829,8 @@
         state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
         state.customersFirstPageCursorValue=firstPageLast?customerCursorValue(firstPageLast):null;
       }else{
-        // Never inject a new or not-yet-loaded customer into the current page.
-        // It will be returned with fresh fields by search or cursor pagination.
+        // Do not change the current page for an off-screen or new customer.
+        // Search returns its fresh record; the next directory page refreshes ordering.
         adminCustomersDirectoryRefreshPending=true;
         adminCustomersRefreshOnNextEntry=true;
         state.customersHasMore=true;
@@ -1844,7 +1846,11 @@
       const id=String(customerId||'');
       if(!id)return;
       if(state.customersLoaded&&state.customersQueryKey===customerDirectoryQueryKey()){
+        const removedIndex=state.customers.findIndex(item=>item?.uid===id);
         state.customers=state.customers.filter(item=>item&&item.uid!==id);
+        if(removedIndex>=0&&removedIndex<Math.max(0,Number(state.customersVisibleCount)||0)){
+          state.customersVisibleCount=Math.max(0,Number(state.customersVisibleCount||0)-1);
+        }
         const last=state.customers[state.customers.length-1]||null;
         const firstPageLast=state.customers[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length)-1]||null;
         state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
@@ -1869,15 +1875,15 @@
     function saveAdminCustomersCache(){
       if(state.role!=='barber'||!state.user||!state.barberUid||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
       const savedAt=Date.now();state.customersCacheSavedAt=savedAt;
-      // Persist only the first visible page, never the user's previous scroll depth.
-      const cachedCustomers=state.customers.slice(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE);
+      const cachedCustomers=state.customers.slice(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS);
+      const cacheTruncated=state.customers.length>cachedCustomers.length;
       const cacheLastCustomer=cachedCustomers[cachedCustomers.length-1]||null;
-      const cursorId=String(cacheLastCustomer?.uid||'');
-      const cursorValue=customerCursorValue(cacheLastCustomer);
-      const hasMore=state.customersHasMore||state.customers.length>cachedCustomers.length;
+      const cursorId=cacheTruncated?String(cacheLastCustomer?.uid||''):state.customersCursorId;
+      const cursorValue=cacheTruncated?customerCursorValue(cacheLastCustomer):state.customersCursorValue;
       try{localStorage.setItem(adminCustomersCacheKey(),JSON.stringify({
         ownerUid:state.user.uid,barberUid:state.barberUid,savedAt,
-        customers:cachedCustomers,hasMore,cursorId,cursorValue,
+        customers:cachedCustomers,hasMore:cacheTruncated||state.customersHasMore,
+        cursorId,cursorValue,
         directoryVersion:Math.max(0,Number(state.customersCacheVersion)||0),queryKey:customerDirectoryQueryKey()
       }));}catch(_){}
     }
@@ -1890,17 +1896,21 @@
           ||!Number.isFinite(savedAt)||savedAt>Date.now()+60000||!Number.isSafeInteger(version)||version<0
           ||cached.queryKey!==customerDirectoryQueryKey())return false;
         const restored=cached.customers.filter(c=>c&&typeof c.uid==='string'&&(!c.barberUid||c.barberUid===state.barberUid));
-        state.customers=restored.slice(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE);
+        state.customers=restored.slice(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS);
+        state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length);
         state.customersLoaded=true;state.customersCacheSavedAt=savedAt;
         state.customersHasMore=cached.hasMore===true||restored.length>state.customers.length;
-        const last=state.customers[state.customers.length-1]||null;
-        state.customersCursorId=String(last?.uid||'');state.customersCursorValue=customerCursorValue(last);
-        state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=state.customersCursorValue;
+        state.customersCursorId=String(cached.cursorId||'');
+        state.customersCursorValue=cached.cursorValue??null;
+        const firstPageLast=state.customers[Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length)-1]||null;
+        state.customersFirstPageCursorId=String(firstPageLast?.uid||'');
+        state.customersFirstPageCursorValue=customerCursorValue(firstPageLast);
         state.customersQueryKey=customerDirectoryQueryKey();
         state.customersDirectoryVersion=version;state.customersCacheVersion=version;
         adminCustomersAwaitingEntrySnapshot=true;
         adminCustomersDirectoryRefreshPending=false;
-        // Normalize older caches that may contain many pages.
+        state.customersLoadingMoreFromCache=false;
+        // Normalize older caches to the bounded multi-page format.
         saveAdminCustomersCache();
         return true;
       }catch(_){return false;}
@@ -1908,14 +1918,10 @@
     function clearAdminCustomersCache(){try{localStorage.removeItem(adminCustomersCacheKey());}catch(_){}}
     function resetAdminCustomersToFirstPage(){
       if(state.role!=='barber'||!state.customersLoaded||state.customersQueryKey!==customerDirectoryQueryKey())return;
-      const hadAdditionalPages=state.customers.length>ADMIN_CUSTOMERS_FIRST_PAGE_SIZE;
-      state.customers=state.customers.slice(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE);
-      const last=state.customers[state.customers.length-1]||null;
-      state.customersCursorId=String(last?.uid||'');state.customersCursorValue=customerCursorValue(last);
-      state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=state.customersCursorValue;
-      state.customersHasMore=state.customersHasMore||hadAdditionalPages;
+      state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length);
       state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';
-      state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.query='';
+      state.customersLoading=false;state.customersLoadingMore=false;state.customersLoadingMoreFromCache=false;
+      state.customersPageError='';state.query='';
       state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
       state.customerSearchCursorId='';state.customerSearchCursorValue=null;
       saveAdminCustomersCache();
@@ -1963,6 +1969,7 @@
           if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid
             ||state.customersLoadSeq!==requestSeq||customerDirectoryQueryKey()!==key)return;
           state.customers=Array.isArray(page.customers)?page.customers:[];
+          state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state.customers.length);
           state.customersLoaded=true;state.customersHasMore=page.hasMore===true;
           state.customersCursorId=String(page.cursorId||'');state.customersCursorValue=page.cursorValue??null;
           state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=page.cursorValue??null;
@@ -2003,18 +2010,24 @@
 
     async function loadMoreAdminCustomers(){
       const key=customerDirectoryQueryKey();
+      const visibleCount=Math.max(0,Number(state.customersVisibleCount)||0);
+      const hasCachedPages=state.customers.length>visibleCount;
       if(state.role!=='barber'||state.customersLoadingMore||!state.customersLoaded||state.customersQueryKey!==key
-        ||!state.customersHasMore||!state.customersCursorId||state.query.trim())return;
+        ||state.query.trim())return;
       const accountUid=state.user?.uid||'',barberUid=state.barberUid,requestSeq=state.customersLoadSeq;
       const refreshFirstPage=adminCustomersDirectoryRefreshPending
         ||Math.max(0,Number(state.customersDirectoryVersion)||0)>Math.max(0,Number(state.customersCacheVersion)||0);
       const refreshVersion=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
-      let cursorId=String(state.customersCursorId),cursorValue=state.customersCursorValue;
+      if(!refreshFirstPage&&!hasCachedPages&&(!state.customersHasMore||!state.customersCursorId))return;
+      const cursorId=String(state.customersCursorId||''),cursorValue=state.customersCursorValue;
       const indicatorStartedAt=Date.now();
       let emptyPage=false;
+      const revealCachedPages=!refreshFirstPage&&hasCachedPages;
       state.customersPageError='';
       customersPaginationObserver?.disconnect();customersPaginationObserver=null;
-      state.customersLoadingMore=true;renderApp();
+      state.customersLoadingMore=true;
+      state.customersLoadingMoreFromCache=revealCachedPages;
+      renderApp();
       const requestStillCurrent=()=>state.role==='barber'&&state.user?.uid===accountUid
         &&state.barberUid===barberUid&&state.customersLoadSeq===requestSeq
         &&customerDirectoryQueryKey()===key&&state.customersQueryKey===key&&!state.query.trim();
@@ -2027,12 +2040,21 @@
         emptyPage=true;
       };
       try{
+        if(revealCachedPages){
+          await keepCustomerPaginationIndicatorVisible(indicatorStartedAt);
+          if(!requestStillCurrent())return;
+          if(directoryChangedDuringRequest()){deferStalePage();return;}
+          state.customersVisibleCount=Math.min(state.customers.length,visibleCount+ADMIN_CUSTOMERS_NEXT_PAGE_SIZE);
+          emptyPage=true;
+          return;
+        }
         if(refreshFirstPage){
           const first=await api('/api/customers/list',{method:'POST',body:{pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE}});
           if(!requestStillCurrent())return;
           if(directoryChangedDuringRequest()){deferStalePage();return;}
           const firstCustomers=Array.isArray(first.customers)?first.customers:[];
           state.customers=firstCustomers;
+          state.customersVisibleCount=Math.min(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,firstCustomers.length);
           state.customersLoaded=true;state.customersQueryKey=key;
           state.customersHasMore=first.hasMore===true;
           state.customersCursorId=String(first.cursorId||firstCustomers[firstCustomers.length-1]?.uid||'');
@@ -2046,13 +2068,16 @@
             adminCustomersRefreshOnNextEntry=false;
           }
           saveAdminCustomersCache();
-          cursorId=String(state.customersCursorId||'');cursorValue=state.customersCursorValue;
-          if(!firstCustomers.length||!state.customersHasMore||!cursorId){
+          if(!firstCustomers.length||!state.customersHasMore||!state.customersCursorId){
             emptyPage=true;
             return;
           }
         }
-        const page=await api('/api/customers/list',{method:'POST',body:{pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE,cursorId,cursorValue}});
+        const page=await api('/api/customers/list',{method:'POST',body:{
+          pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE,
+          cursorId:state.customersCursorId||cursorId,
+          cursorValue:state.customersCursorValue??cursorValue
+        }});
         if(!requestStillCurrent())return;
         if(directoryChangedDuringRequest()){deferStalePage();return;}
         const incoming=Array.isArray(page.customers)?page.customers:[];
@@ -2060,9 +2085,12 @@
           emptyPage=true;state.customersHasMore=false;state.customersPageError='';saveAdminCustomersCache();
         }else{
           const nextCursorId=String(page.cursorId||'');
-          if(!nextCursorId||nextCursorId===cursorId)throw new Error('El cursor de clientes no avanzó. Conservamos la lista para que puedas reintentar.');
+          if(!nextCursorId||nextCursorId===String(state.customersCursorId||cursorId))throw new Error('El cursor de clientes no avanzó. Conservamos la lista para que puedas reintentar.');
           const seen=new Set(state.customers.map(c=>c.uid));
-          state.customers=[...state.customers,...incoming.filter(c=>!seen.has(c.uid))];
+          const next=incoming.filter(c=>!seen.has(c.uid));
+          state.customers=[...state.customers,...next];
+          const baseVisibleCount=refreshFirstPage?ADMIN_CUSTOMERS_FIRST_PAGE_SIZE:visibleCount;
+          state.customersVisibleCount=Math.min(state.customers.length,baseVisibleCount+next.length);
           state.customersHasMore=page.hasMore===true;
           state.customersCursorId=nextCursorId;
           state.customersCursorValue=Object.prototype.hasOwnProperty.call(page,'cursorValue')?page.cursorValue:state.customersCursorValue;
@@ -2075,9 +2103,10 @@
           console.warn('[Barber VIP] Falló la siguiente página de clientes.',error?.message||error);
         }
       }finally{
-        if(!emptyPage||refreshFirstPage)await keepCustomerPaginationIndicatorVisible(indicatorStartedAt);
+        if(!emptyPage)await keepCustomerPaginationIndicatorVisible(indicatorStartedAt);
         if(state.customersLoadSeq===requestSeq&&state.user?.uid===accountUid&&state.barberUid===barberUid){
-          state.customersLoadingMore=false;if(state.section==='clients')renderApp();else observeCustomersPagination();
+          state.customersLoadingMore=false;state.customersLoadingMoreFromCache=false;
+          if(state.section==='clients')renderApp();else observeCustomersPagination();
         }
       }
     }

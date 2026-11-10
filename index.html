@@ -2460,6 +2460,11 @@
         state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
         if(saved)markCustomerDirectoryChanged({customer:saved});
         modalRoot.innerHTML='';if(state.section==='clients')renderApp();
+        if(state.section==='clients'&&adminCustomersDirectoryRefreshPending){
+          void ensureAdminCustomersLoaded({force:true,reset:true}).catch(error=>
+            toast(userFacingError(error,'No se pudieron actualizar los clientes.'),'error')
+          );
+        }
         const message=result.passwordResetFailed?'Los datos del cliente se guardaron, pero no se pudo cambiar la contraseña. Volvé a intentarlo.':(id?'Cliente actualizado.':'Cliente creado correctamente.');
         toast(message,result.passwordResetFailed?'error':'success');
       }catch(error){

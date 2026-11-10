@@ -553,12 +553,12 @@ test("a customer outside the unlocked page is deferred without reading its docum
   assert.match(listener, /index<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
   const merge = functionBody(html, "function applyCustomerUpsertToDirectory", "function applyCustomerRemovalToDirectory");
   assert.match(merge, /priorIndex=complete\?state\.customers\.findIndex/);
-  assert.match(merge, /priorIndex<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
+  assert.match(merge, /priorIndex<visibleCount/);
   assert.match(merge, /adminCustomersDirectoryRefreshPending=true/);
   assert.match(merge, /state\.customersHasMore===false/);
   assert.match(merge, /state\.customers\.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(merge, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
-  assert.match(listener, /canFillFirstPage/);
+  assert.match(listener, /canFillFirstPage=state\.section==='clients'&&!state\.query\.trim\(\)/);
   assert.match(listener, /!modalRoot\.querySelector\('\.modal-backdrop'\)/);
 });
 

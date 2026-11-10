@@ -602,3 +602,13 @@ test("manual creation can fill an incomplete first page locally without another 
   assert.match(merge, /state\.customers\.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(merge, /state\.customers=\[\.\.\.state\.customers,\{\.\.\.customer,uid:customerId\}\]/);
 });
+
+test("direct signup uses the Auth UID for metadata and atomically claims the normalized phone", () => {
+  const signup = functionBody(worker, "async function registerCustomerAccount", "async function hmacHex");
+  assert.match(signup, /customerDirectoryUpsertFields\(version, customerUid, now\)/);
+  assert.doesNotMatch(signup, /changeType:\s*"upsert",\s*customerId\s*[,}]/);
+  assert.match(signup, /customerPhoneIndex/);
+  assert.match(signup, /const phoneLookupWrite/);
+  assert.match(signup, /currentDocument:\s*latestPhoneLookup\?\.updateTime/);
+  assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, phoneLookupWrite, directoryWrite\]\)/);
+});

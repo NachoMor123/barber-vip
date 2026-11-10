@@ -80,7 +80,7 @@ test("directory starts with ten records and explicitly loads five-record cursor 
   assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5/);
   assert.match(loader, /pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(more, /pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE/);
-  assert.match(more, /let cursorId=String\(state\.customersCursorId\)/);
+  assert.match(more, /const cursorId=String\(state\.customersCursorId\|\|''\),cursorValue=state\.customersCursorValue/);
   assert.match(more, /cursorId,cursorValue/);
   assert.match(more, /refreshFirstPage/);
   assert.match(list, /Math\.min\(15, Number\(data\.pageSize\) \|\| 15\)/);

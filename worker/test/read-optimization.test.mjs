@@ -79,7 +79,7 @@ test("directory starts with ten records and explicitly loads five-record cursor 
   assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5/);
   assert.match(loader, /pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(more, /pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE/);
-  assert.match(more, /const cursorId=String\(state\.customersCursorId\)/);
+  assert.match(more, /let cursorId=String\(state\.customersCursorId\)/);
   assert.match(more, /cursorId,cursorValue/);
   assert.match(more, /refreshFirstPage/);
   assert.match(list, /Math\.min\(15, Number\(data\.pageSize\) \|\| 15\)/);
@@ -263,7 +263,8 @@ test("professional profile and loyalty settings use a separate cache scope", () 
   assert.match(changed, /applyCustomerRemovalToDirectory/);
   assert.match(changed, /applyCustomerUpsertToDirectory/);
   assert.doesNotMatch(changed, /invalidateCustomerDirectoryPages/);
-  assert.match(changed, /clearAllAdminCustomersCaches/);
+  assert.match(changed, /adminCustomersDirectoryRefreshPending=true/);
+  assert.match(changed, /adminCustomersRefreshOnNextEntry=true/);
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
@@ -292,7 +293,7 @@ test("failed customer pages keep their cursor and expose an explicit retry", () 
   assert.match(search, /customerSearchPageError='No pudimos cargar/);
   assert.doesNotMatch(list.slice(list.indexOf("}catch(error)"), list.indexOf("}finally")), /customersHasMore=false/);
   assert.doesNotMatch(search.slice(search.indexOf("}catch(error)"), search.indexOf("}finally")), /customerSearchHasMore=false/);
-  assert.match(markup, /data-action=\"\$\{retryAction\}\"/);
+  assert.match(markup, /data-action=\"'\+retryAction\+'\"/);
   assert.match(html, /retry-more-clients/);
   assert.match(html, /retry-more-search/);
 });
@@ -462,7 +463,8 @@ test("barber listens only to one directory revision while Clients is visible", (
   assert.match(listener, /changeType==='remove'/);
   assert.match(listener, /remoteVersion===knownVersion\+1/);
   assert.match(listener, /getDoc\(customerRef\)/);
-  assert.match(listener, /Se detectó un cambio de clientes/);
+  assert.match(listener, /No pudimos actualizar un cliente visible/);
+  assert.match(listener, /Several missed changes cannot be patched safely/);
   assert.match(listener, /ensureAdminCustomersLoaded/);
   assert.doesNotMatch(listener, /onSnapshot\(collection\(.*customers/);
   assert.match(clear, /stopAdminCustomersListener\(\)/);

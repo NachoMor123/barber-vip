@@ -1581,6 +1581,10 @@
     document.addEventListener('visibilitychange',()=>{
       if(!state.db)return;
       if(document.visibilityState==='hidden'){
+        if(state.role==='barber'&&state.section==='clients'){
+          resetAdminCustomersToFirstPage();
+          adminCustomersAwaitingEntrySnapshot=true;
+        }
         if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())stopAdminCustomersListener();
         void syncFirestoreNetworkWithVisibility().catch(error=>{
           firestoreBackgroundPause=false;
@@ -1591,6 +1595,7 @@
       // Re-enable Firestore before reconnecting the listener or resuming the session.
       void syncFirestoreNetworkWithVisibility().then(()=>{
         if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        if(state.role==='barber'&&state.section==='clients')renderApp();
         resumePaymentReturnSession();
       }).catch(error=>{
         console.warn('[Barber VIP] No se pudo reanudar Firestore.',error?.message||error);
@@ -1601,6 +1606,7 @@
       if(!event.persisted||!state.db)return;
       void syncFirestoreNetworkWithVisibility({forceResume:true}).then(()=>{
         if(state.role==='barber'&&isAdminCustomerDirectorySurfaceOpen())startAdminCustomersListener();
+        if(state.role==='barber'&&state.section==='clients')renderApp();
         resumePaymentReturnSession();
       }).catch(error=>{
         showErrorOnce('firestore-pageshow','No se pudo reanudar la conexión. Revisá tu conexión e intentá nuevamente.',error);
@@ -1909,7 +1915,7 @@
       state.customersFirstPageCursorId=state.customersCursorId;state.customersFirstPageCursorValue=state.customersCursorValue;
       state.customersHasMore=state.customersHasMore||hadAdditionalPages;
       state.customersLoadSeq++;state.customersLoadPromise=null;state.customersLoadQueryKey='';
-      state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';
+      state.customersLoading=false;state.customersLoadingMore=false;state.customersPageError='';state.query='';
       state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
       state.customerSearchCursorId='';state.customerSearchCursorValue=null;
       saveAdminCustomersCache();

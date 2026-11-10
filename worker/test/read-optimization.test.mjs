@@ -72,12 +72,12 @@ test("directory cache persists across logout and is scoped by both Firebase UIDs
   assert.doesNotMatch(html, /customersDirectoryCheckSeq/);
 });
 
-test("directory starts with ten records and explicitly loads five-record cursor pages", () => {
+test("directory starts with thirteen records and explicitly loads six-record cursor pages", () => {
   const loader = functionBody(html, "async function ensureAdminCustomersLoaded", "async function loadMoreAdminCustomers");
   const more = functionBody(html, "async function loadMoreAdminCustomers", "async function loadMoreCustomerSearch");
   const list = functionBody(api, "async function listCustomers", "async function searchCustomers");
-  assert.match(html, /ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=10/);
-  assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=5/);
+  assert.match(html, /ADMIN_CUSTOMERS_FIRST_PAGE_SIZE=13/);
+  assert.match(html, /ADMIN_CUSTOMERS_NEXT_PAGE_SIZE=6/);
   assert.match(loader, /pageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(more, /pageSize:ADMIN_CUSTOMERS_NEXT_PAGE_SIZE/);
   assert.match(more, /const cursorId=String\(state\.customersCursorId\|\|''\),cursorValue=state\.customersCursorValue/);
@@ -102,7 +102,7 @@ test("scrolling alone never triggers a Firestore customer page read", () => {
   assert.doesNotMatch(observer, /new IntersectionObserver|loadMoreAdminCustomers\(\)|loadMoreCustomerSearch\(\)/);
 });
 
-test("five-record pagination uses an explicit button and a 3.5-second loading indicator", () => {
+test("six-record pagination uses an explicit button and a 3-second loading indicator", () => {
   const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
   assert.ok(markup.includes("customer-load-more-indicator"));
@@ -112,7 +112,7 @@ test("five-record pagination uses an explicit button and a 3.5-second loading in
   assert.ok(markup.includes("load-more-search"));
   assert.ok(markup.includes("Cargando más coincidencias"));
   assert.ok(markup.includes("Cargando más clientes"));
-  assert.match(html, /CUSTOMER_PAGINATION_INDICATOR_MIN_MS=3500/);
+  assert.match(html, /CUSTOMER_PAGINATION_INDICATOR_MIN_MS=3000/);
   assert.match(html, /function keepCustomerPaginationIndicatorVisible\(startedAt\)/);
   const listPagination = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
   const searchPagination = functionBody(html, "async function loadMoreCustomerSearch()", "async function runCustomerSearch");
@@ -143,12 +143,12 @@ test("customer search declares its collection reference and cannot throw Referen
   assert.doesNotMatch(search, /query\(ref,/);
 });
 
-test("name and WhatsApp searches are prefix-based and capped at five matches", () => {
+test("name and WhatsApp searches are prefix-based and capped at six matches", () => {
   const search = functionBody(api, "async function searchCustomers", "const apiRequest");
   const inputStart = html.indexOf("if(target.id==='clientSearch')");
   const inputEnd = html.indexOf("else if(['settingDisplayName'", inputStart);
   const input = html.slice(inputStart, inputEnd);
-  assert.match(search, /Math\.min\(5, Number\(data\.pageSize\) \|\| 5\)/);
+  assert.match(search, /Math\.min\(6, Number\(data\.pageSize\) \|\| 6\)/);
   assert.match(search, /where\(field, '>='/);
   assert.match(search, /where\(field, '<='/);
   assert.match(search, /rawDigits\.length < requiredDigits/);
@@ -481,7 +481,7 @@ test("barber listens only to one directory revision while Clients is visible", (
 });
 
 
-test("the admin customer cache keeps up to 150 loaded records but exposes only ten on entry", () => {
+test("the admin customer cache keeps up to 150 loaded records but exposes only thirteen on entry", () => {
   assert.match(html, /ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150/);
   const save = functionBody(html, "function saveAdminCustomersCache()", "function restoreAdminCustomersCache()");
   const restore = functionBody(html, "function restoreAdminCustomersCache()", "function clearAdminCustomersCache()");
@@ -491,6 +491,9 @@ test("the admin customer cache keeps up to 150 loaded records but exposes only t
   assert.match(restore, /restored\.slice\(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS\)/);
   assert.match(restore, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
   assert.match(restore, /state\.customersCursorId=String\(cached\.cursorId\|\|''\)/);
+  assert.match(save, /firstPageSize:ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
+  assert.match(restore, /needsExpandedFirstPageRefresh/);
+  assert.match(restore, /if\(!needsExpandedFirstPageRefresh\)saveAdminCustomersCache\(\)/);
   assert.match(reset, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
   assert.doesNotMatch(reset, /state\.customers=state\.customers\.slice/);
   assert.match(reset, /saveAdminCustomersCache\(\)/);
@@ -552,6 +555,11 @@ test("a customer outside the unlocked page is deferred without reading its docum
   assert.match(merge, /priorIndex=complete\?state\.customers\.findIndex/);
   assert.match(merge, /priorIndex<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
   assert.match(merge, /adminCustomersDirectoryRefreshPending=true/);
+  assert.match(merge, /state\.customersHasMore===false/);
+  assert.match(merge, /state\.customers\.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
+  assert.match(merge, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
+  assert.match(listener, /canFillFirstPage/);
+  assert.match(listener, /!modalRoot\.querySelector\('\.modal-backdrop'\)/);
 });
 
 test("a page is discarded when a directory revision changes while it is loading", () => {
@@ -564,7 +572,7 @@ test("a page is discarded when a directory revision changes while it is loading"
   assert.match(more, /customersDirectoryVersion\)\|\|0\)>Math\.max\(0,Number\(state\.customersCacheVersion/);
 });
 
-test("backgrounding and returning to the PWA resets the barber list to ten without losing its cache", () => {
+test("backgrounding and returning to the PWA resets the barber list to thirteen without losing its cache", () => {
   const visibilityStart = html.indexOf("document.addEventListener('visibilitychange'");
   const visibilityEnd = html.indexOf("window.addEventListener('pageshow'", visibilityStart);
   const visibility = html.slice(visibilityStart, visibilityEnd);
@@ -581,3 +589,16 @@ test("backgrounding and returning to the PWA resets the barber list to ten witho
   assert.match(reset, /saveAdminCustomersCache\(\)/);
 });
 
+
+test("clearing a search reconciles deferred directory changes with one bounded first-page read", () => {
+  const search = functionBody(html, "async function runCustomerSearch(term,target='clients')", "function sectionPreferenceKey");
+  assert.match(search, /!clean&&state\.section==='clients'&&adminCustomersDirectoryRefreshPending/);
+  assert.match(search, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
+});
+
+test("manual creation can fill an incomplete first page locally without another read", () => {
+  const merge = functionBody(html, "function applyCustomerUpsertToDirectory", "function applyCustomerRemovalToDirectory");
+  assert.match(merge, /complete&&priorIndex<0&&state\.customersHasMore===false/);
+  assert.match(merge, /state\.customers\.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
+  assert.match(merge, /state\.customers=\[\.\.\.state\.customers,\{\.\.\.customer,uid:customerId\}\]/);
+});

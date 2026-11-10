@@ -1727,7 +1727,6 @@
             &&state.customersHasMore===false;
           const customerIsVisible=state.section==='clients'&&!state.query.trim()
             &&!modalRoot.querySelector('.modal-backdrop')
-            &&directoryComplete===false
             &&state.customers.some((customer,index)=>index<Math.max(0,Number(state.customersVisibleCount)||0)&&customer?.uid===changedId);
           const canFillFirstPage=directoryComplete
             &&state.customers.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE
@@ -2011,9 +2010,8 @@
           throw failure;
         }finally{
           if(state.customersLoadSeq===requestSeq&&state.barberUid===barberUid){
-            // Arm the scroll observer only after loading is false. Rendering sooner
-            // makes observeCustomersPagination() skip the sentinel and leaves the
-            // initial 15 records without automatic pagination until a later repaint.
+            // Finish the first-page request before rendering so loading state and
+            // the visible first page remain consistent.
             state.customersLoading=false;
             if(state.customersLoadQueryKey===key)state.customersLoadQueryKey='';
             if(state.section==='clients'&&document.visibilityState==='visible')renderApp();

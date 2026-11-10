@@ -347,6 +347,13 @@ async function registerCustomerAccount(request, env) {
   if (phoneMatches.some(row => row.data.active !== false && normalizeCustomerWhatsapp(row.data.whatsapp) === whatsapp)) {
     throw Object.assign(new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."), { status: 409 });
   }
+  // Keep legacy duplicate detection and serialize concurrent registrations with
+  // the same normalized phone through the private uniqueness-lock document.
+  const phoneLookupPath = "barbers/" + barberUid + "/customerPhoneIndex/" + await sha256Hex(whatsapp);
+  const existingPhoneLookup = await fsGet(env, phoneLookupPath);
+  if (existingPhoneLookup && existingPhoneLookup.data.active !== false) {
+    throw Object.assign(new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."), { status: 409 });
+  }
 
   if (!env.FIREBASE_WEB_API_KEY) throw new Error("FIREBASE_WEB_API_KEY no está configurada.");
   const loginEmail = "cliente-" + crypto.randomUUID() + "@accounts.barbervip.app";
@@ -415,13 +422,20 @@ async function registerCustomerAccount(request, env) {
   try {
     let committed = false;
     for (let attempt = 0; attempt < 5 && !committed; attempt++) {
-      const [currentDirectory, latestLookup] = await Promise.all([
+      const [currentDirectory, latestLookup, latestPhoneLookup] = await Promise.all([
         fsGet(env, directoryPath),
-        attempt === 0 ? Promise.resolve(existingLookup) : fsGet(env, loginPath)
+        attempt === 0 ? Promise.resolve(existingLookup) : fsGet(env, loginPath),
+        attempt === 0 ? Promise.resolve(existingPhoneLookup) : fsGet(env, phoneLookupPath)
       ]);
       if (latestLookup && latestLookup.data.active !== false) {
         throw Object.assign(
           new Error("Ya existe una cuenta con ese nombre en este espacio profesional. Consultá con tu profesional."),
+          { status: 409 }
+        );
+      }
+      if (latestPhoneLookup && latestPhoneLookup.data.active !== false) {
+        throw Object.assign(
+          new Error("Ya existe una cuenta activa con ese WhatsApp en este espacio profesional. Consultá con tu profesional."),
           { status: 409 }
         );
       }
@@ -437,6 +451,17 @@ async function registerCustomerAccount(request, env) {
           ? { updateTime: latestLookup.updateTime }
           : { exists: false }
       };
+      const phoneLookupWrite = {
+        update: {
+          name: latestPhoneLookup?.name || firestoreResourceName(env, phoneLookupPath),
+          fields: encodeFields({
+            uid: customerUid, barberUid, active: true, updatedAt: now
+          })
+        },
+        currentDocument: latestPhoneLookup?.updateTime
+          ? { updateTime: latestPhoneLookup.updateTime }
+          : { exists: false }
+      };
       const directoryWrite = {
         update: {
           name: currentDirectory?.name || firestoreResourceName(env, directoryPath),
@@ -448,7 +473,7 @@ async function registerCustomerAccount(request, env) {
           : { exists: false }
       };
       try {
-        await fsCommit(env, [...customerWrites, lookupWrite, directoryWrite]);
+        await fsCommit(env, [...customerWrites, lookupWrite, phoneLookupWrite, directoryWrite]);
         committed = true;
       } catch (error) {
         if (error?.conflict && attempt < 4) continue;

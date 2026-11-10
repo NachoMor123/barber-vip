@@ -266,6 +266,12 @@ function normalizeCustomerWhatsapp(value) {
   return number.length === 10 ? "549" + number : number;
 }
 
+function customerDirectoryUpsertFields(version, customerUid, updatedAt) {
+  const uid = String(customerUid || "").trim();
+  if (!uid) throw new Error("Falta identificar al cliente nuevo.");
+  return { version, updatedAt, changeType: "upsert", customerId: uid };
+}
+
 async function lookupCustomerAccount(request, env) {
   const data = await parseBody(request);
   const barberCode = String(data.barberCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
@@ -434,9 +440,7 @@ async function registerCustomerAccount(request, env) {
       const directoryWrite = {
         update: {
           name: currentDirectory?.name || firestoreResourceName(env, directoryPath),
-          fields: encodeFields({
-            version, updatedAt: now, changeType: "upsert", customerId
-          })
+          fields: encodeFields(customerDirectoryUpsertFields(version, customerUid, now))
         },
         updateMask: { fieldPaths: ["version", "updatedAt", "changeType", "customerId"] },
         currentDocument: currentDirectory?.updateTime
@@ -718,5 +722,5 @@ export {
   renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
   validMercadoPagoSignature, encodeValue, decodeValue,
   originAllowed, frontendReturnOrigin,
-  normalizeCustomerSignupName, normalizeCustomerWhatsapp
+  normalizeCustomerSignupName, normalizeCustomerWhatsapp, customerDirectoryUpsertFields
 };

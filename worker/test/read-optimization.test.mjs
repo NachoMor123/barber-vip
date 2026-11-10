@@ -591,9 +591,12 @@ test("backgrounding and returning to the PWA resets the barber list to thirteen 
 
 
 test("clearing a search reconciles deferred directory changes with one bounded first-page read", () => {
-  const search = functionBody(html, "async function runCustomerSearch(term,target='clients')", "function sectionPreferenceKey");
-  assert.match(search, /!clean&&state\.section==='clients'&&adminCustomersDirectoryRefreshPending/);
-  assert.match(search, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
+  const inputStart = html.indexOf("document.addEventListener('input'");
+  const inputEnd = html.indexOf("document.addEventListener('change'", inputStart);
+  const input = html.slice(inputStart, inputEnd);
+  assert.match(input, /!term&&state\.role==='barber'/);
+  assert.match(input, /adminCustomersDirectoryRefreshPending/);
+  assert.match(input, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
 });
 
 test("manual creation can fill an incomplete first page locally without another read", () => {
@@ -601,6 +604,12 @@ test("manual creation can fill an incomplete first page locally without another 
   assert.match(merge, /complete&&priorIndex<0&&state\.customersHasMore===false/);
   assert.match(merge, /state\.customers\.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE/);
   assert.match(merge, /state\.customers=\[\.\.\.state\.customers,\{\.\.\.customer,uid:customerId\}\]/);
+});
+test("saving an edited hidden customer reconciles the visible directory without waiting for another click", () => {
+  const save = functionBody(html, "async function saveCustomerForm(form)", "function collectSchedule");
+  assert.match(save, /markCustomerDirectoryChanged\(\{customer:saved\}\)/);
+  assert.match(save, /adminCustomersDirectoryRefreshPending/);
+  assert.match(save, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
 });
 
 test("direct signup uses the Auth UID for metadata and atomically claims the normalized phone", () => {

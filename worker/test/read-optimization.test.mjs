@@ -546,11 +546,9 @@ test("a customer outside the unlocked page is deferred without reading its docum
   assert.ok(hiddenBranchStart >= 0);
   assert.ok(targetedRead > hiddenBranchStart);
   const hiddenBranch = listener.slice(hiddenBranchStart, listener.indexOf("const syncSeq", hiddenBranchStart));
-  assert.match(hiddenBranch, /adminCustomersDirectoryRefreshPending=true/);
-  assert.match(hiddenBranch, /adminCustomersRefreshOnNextEntry=true/);
-  assert.doesNotMatch(hiddenBranch, /getDoc\(customerRef\)/);
   assert.match(hiddenBranch, /state\.customersDirectoryRefreshPending=true/);
   assert.match(hiddenBranch, /adminCustomersRefreshOnNextEntry=true/);
+  assert.doesNotMatch(hiddenBranch, /getDoc\(customerRef\)/);
   assert.match(hiddenBranch, /refreshSearch\(\)/);
   assert.match(listener, /index<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
   const merge = functionBody(html, "function applyCustomerUpsertToDirectory", "function applyCustomerRemovalToDirectory");

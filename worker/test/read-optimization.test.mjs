@@ -385,7 +385,7 @@ test("barber workspace uses Clients and Settings as the only navigation sections
   assert.match(html, /readSectionPreference\('barber',me\.uid,\['clients','settings'\],'clients'\)/);
   const clients = functionBody(html, "function clientsView()", "function renderSettings()");
   assert.match(clients, /greetingForNow\(\)/);
-  assert.match(clients, /data-action="open-cut-modal"/);
+  assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
   assert.match(clients, /data-action="new-client"/);
   assert.match(html, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/);
 });

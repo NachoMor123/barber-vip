@@ -534,3 +534,21 @@ test("an off-page customer mutation is deferred without reading that customer do
   assert.match(merge, /if\(cacheCurrent\)/);
   assert.match(merge, /adminCustomersDirectoryRefreshPending=true/);
 });
+
+test("backgrounding and returning to the PWA resets the barber list to ten without losing its cache", () => {
+  const visibilityStart = html.indexOf("document.addEventListener('visibilitychange'");
+  const visibilityEnd = html.indexOf("window.addEventListener('pageshow'", visibilityStart);
+  const visibility = html.slice(visibilityStart, visibilityEnd);
+  const pageshowStart = visibilityEnd;
+  const pageshowEnd = html.indexOf("function adminShell()", pageshowStart);
+  const pageshow = html.slice(pageshowStart, pageshowEnd);
+  const reset = functionBody(html, "function resetAdminCustomersToFirstPage()", "function markCustomerDirectoryChanged");
+  assert.match(visibility, /document\.visibilityState==='hidden'/);
+  assert.match(visibility, /resetAdminCustomersToFirstPage\(\)/);
+  assert.match(visibility, /adminCustomersAwaitingEntrySnapshot=true/);
+  assert.match(visibility, /if\(state\.role==='barber'&&state\.section==='clients'\)renderApp\(\)/);
+  assert.match(pageshow, /if\(state\.role==='barber'&&state\.section==='clients'\)renderApp\(\)/);
+  assert.match(reset, /state\.query=''/);
+  assert.match(reset, /saveAdminCustomersCache\(\)/);
+});
+

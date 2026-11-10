@@ -49,7 +49,8 @@ test("Clients keeps the real latest-visit order and a single centered create act
   assert.doesNotMatch(api, /customerListSort|customerDirectoryFilters|signupSource/);
   assert.match(list, /where\('active', '==', true\)/);
   assert.match(list, /orderBy\('lastCutAt', 'desc'\)/);
-  assert.match(clients, /Mostramos los 10 clientes con visita más reciente/);
+  assert.match(clients, /Tus clientes, ordenados por última visita/);
+  assert.doesNotMatch(clients, /Mostramos los 10|cinco más|cargá cinco/);
   assert.match(clients, /data-action="new-client"/);
   assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
   assert.doesNotMatch(clients, /Más visitas totales|Menos visitas totales|Todos los orígenes/);

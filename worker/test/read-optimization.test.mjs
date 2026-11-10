@@ -480,20 +480,34 @@ test("barber listens only to one directory revision while Clients is visible", (
 });
 
 
-test("the admin customer cache persists only the first ten records and their cursor", () => {
-  assert.doesNotMatch(html, /ADMIN_CUSTOMERS_CACHE_MAX_RECORDS/);
+test("the admin customer cache keeps up to 150 loaded records but exposes only ten on entry", () => {
+  assert.match(html, /ADMIN_CUSTOMERS_CACHE_MAX_RECORDS=150/);
   const save = functionBody(html, "function saveAdminCustomersCache()", "function restoreAdminCustomersCache()");
-  const restore = functionBody(html, "function restoreAdminCustomersCache()", "function resetAdminCustomersToFirstPage()");
-  assert.match(save, /state\.customers\.slice\(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE\)/);
-  assert.match(save, /cursorId=String\(cacheLastCustomer\?\.uid\|\|''\)/);
-  assert.match(save, /cursorValue=customerCursorValue\(cacheLastCustomer\)/);
-  assert.match(restore, /restored\.slice\(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE\)/);
-  assert.match(restore, /state\.customersCursorId=String\(last\?\.uid\|\|''\)/);
-  assert.match(restore, /adminCustomersAwaitingEntrySnapshot=true/);
-  assert.match(html, /function resetAdminCustomersToFirstPage\(\)/);
+  const restore = functionBody(html, "function restoreAdminCustomersCache()", "function clearAdminCustomersCache()");
   const reset = functionBody(html, "function resetAdminCustomersToFirstPage()", "function markCustomerDirectoryChanged");
-  assert.match(reset, /state\.customers=state\.customers\.slice\(0,ADMIN_CUSTOMERS_FIRST_PAGE_SIZE\)/);
+  assert.match(save, /slice\(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS\)/);
+  assert.match(save, /cacheTruncated\?String\(cacheLastCustomer\?\.uid\|\|''\):state\.customersCursorId/);
+  assert.match(restore, /restored\.slice\(0,ADMIN_CUSTOMERS_CACHE_MAX_RECORDS\)/);
+  assert.match(restore, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
+  assert.match(restore, /state\.customersCursorId=String\(cached\.cursorId\|\|''\)/);
+  assert.match(reset, /state\.customersVisibleCount=Math\.min\(ADMIN_CUSTOMERS_FIRST_PAGE_SIZE,state\.customers\.length\)/);
+  assert.doesNotMatch(reset, /state\.customers=state\.customers\.slice/);
   assert.match(reset, /saveAdminCustomersCache\(\)/);
+});
+
+test("previously loaded directory pages are revealed from cache without another Firestore request", () => {
+  const more = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  const cachedBranch = more.slice(more.indexOf("if(revealCachedPages)"), more.indexOf("if(refreshFirstPage)"));
+  assert.match(more, /const hasCachedPages=state\.customers\.length>visibleCount/);
+  assert.match(more, /revealCachedPages=!refreshFirstPage&&hasCachedPages/);
+  assert.match(cachedBranch, /keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
+  assert.match(cachedBranch, /state\.customersVisibleCount=Math\.min\(state\.customers\.length,visibleCount\+ADMIN_CUSTOMERS_NEXT_PAGE_SIZE\)/);
+  assert.doesNotMatch(cachedBranch, /api\('\/api\/customers\/list/);
+  assert.match(html, /state\.customersLoadingMoreFromCache\?'Mostrando más clientes/);
+  const visible = functionBody(html, "function filteredCustomers()", "function clientStatus");
+  assert.match(visible, /slice\(0,visibleCount\)/);
+  const markup = functionBody(html, "function customerResultsMarkup", "function clientsView");
+  assert.match(markup, /state\.customersVisibleCount<state\.customers\.length\|\|state\.customersHasMore/);
 });
 
 test("first-page customer load failures never masquerade as an empty directory", () => {
@@ -521,9 +535,9 @@ test("leaving Clients resets pagination depth and re-entry checks one revision d
   assert.match(listener, /ensureAdminCustomersLoaded\(\{force:true,reset:true\}\)/);
 });
 
-test("an off-page customer mutation is deferred without reading that customer document", () => {
+test("a customer outside the unlocked page is deferred without reading its document", () => {
   const listener = functionBody(html, "function startAdminCustomersListener()", "// Subscribe only while the Clients view");
-  const hiddenBranchStart = listener.indexOf("if(!customerIsLoaded)");
+  const hiddenBranchStart = listener.indexOf("if(!customerIsVisible)");
   const targetedRead = listener.indexOf("void getDoc(customerRef)");
   assert.ok(hiddenBranchStart >= 0);
   assert.ok(targetedRead > hiddenBranchStart);
@@ -532,12 +546,12 @@ test("an off-page customer mutation is deferred without reading that customer do
   assert.match(hiddenBranch, /state\.customersDirectoryRefreshPending=true/);
   assert.match(hiddenBranch, /adminCustomersRefreshOnNextEntry=true/);
   assert.match(hiddenBranch, /refreshSearch\(\)/);
+  assert.match(listener, /index<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
   const merge = functionBody(html, "function applyCustomerUpsertToDirectory", "function applyCustomerRemovalToDirectory");
   assert.match(merge, /priorIndex=complete\?state\.customers\.findIndex/);
-  assert.match(merge, /if\(cacheCurrent\)/);
+  assert.match(merge, /priorIndex<Math\.max\(0,Number\(state\.customersVisibleCount\)\|\|0\)/);
   assert.match(merge, /adminCustomersDirectoryRefreshPending=true/);
 });
-
 
 test("a page is discarded when a directory revision changes while it is loading", () => {
   const more = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");

@@ -1728,7 +1728,9 @@
           const customerIsVisible=state.section==='clients'&&!state.query.trim()
             &&!modalRoot.querySelector('.modal-backdrop')
             &&state.customers.some((customer,index)=>index<Math.max(0,Number(state.customersVisibleCount)||0)&&customer?.uid===changedId);
-          const canFillFirstPage=directoryComplete
+          const canFillFirstPage=state.section==='clients'&&!state.query.trim()
+            &&!modalRoot.querySelector('.modal-backdrop')
+            &&directoryComplete
             &&state.customers.length<ADMIN_CUSTOMERS_FIRST_PAGE_SIZE
             &&Math.max(0,Number(state.customersVisibleCount)||0)>=state.customers.length;
           if(!customerIsVisible&&!canFillFirstPage){

@@ -752,9 +752,10 @@ async function deleteCustomerAccount(request, env) {
   const loginPath = normalizedName
     ? "customerLoginLookup/" + barber.uid + "_" + await sha256Hex(normalizedName)
     : "";
-  const [loginLookup, phoneLookups] = await Promise.all([
+  const [loginLookup, allLoginLookups, phoneLookups] = await Promise.all([
     loginPath ? fsGet(env, loginPath) : Promise.resolve(null),
-    fsQueryBarberCollection(env, barber.uid, "customerPhoneIndex", "uid", customerId, 10)
+    fsQuery(env, "customerLoginLookup", "uid", customerId, 20),
+    fsQueryBarberCollection(env, barber.uid, "customerPhoneIndex", "uid", customerId, 20)
   ]);
 
   // Firebase Auth deletion is performed with the service account. USER_NOT_FOUND
@@ -784,7 +785,9 @@ async function deleteCustomerAccount(request, env) {
     const writes = [];
     if (customer) writes.push({ delete: customerResource });
     if (profile) writes.push({ delete: profileResource });
-    if (loginLookup?.data?.uid === customerId) writes.push({ delete: loginLookup.name });
+    const loginDocuments = new Map(allLoginLookups.filter(item => item.data?.uid === customerId).map(item => [item.name, item]));
+    if (loginLookup?.data?.uid === customerId) loginDocuments.set(loginLookup.name, loginLookup);
+    for (const item of loginDocuments.values()) writes.push({ delete: item.name });
     for (const phoneLookup of phoneLookups) {
       if (phoneLookup.data?.uid === customerId) writes.push({ delete: phoneLookup.name });
     }

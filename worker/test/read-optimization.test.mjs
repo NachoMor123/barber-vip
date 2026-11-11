@@ -679,6 +679,7 @@ test("barber signup requests one display name and keeps credentials as account a
   const signup = functionBody(html, "function renderLogin(mode)", "async function renderCustomerSignup");
   assert.match(signup, /name="displayName"/);
   assert.match(signup, /label for="signupName">Tu nombre/);
+  assert.match(signup, /Como dato personal, solo te pedimos tu nombre/);
   assert.doesNotMatch(signup, /name="barberName"/);
   assert.match(signup, /name="email"/);
   assert.match(signup, /barberNewPassword/);

@@ -129,7 +129,7 @@ service cloud.firestore {
       ) || (isOwner(barberId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'barberName', 'activityType', 'whatsapp', 'instagramUrl',
-          'mapsUrl', 'schedule', 'services', 'showServices', 'theme',
+          'mapsUrl', 'schedule', 'services', 'showServices', 'theme', 'pipVisible',
           'loyaltyPrograms', 'defaultLoyaltyProgramId', 'rewards',
           'sparkLoginIndexMigratedAt', 'sparkLoginIndexMigrationCursor', 'sparkPublicCodeReadyAt', 'sparkPublicMetaReadyAt',
           'customerDirectoryFieldsMigrationCursor', 'customerDirectoryFieldsMigratedAt', 'updatedAt'
@@ -139,6 +139,7 @@ service cloud.firestore {
         && request.resource.data.get('trialStartedAt', null) == resource.data.get('trialStartedAt', null)
         && request.resource.data.get('barberCode', null) == resource.data.get('barberCode', null)
         && request.resource.data.get('trialClaimId', null) == resource.data.get('trialClaimId', null)
+        && (!('pipVisible' in request.resource.data) || request.resource.data.pipVisible is bool)
         && (
           barberCanOperate(barberId)
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly([

@@ -1379,7 +1379,7 @@
           ${hasWhats? `<button class="btn btn-soft btn-mini" data-action="contact" data-id="${escapeHtml(id)}">WhatsApp</button>`:''}
           <button class="btn btn-ghost btn-mini" data-action="view-client" data-id="${escapeHtml(id)}">Ver</button>
           <button class="btn btn-ghost btn-mini" data-action="edit-client" data-id="${escapeHtml(id)}">Editar</button>
-          <button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(id)}" aria-label="Dar de baja a ${escapeHtml(name)}" title="Dar de baja">⌫</button>
+          <button class="btn btn-danger btn-mini delete-client-mini" data-action="delete-client" data-id="${escapeHtml(id)}" aria-label="Eliminar definitivamente a ${escapeHtml(name)}" title="Eliminar definitivamente">⌫</button>
         </div>
       </article>`;
     }
@@ -1797,7 +1797,7 @@
       return typeof value==='string'&&value?value:null;
     }
     function adminCustomersCacheKey(){
-      return 'barberVipAdminCustomers:v5:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
+      return 'barberVipAdminCustomers:v6:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
     }
     function customerDirectoryQueryKey(){return 'lastCut-desc-v1';}
     function compareCustomersByLastVisit(a,b){
@@ -2104,7 +2104,14 @@
         if(directoryChangedDuringRequest()){deferStalePage();return;}
         const incoming=Array.isArray(page.customers)?page.customers:[];
         if(!incoming.length){
-          emptyPage=true;state.customersHasMore=false;state.customersPageError='';saveAdminCustomersCache();
+          // An unexpected empty cursor page is not proof that the directory ended.
+          // Keep pagination available and force a fresh first-page reconciliation.
+          emptyPage=true;
+          state.customersHasMore=true;
+          state.customersPageError='No pudimos confirmar la siguiente página. Tocá Reintentar para sincronizar la lista.';
+          adminCustomersDirectoryRefreshPending=true;
+          adminCustomersRefreshOnNextEntry=true;
+          saveAdminCustomersCache();
         }else{
           const nextCursorId=String(page.cursorId||'');
           if(!nextCursorId||nextCursorId===String(state.customersCursorId||cursorId))throw new Error('El cursor de clientes no avanzó. Conservamos la lista para que puedas reintentar.');
@@ -2267,6 +2274,19 @@
       if(me.role==='barber') {
         state.section=readSectionPreference('barber',me.uid,['clients','settings'],'clients');
         state.barber=me.profile; state.customer=null; applyTheme(state.barber.theme); restoreAdminCustomersCache();
+        // Migrate the older device-only Pip switch once into the professional account.
+        if(typeof state.barber.pipVisible!=='boolean'){
+          try{
+            const legacyPip=localStorage.getItem('barberVipPipVisible');
+            if(legacyPip==='true'||legacyPip==='false'){
+              const migratedValue=legacyPip==='true';
+              const accountUid=state.user?.uid||'',barberUid=state.barberUid||'';
+              void api('/api/preferences',{method:'PUT',body:{pipVisible:migratedValue}}).then(()=>{
+                if(state.user?.uid===accountUid&&state.barberUid===barberUid)state.barber={...state.barber,pipVisible:migratedValue};
+              }).catch(error=>console.warn('[Barber VIP] La preferencia Pip se migrará al recuperar la conexión.',error?.message||error));
+            }
+          }catch(_){}
+        }
         // One revision check when Clients opens; never keep a directory listener active.
         if(state.section==='clients')startAdminCustomersListener();
         renderApp();
@@ -2406,7 +2426,7 @@
 
     function openCustomerModal(id='') {
       const c=id?(state.customers.find(x=>x.uid===id)||state.customerSearchResults?.find(x=>x.uid===id)||state.cutSearchResults.find(x=>x.uid===id)):null;
-      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle"><div class="modal-header"><div><h2 id="customerModalTitle">${c?'Editar cliente':'Crear cliente'}</h2><p>${c?'Actualizá los datos del cliente.':'Creá su acceso a Barber VIP.'}</p></div><button class="close-modal" type="button" data-action="close-modal">×</button></div><form id="customerForm" data-id="${escapeHtml(c?.uid||'')}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other"><div class="autofill-decoys" aria-hidden="true"><input type="text" name="aux_account_${Math.random().toString(36).slice(2,9)}" autocomplete="off" tabindex="-1"><input type="password" name="aux_secret_${Math.random().toString(36).slice(2,9)}" autocomplete="new-password" tabindex="-1"></div><div class="field-grid"><div class="form-field span-2"><label for="clientFullName">Nombre y apellido *</label><input id="clientFullName" name="client_name_${Math.random().toString(36).slice(2,9)}" autocomplete="off" aria-autocomplete="none" autocapitalize="words" autocorrect="off" spellcheck="false" data-unlock-on-focus readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.fullName||'')}" placeholder="Joaquín Ortiz" required maxlength="100"></div><div class="form-field span-2"><label for="clientPassword">${c?'Cambiar contraseña (opcional)':'Contraseña inicial *'}</label><div class="password-control"><input id="clientPassword" name="initial_secret_${Math.random().toString(36).slice(2,9)}" type="text" autocomplete="off" aria-autocomplete="none" data-mask-password data-masked="true" style="-webkit-text-security:disc" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" autocorrect="off" spellcheck="false" placeholder="${c?'Dejar vacío para no cambiarla':'Mínimo 6 caracteres'}" ${c?'':'required'} minlength="6"><button type="button" class="password-visibility customer-password-toggle" data-action="toggle-password" data-target="clientPassword" aria-label="Mostrar contraseña">Ver</button></div><span class="field-hint">El cliente inicia sesión con su nombre, esta contraseña y el código de acceso de tu profesional.</span></div><div class="form-field span-2"><label for="clientWhatsapp">WhatsApp del cliente *</label><div class="phone-input"><span class="phone-prefix" aria-hidden="true">+54 9</span><input id="clientWhatsapp" name="client_phone_${Math.random().toString(36).slice(2,9)}" type="tel" inputmode="tel" autocomplete="off" aria-autocomplete="none" data-unlock-on-focus readonly autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" data-argentina-mobile value="${escapeHtml(argentinaLocalNumber(c?.whatsapp||''))}" placeholder="261 752 9885" maxlength="18" required></div><span class="field-hint">Argentina ya está configurada. Escribí el número local de 10 dígitos, incluida la característica; no hace falta poner +54 9.</span></div><div class="form-field span-2"><label for="clientLoyaltyMode">Programa de fidelización</label><select id="clientLoyaltyMode" name="loyaltyMode" class="setting-input"><option value="standard" ${c?.loyaltyOverride?.mode!=='custom'?'selected':''}>Estándar · usa Configuración</option><option value="custom" ${c?.loyaltyOverride?.mode==='custom'?'selected':''}>Personalizado para este cliente</option></select><span class="field-hint">Estándar hereda los descuentos de Configuración. Personalizado permite editar solo los porcentajes de este cliente.</span><div id="clientLoyaltyConfig" class="client-loyalty-config ${c?.loyaltyOverride?.mode==='custom'?'':'hidden'}"><div class="tiny muted">Descuentos por hito · visitas 2, 4 y 6</div><div class="loyalty-custom-rows">${rewardsForCustomer(c).map((r,i)=>`<div class="loyalty-custom-row" data-client-reward-row><label>Hito fijo<strong>Visita ${[2,4,6][i]}</strong><input type="hidden" data-client-reward-cut value="${[2,4,6][i]}" ${c?.loyaltyOverride?.mode==='custom'?'':'disabled'}></label><label>Descuento (%)<input type="number" min="0" max="100" data-client-reward-discount value="${Number(r.discount)}" required ${c?.loyaltyOverride?.mode==='custom'?'':'disabled'}></label></div>`).join('')}</div></div></div><div class="form-field"><label for="clientCutStyle">Servicio o preferencia habitual (opcional)</label><input id="clientCutStyle" name="client_cut_style_entry" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.cutStyle||'')}" maxlength="100" placeholder="Ej. estilo preferido, diseño o acabado"></div><div class="form-field span-2"><label for="clientConversationPreference">¿Cómo prefiere la atención? (opcional)</label><select id="clientConversationPreference" name="conversationPreference"><option value="" ${!c?.conversationPreference?'selected':''}>Sin preferencia</option><option value="conversar" ${c?.conversationPreference==='conversar'?'selected':''}>Le gusta conversar</option><option value="tranquilo" ${c?.conversationPreference==='tranquilo'?'selected':''}>Prefiere una atención tranquila</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">${c?'Guardar cambios':'Crear cliente'}</button></div></form>${c?`<div class="login-divider"></div><button class="btn btn-danger btn-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}">Dar de baja a este cliente</button>`:''}</section></div>`;
+      modalRoot.innerHTML=`<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle"><div class="modal-header"><div><h2 id="customerModalTitle">${c?'Editar cliente':'Crear cliente'}</h2><p>${c?'Actualizá los datos del cliente.':'Creá su acceso a Barber VIP.'}</p></div><button class="close-modal" type="button" data-action="close-modal">×</button></div><form id="customerForm" data-id="${escapeHtml(c?.uid||'')}" autocomplete="off" autocorrect="off" spellcheck="false" data-form-type="other"><div class="autofill-decoys" aria-hidden="true"><input type="text" name="aux_account_${Math.random().toString(36).slice(2,9)}" autocomplete="off" tabindex="-1"><input type="password" name="aux_secret_${Math.random().toString(36).slice(2,9)}" autocomplete="new-password" tabindex="-1"></div><div class="field-grid"><div class="form-field span-2"><label for="clientFullName">Nombre y apellido *</label><input id="clientFullName" name="client_name_${Math.random().toString(36).slice(2,9)}" autocomplete="off" aria-autocomplete="none" autocapitalize="words" autocorrect="off" spellcheck="false" data-unlock-on-focus readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.fullName||'')}" placeholder="Joaquín Ortiz" required maxlength="100"></div><div class="form-field span-2"><label for="clientPassword">${c?'Cambiar contraseña (opcional)':'Contraseña inicial *'}</label><div class="password-control"><input id="clientPassword" name="initial_secret_${Math.random().toString(36).slice(2,9)}" type="text" autocomplete="off" aria-autocomplete="none" data-mask-password data-masked="true" style="-webkit-text-security:disc" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" autocorrect="off" spellcheck="false" placeholder="${c?'Dejar vacío para no cambiarla':'Mínimo 6 caracteres'}" ${c?'':'required'} minlength="6"><button type="button" class="password-visibility customer-password-toggle" data-action="toggle-password" data-target="clientPassword" aria-label="Mostrar contraseña">Ver</button></div><span class="field-hint">El cliente inicia sesión con su nombre, esta contraseña y el código de acceso de tu profesional.</span></div><div class="form-field span-2"><label for="clientWhatsapp">WhatsApp del cliente *</label><div class="phone-input"><span class="phone-prefix" aria-hidden="true">+54 9</span><input id="clientWhatsapp" name="client_phone_${Math.random().toString(36).slice(2,9)}" type="tel" inputmode="tel" autocomplete="off" aria-autocomplete="none" data-unlock-on-focus readonly autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" data-argentina-mobile value="${escapeHtml(argentinaLocalNumber(c?.whatsapp||''))}" placeholder="261 752 9885" maxlength="18" required></div><span class="field-hint">Argentina ya está configurada. Escribí el número local de 10 dígitos, incluida la característica; no hace falta poner +54 9.</span></div><div class="form-field span-2"><label for="clientLoyaltyMode">Programa de fidelización</label><select id="clientLoyaltyMode" name="loyaltyMode" class="setting-input"><option value="standard" ${c?.loyaltyOverride?.mode!=='custom'?'selected':''}>Estándar · usa Configuración</option><option value="custom" ${c?.loyaltyOverride?.mode==='custom'?'selected':''}>Personalizado para este cliente</option></select><span class="field-hint">Estándar hereda los descuentos de Configuración. Personalizado permite editar solo los porcentajes de este cliente.</span><div id="clientLoyaltyConfig" class="client-loyalty-config ${c?.loyaltyOverride?.mode==='custom'?'':'hidden'}"><div class="tiny muted">Descuentos por hito · visitas 2, 4 y 6</div><div class="loyalty-custom-rows">${rewardsForCustomer(c).map((r,i)=>`<div class="loyalty-custom-row" data-client-reward-row><label>Hito fijo<strong>Visita ${[2,4,6][i]}</strong><input type="hidden" data-client-reward-cut value="${[2,4,6][i]}" ${c?.loyaltyOverride?.mode==='custom'?'':'disabled'}></label><label>Descuento (%)<input type="number" min="0" max="100" data-client-reward-discount value="${Number(r.discount)}" required ${c?.loyaltyOverride?.mode==='custom'?'':'disabled'}></label></div>`).join('')}</div></div></div><div class="form-field"><label for="clientCutStyle">Servicio o preferencia habitual (opcional)</label><input id="clientCutStyle" name="client_cut_style_entry" autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-protonpass-ignore="true" data-form-type="other" value="${escapeHtml(c?.cutStyle||'')}" maxlength="100" placeholder="Ej. estilo preferido, diseño o acabado"></div><div class="form-field span-2"><label for="clientConversationPreference">¿Cómo prefiere la atención? (opcional)</label><select id="clientConversationPreference" name="conversationPreference"><option value="" ${!c?.conversationPreference?'selected':''}>Sin preferencia</option><option value="conversar" ${c?.conversationPreference==='conversar'?'selected':''}>Le gusta conversar</option><option value="tranquilo" ${c?.conversationPreference==='tranquilo'?'selected':''}>Prefiere una atención tranquila</option></select></div></div><div class="modal-footer"><button class="btn btn-ghost" type="button" data-action="close-modal">Cancelar</button><button class="btn btn-primary" type="submit">${c?'Guardar cambios':'Crear cliente'}</button></div></form>${c?`<div class="login-divider"></div><button class="btn btn-danger btn-mini" data-action="delete-client" data-id="${escapeHtml(c.uid)}">Eliminar definitivamente a este cliente</button>`:''}</section></div>`;
     }
     function openClientView(id){
       const c=state.customers.find(x=>x.uid===id)||state.customerSearchResults?.find(x=>x.uid===id)||state.cutSearchResults.find(x=>x.uid===id);if(!c)return;const program=programForCustomer(c),rewards=availableRewards(c),rewardConfig=rewardsForCustomer(c),programMode=c.loyaltyOverride?.mode==='custom'?'Personalizado para este cliente':'Estándar · hereda Configuración',last=c.lastCutAt?dateTimeLabel(c.lastCutAt):'Todavía no hay visitas';
@@ -2600,7 +2620,10 @@
     }
 
     function showPipTopic(topic){openPipHelp(topic);}
-    function pipEnabled(){try{return localStorage.getItem('barberVipPipVisible')!=='false';}catch(_){return true;}}
+    function pipEnabled(){
+      if(typeof state.barber?.pipVisible==='boolean')return state.barber.pipVisible;
+      try{return localStorage.getItem('barberVipPipVisible')!=='false';}catch(_){return true;}
+    }
     function isStandaloneApp(){return window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;}
     let installedPwaDetectionPromise = null;
     async function isInstalledPwaInBrowser(){
@@ -2761,15 +2784,15 @@
         else if(action==='delete-client'){
           const id=button.dataset.id;const c=state.customers.find(x=>x.uid===id)||state.customerSearchResults?.find(x=>x.uid===id);
           const accountUid=state.user?.uid||'';const barberUid=state.barberUid||'';
-          if(confirm(c?.fullName?`¿Eliminar a ${c.fullName}?`:'¿Eliminar cliente?')){
+          if(confirm(c?.fullName?`¿Eliminar definitivamente a ${c.fullName}? Se borrarán su ficha, visitas, hitos y acceso. Esta acción no se puede deshacer.`:'¿Eliminar definitivamente este cliente? Se borrarán su ficha, visitas, hitos y acceso. Esta acción no se puede deshacer.')){
             button.disabled=true;
             try{
               await api('/api/customers',{method:'DELETE',body:{customerId:id}});
               if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
               state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
               markCustomerDirectoryChanged({removeId:id});modalRoot.innerHTML='';renderApp();
-              toast('Cliente dado de baja. El historial de visitas se conservó.','success');
-            }catch(error){toast(userFacingError(error,'No se pudo dar de baja al cliente. Revisá la conexión.'),'error');if(button?.isConnected)button.disabled=false;}
+              toast('Cliente eliminado definitivamente.','success');
+            }catch(error){toast(userFacingError(error,'No se pudo eliminar al cliente. Revisá la conexión e intentá nuevamente.'),'error');if(button?.isConnected)button.disabled=false;}
           }
         }
         else if(action==='contact'){contactClient(button.dataset.id,false);}
@@ -2948,11 +2971,24 @@
       }
       else if(['settingDisplayName','settingWhatsapp','settingInstagram','settingMaps'].includes(target.id)||target.matches('[data-schedule-enabled], [data-day-mode], [data-start1], [data-end1], [data-start2], [data-end2]')){const root=target.closest('#profileEditForm')||modalRoot;const bar=$('.profile-progress span',root);const pct=profileCompletion({...state.barber,displayName:$('#settingDisplayName',root)?.value,whatsapp:argentinaLocalNumber($('#settingWhatsapp',root)?.value),instagramUsername:$('#settingInstagram',root)?.value,mapsUrl:$('#settingMaps',root)?.value,schedule:collectSchedule(root)});const pctLabel=$('.profile-completion > strong',root);if(bar)bar.style.width=pct+'%';if(pctLabel)pctLabel.textContent=pct+'%';}
     });
-    document.addEventListener('change',event=>{
+    document.addEventListener('change',async event=>{
       const target=event.target;
 
       if(target.id==='clientLoyaltyMode'){const box=$('#clientLoyaltyConfig',modalRoot);if(box){box.classList.toggle('hidden',target.value!=='custom');$$('input',box).forEach(input=>input.disabled=target.value!=='custom');}}
-      if(target.id==='settingPipVisible'){try{localStorage.setItem('barberVipPipVisible',target.value==='on'?'true':'false');}catch(_){}renderApp();toast(target.value==='on'?'Guía rápida Pip activada.':'Guía rápida Pip oculta.','success');}
+      if(target.id==='settingPipVisible'){
+        const visible=target.value==='on';
+        const accountUid=state.user?.uid||'',barberUid=state.barberUid||'';
+        target.disabled=true;
+        try{
+          await api('/api/preferences',{method:'PUT',body:{pipVisible:visible}});
+          if(state.user?.uid!==accountUid||state.barberUid!==barberUid)return;
+          state.barber={...state.barber,pipVisible:visible};
+          try{localStorage.setItem('barberVipPipVisible',visible?'true':'false');}catch(_){}
+          renderApp();toast(visible?'Guía rápida Pip activada.':'Guía rápida Pip oculta.','success');
+        }catch(error){
+          renderApp();toast(userFacingError(error,'No se pudo guardar la preferencia Pip. Revisá la conexión e intentá nuevamente.'),'error');
+        }
+      }
     });
 
     if(firebaseConfigured()) {

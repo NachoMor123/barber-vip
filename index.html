@@ -2792,7 +2792,7 @@
               state.query='';state.customerSearchResults=null;state.customerSearchTerm='';state.customerSearchHasMore=false;
               markCustomerDirectoryChanged({removeId:id});modalRoot.innerHTML='';renderApp();
               toast('Cliente eliminado definitivamente.','success');
-            }catch(error){toast(userFacingError(error,'No se pudo dar de baja al cliente. Revisá la conexión.'),'error');if(button?.isConnected)button.disabled=false;}
+            }catch(error){toast(userFacingError(error,'No se pudo eliminar al cliente. Revisá la conexión e intentá nuevamente.'),'error');if(button?.isConnected)button.disabled=false;}
           }
         }
         else if(action==='contact'){contactClient(button.dataset.id,false);}

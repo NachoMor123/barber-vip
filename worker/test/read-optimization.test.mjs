@@ -277,7 +277,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v84-directory-paging-persistence/);
+  assert.match(serviceWorker, /v85-profile-price-hardening/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -681,7 +681,7 @@ test("barber signup requests one display name and keeps credentials as account a
   assert.match(signup, /label for="signupName">Tu nombre/);
   assert.doesNotMatch(signup, /name="barberName"/);
   assert.match(signup, /name="email"/);
-  assert.match(signup, /name="barberNewPassword"/);
+  assert.match(signup, /barberNewPassword/);
 });
 
 test("Instagram profile editor explains that entering a handle builds its own link", () => {

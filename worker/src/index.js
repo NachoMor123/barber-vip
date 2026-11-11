@@ -159,6 +159,29 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
   }));
 }
 
+async function fsQueryBarberCollection(env, barberUid, collectionId, fieldPath, value, limit = 10) {
+  const token = await googleAccessToken(env);
+  const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId }],
+        where: { fieldFilter: { field: { fieldPath }, op: "EQUAL", value: encodeValue(value) } },
+        limit
+      }
+    })
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) throw new Error("Firestore no pudo consultar " + collectionId + " (" + response.status + ").");
+  return (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
+    name: row.document.name,
+    path: row.document.name.split("/documents/")[1],
+    data: decodeFields(row.document.fields || {})
+  }));
+}
+
 async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10, activeOnly = false) {
   const token = await googleAccessToken(env);
   const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
@@ -704,6 +727,91 @@ async function resetCustomerPassword(request, env) {
   return { ok: true };
 }
 
+async function deleteCustomerAccount(request, env) {
+  const barber = await requireBarber(env, request, false);
+  const data = await parseBody(request);
+  const customerId = String(data.customerId || "").trim();
+  if (!customerId || customerId.length > 128 || customerId === barber.uid) {
+    throw Object.assign(new Error("El cliente seleccionado no es válido."), { status: 400 });
+  }
+
+  const customerPath = "barbers/" + barber.uid + "/customers/" + customerId;
+  const profilePath = "userProfiles/" + customerId;
+  const [customer, profile] = await Promise.all([
+    fsGet(env, customerPath),
+    fsGet(env, profilePath)
+  ]);
+  const ownsCustomer = Boolean(customer && customer.data.barberUid === barber.uid);
+  const ownsProfile = Boolean(profile && profile.data.role === "customer" && profile.data.barberUid === barber.uid);
+  if (!ownsCustomer && !ownsProfile) {
+    throw Object.assign(new Error("El cliente no pertenece a este espacio profesional o ya fue eliminado."), { status: 404 });
+  }
+
+  const customerData = customer?.data || {};
+  const normalizedName = normalizeCustomerSignupName(customerData.usernameNormalized || customerData.fullName);
+  const loginPath = normalizedName
+    ? "customerLoginLookup/" + barber.uid + "_" + await sha256Hex(normalizedName)
+    : "";
+  const [loginLookup, phoneLookups] = await Promise.all([
+    loginPath ? fsGet(env, loginPath) : Promise.resolve(null),
+    fsQueryBarberCollection(env, barber.uid, "customerPhoneIndex", "uid", customerId, 10)
+  ]);
+
+  // Firebase Auth deletion is performed with the service account. USER_NOT_FOUND
+  // is accepted so a retry can finish Firestore cleanup after a partial failure.
+  const token = await googleAccessToken(env);
+  const authResponse = await fetch(
+    "https://identitytoolkit.googleapis.com/v1/projects/" + encodeURIComponent(projectId(env)) + "/accounts:delete",
+    {
+      method: "POST",
+      headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+      body: JSON.stringify({ localId: customerId })
+    }
+  );
+  const authResult = await authResponse.json().catch(() => ({}));
+  const authError = String(authResult.error?.message || "");
+  if (!authResponse.ok && !authError.includes("USER_NOT_FOUND")) {
+    console.error("Firebase Auth customer delete failed:", authResponse.status, authError);
+    throw Object.assign(new Error("Firebase no pudo eliminar el acceso del cliente. No se borraron sus datos."), { status: 502 });
+  }
+
+  const directoryPath = "barbers/" + barber.uid + "/customerDirectory/state";
+  const customerResource = firestoreResourceName(env, customerPath);
+  const profileResource = firestoreResourceName(env, profilePath);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const directory = await fsGet(env, directoryPath);
+    const version = Math.max(0, Number(directory?.data?.version) || 0) + 1;
+    const writes = [];
+    if (customer) writes.push({ delete: customerResource });
+    if (profile) writes.push({ delete: profileResource });
+    if (loginLookup?.data?.uid === customerId) writes.push({ delete: loginLookup.name });
+    for (const phoneLookup of phoneLookups) {
+      if (phoneLookup.data?.uid === customerId) writes.push({ delete: phoneLookup.name });
+    }
+    writes.push({
+      update: {
+        name: directory?.name || firestoreResourceName(env, directoryPath),
+        fields: encodeFields({
+          version, updatedAt: new Date(), changeType: "remove", customerId
+        })
+      },
+      updateMask: { fieldPaths: ["version", "updatedAt", "changeType", "customerId"] },
+      currentDocument: directory?.updateTime
+        ? { updateTime: directory.updateTime }
+        : { exists: false }
+    });
+    try {
+      await fsCommit(env, writes);
+      return { ok: true, deleted: true, authDeleted: true };
+    } catch (error) {
+      if (error?.conflict && attempt < 3) continue;
+      console.error("Customer permanent delete commit failed:", error?.message || "");
+      throw Object.assign(new Error("Se eliminó el acceso, pero no se pudo completar el borrado de datos. Volvé a tocar Eliminar para finalizarlo."), { status: 502 });
+    }
+  }
+  throw Object.assign(new Error("No se pudo confirmar el borrado definitivo. Volvé a intentarlo."), { status: 502 });
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -727,6 +835,7 @@ async function route(request, env) {
     return json(await registerCustomerAccount(request, env), 200, corsHeaders(request, env));
   }
   if (path === "/api/customers/reset-password" && request.method === "POST") return json(await resetCustomerPassword(request, env), 200, corsHeaders(request, env));
+  if (path === "/api/customers/delete" && request.method === "POST") return json(await deleteCustomerAccount(request, env), 200, corsHeaders(request, env));
   return json({ ok: false, error: "Ruta no encontrada." }, 404, corsHeaders(request, env));
 }
 

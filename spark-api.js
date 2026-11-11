@@ -807,46 +807,16 @@ export function createSparkApi({ firebaseConfig, state }) {
     };
   }
 
-  async function disableCustomer(data) {
-    const uid = currentUid();
+  async function deleteCustomer(data) {
     const id = cleanText(data.customerId, 100);
     if (!id) throw fail('Falta identificar al cliente.');
-    const customerRef = doc(db(), 'barbers', uid, 'customers', id);
-    const profileRef = doc(db(), 'userProfiles', id);
-    const directoryRef = doc(db(), 'barbers', uid, 'customerDirectory', 'state');
-
-    await runTransaction(db(), async transaction => {
-      const customerSnap = await transaction.get(customerRef);
-      if (!customerSnap.exists() || customerSnap.data().active === false) {
-        throw fail('El cliente ya no está activo. Actualizá la lista y volvé a intentarlo.', 404);
-      }
-      const fresh = customerSnap.data();
-      const normalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
-      const whatsapp = normalizePhone(fresh.whatsapp);
-      const lookupRef = normalized ? doc(db(), 'customerLoginLookup', await loginLookupId(uid, normalized)) : null;
-      const phoneLookupRef = whatsapp ? doc(db(), 'barbers', uid, 'customerPhoneIndex', await phoneLookupId(whatsapp)) : null;
-      const phoneLookupSnap = phoneLookupRef ? await transaction.get(phoneLookupRef) : null;
-
-      transaction.update(customerRef, {
-        active: false, disabledAt: serverTimestamp(), usernameNormalized: null,
-        whatsapp: '', updatedAt: serverTimestamp()
-      });
-      transaction.set(profileRef, { disabled: true, updatedAt: serverTimestamp() }, { merge: true });
-      if (lookupRef) transaction.set(lookupRef, {
-        uid: id, barberUid: uid, email: fresh.loginEmail || '', active: false, updatedAt: serverTimestamp()
-      }, { merge: true });
-      if (phoneLookupRef && phoneLookupSnap?.exists() && phoneLookupSnap.data().uid === id) {
-        transaction.set(phoneLookupRef, {
-          uid: id, barberUid: uid,
-          active: false, updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
-      transaction.set(directoryRef, {
-        version: increment(1), updatedAt: serverTimestamp(), changeType: 'remove', customerId: id
-      }, { merge: true });
+    if (id === currentUid()) throw fail('No se puede eliminar la cuenta profesional desde esta acción.', 400);
+    const result = await workerRequest('/api/customers/delete', {
+      method: 'POST', body: { customerId: id }
     });
     clearCustomerSearchCache();
-    return { ok: true };
+    removeCustomerCardCache(id, state.barberUid);
+    return { ok: true, deleted: result.deleted === true };
   }
 
   async function addCut(data) {
@@ -969,19 +939,23 @@ export function createSparkApi({ firebaseConfig, state }) {
       }
       constraints.push(startAfter(cursorValue, String(data.cursorId)));
     }
-    constraints.push(limit(pageSize));
+    // Read one look-ahead record so hasMore is exact; an exact page multiple
+    // no longer advertises a phantom next page that later disappears on mobile.
+    constraints.push(limit(pageSize + 1));
     const snap = await getDocs(query(ref, ...constraints));
-    const customers = snap.docs.map(item => {
+    const pageDocs = snap.docs.slice(0, pageSize);
+    const hasMore = snap.docs.length > pageSize;
+    const customers = pageDocs.map(item => {
       const customer = { uid: item.id, ...item.data() };
       delete customer.isOnline;
       delete customer.lastSeenAt;
       delete customer.lastConnectedAt;
       return customer;
     });
-    const last = snap.docs.at(-1);
+    const last = pageDocs.at(-1);
     const cursorValue = last ? (dateOf(last.data().lastCutAt)?.toISOString() || null) : (data.cursorValue ?? null);
     return {
-      ok: true, customers, hasMore: snap.docs.length === pageSize,
+      ok: true, customers, hasMore,
       cursorId: last?.id || String(data.cursorId || ''), cursorValue
     };
   }
@@ -1062,11 +1036,12 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/profile' && method === 'POST') return await ensureBarberProfile(data);
       if (path === '/api/profile' && method === 'PUT') return await saveProfile(data);
       if (path === '/api/loyalty' && method === 'PUT') return await saveLoyalty(data);
+      if (path === '/api/preferences' && method === 'PUT') return await saveBarberPreferences(data);
       if (path === '/api/customer-login' && method === 'POST') return data.action === 'register' ? await registerCustomer(data) : await signInCustomerLookup(data);
       if (path === '/api/customer-login-index' && method === 'POST') return await migrateCustomerLoginIndex(data.customers);
       if (path === '/api/customers' && method === 'POST') return await createCustomerForBarber(data);
       if (path === '/api/customers' && method === 'PUT') return await updateCustomer(data);
-      if (path === '/api/customers' && method === 'DELETE') return await disableCustomer(data);
+      if (path === '/api/customers' && method === 'DELETE') return await deleteCustomer(data);
       if (path === '/api/customers/list' && method === 'POST') return await listCustomers(data);
       if (path === '/api/customers/search' && method === 'POST') return await searchCustomers(data);
       if (path === '/api/cuts' && method === 'POST') return await addCut(data);
@@ -1083,6 +1058,16 @@ export function createSparkApi({ firebaseConfig, state }) {
       throw error;
     }
   };
+
+  async function saveBarberPreferences(data) {
+    const uid = currentUid();
+    if (typeof data.pipVisible !== 'boolean') throw fail('La preferencia del botón Pip no es válida.', 400);
+    await updateDoc(doc(db(), 'barbers', uid), {
+      pipVisible: data.pipVisible, updatedAt: serverTimestamp()
+    });
+    invalidateSessionCache();
+    return { ok: true, pipVisible: data.pipVisible };
+  }
 
   async function saveProfile(data) {
     const uid = currentUid();

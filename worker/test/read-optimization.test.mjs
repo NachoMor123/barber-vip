@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { parseArsPrice, formatArsPriceInput } from "../../profile-utils.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
@@ -49,7 +50,7 @@ test("Clients keeps the real latest-visit order and a single centered create act
   assert.doesNotMatch(api, /customerListSort|customerDirectoryFilters|signupSource/);
   assert.match(list, /where\('active', '==', true\)/);
   assert.match(list, /orderBy\('lastCutAt', 'desc'\)/);
-  assert.match(clients, /Tus clientes, ordenados por última visita/);
+  assert.doesNotMatch(clients, /Tus clientes, ordenados por última visita/);
   assert.doesNotMatch(clients, /Mostramos los 10|cinco más|cargá cinco/);
   assert.match(clients, /data-action="new-client"/);
   assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
@@ -120,7 +121,7 @@ test("six-record pagination uses an explicit button and a 3-second loading indic
   const searchPagination = functionBody(html, "async function loadMoreCustomerSearch()", "async function runCustomerSearch");
   assert.match(listPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
   assert.match(searchPagination, /await keepCustomerPaginationIndicatorVisible\(indicatorStartedAt\)/);
-  assert.match(clients, /Tus clientes, ordenados por última visita/);
+  assert.doesNotMatch(clients, /Tus clientes, ordenados por última visita/);
   assert.doesNotMatch(clients, /Mostramos los 10|cinco más|cargá cinco/);
   assert.doesNotMatch(clients, /open-cut-modal|Registrar visita/);
   assert.doesNotMatch(html, /customerLoadSentinel|customerSearchLoadSentinel/);
@@ -276,7 +277,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v84-directory-paging-persistence/);
+  assert.match(serviceWorker, /v85-profile-price-hardening/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -659,4 +660,42 @@ test("permanent customer deletion removes Firebase Auth, profile, customer and l
   assert.match(remove, /writes\.push\(\{ delete:/);
   assert.match(remove, /changeType: "remove", customerId/);
   assert.match(worker, /path === "\/api\/customers\/delete"/);
+});
+
+
+test("service prices accept Argentine and international thousands separators without truncating values", () => {
+  assert.equal(parseArsPrice("8.000"), 8000);
+  assert.equal(parseArsPrice("5,000"), 5000);
+  assert.equal(parseArsPrice("8000"), 8000);
+  assert.equal(parseArsPrice("$ 1.250.000"), 1250000);
+  assert.equal(parseArsPrice(""), null);
+  assert.ok(Number.isNaN(parseArsPrice("8,00")));
+  assert.ok(Number.isNaN(parseArsPrice("10.000.000.000")));
+  assert.equal(formatArsPriceInput(8000), "8.000");
+  assert.equal(formatArsPriceInput(5000), "5.000");
+});
+
+test("barber signup requests one display name and keeps credentials as account access fields", () => {
+  const signup = functionBody(html, "function renderLogin(mode)", "async function renderCustomerSignup");
+  assert.match(signup, /name="displayName"/);
+  assert.match(signup, /label for="signupName">Tu nombre/);
+  assert.match(signup, /Como dato personal, solo te pedimos tu nombre/);
+  assert.doesNotMatch(signup, /name="barberName"/);
+  assert.match(signup, /name="email"/);
+  assert.match(signup, /barberNewPassword/);
+});
+
+test("Instagram profile editor explains that entering a handle builds its own link", () => {
+  const modal = functionBody(html, "function openProfileModal()", "function collectLoyaltyPrograms");
+  assert.match(modal, /placeholder="tuusuario"/);
+  assert.match(modal, /genera el enlace a tu perfil automáticamente/);
+});
+
+test("Firestore retries only bounded read operations and never replays writes", () => {
+  const fetcher = functionBody(worker, "async function firestoreFetch(", "async function fsRequest(");
+  const request = functionBody(worker, "async function fsRequest(", "async function fsGet(");
+  assert.match(fetcher, /readOnly \? 3 : 1/);
+  assert.match(fetcher, /AbortSignal\.timeout\(10_000\)/);
+  assert.match(fetcher, /FIRESTORE_RETRYABLE_STATUSES/);
+  assert.match(request, /method === "GET" \|\| \(method === "POST" && path\.endsWith\(":runQuery"\)\)/);
 });

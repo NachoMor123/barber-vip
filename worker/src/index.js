@@ -106,13 +106,43 @@ function decodeFields(fields = {}) {
 function encodePath(path) {
   return path.split("/").map(encodeURIComponent).join("/");
 }
+const FIRESTORE_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function firestoreFetch(url, init = {}, { readOnly = false } = {}) {
+  const maxAttempts = readOnly ? 3 : 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        signal: init.signal || AbortSignal.timeout(10_000)
+      });
+    } catch (error) {
+      if (attempt + 1 >= maxAttempts) {
+        throw Object.assign(new Error("Firestore no respondió dentro del tiempo permitido."), {
+          status: 503, retryable: true, cause: error
+        });
+      }
+    }
+    if (response && (!readOnly || !FIRESTORE_RETRYABLE_STATUSES.has(response.status) || attempt + 1 >= maxAttempts)) {
+      return response;
+    }
+    try { await response?.body?.cancel(); } catch (_) {}
+    await wait(200 * (attempt + 1));
+  }
+  throw Object.assign(new Error("Firestore no respondió después de varios intentos."), { status: 503, retryable: true });
+}
+
 async function fsRequest(env, path, init = {}) {
   const token = await googleAccessToken(env);
   const suffix = path.startsWith(":") ? path : "/" + encodePath(path);
-  return fetch(firestoreBase(env) + suffix, {
+  const method = String(init.method || "GET").toUpperCase();
+  const readOnly = method === "GET" || (method === "POST" && path.endsWith(":runQuery"));
+  return firestoreFetch(firestoreBase(env) + suffix, {
     ...init,
     headers: { authorization: "Bearer " + token, "content-type": "application/json", ...(init.headers || {}) }
-  });
+  }, { readOnly });
 }
 async function fsGet(env, path) {
   const response = await fsRequest(env, path);
@@ -162,7 +192,7 @@ async function fsQuery(env, collectionId, fieldPath, value, limit = 500) {
 async function fsQueryBarberCollection(env, barberUid, collectionId, fieldPath, value, limit = 10) {
   const token = await googleAccessToken(env);
   const url = firestoreBase(env) + "/barbers/" + encodeURIComponent(barberUid) + ":runQuery";
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
     body: JSON.stringify({
@@ -172,7 +202,7 @@ async function fsQueryBarberCollection(env, barberUid, collectionId, fieldPath, 
         limit
       }
     })
-  });
+  }, { readOnly: true });
   const rows = await response.json().catch(() => []);
   if (!response.ok) throw new Error("Firestore no pudo consultar " + collectionId + " (" + response.status + ").");
   return (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({
@@ -190,11 +220,11 @@ async function fsQueryCustomerField(env, barberUid, fieldPath, value, limit = 10
     fieldFilter: { field: { fieldPath: "active" }, op: "EQUAL", value: encodeValue(true) }
   });
   const where = filters.length === 1 ? filters[0] : { compositeFilter: { op: "AND", filters } };
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
     body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "customers" }], where, limit } })
-  });
+  }, { readOnly: true });
   const rows = await response.json().catch(() => []);
   if (!response.ok) throw new Error("Firestore no pudo verificar el cliente (" + response.status + ").");
   return (Array.isArray(rows) ? rows : []).filter(row => row.document).map(row => ({

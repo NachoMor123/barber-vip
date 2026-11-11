@@ -1,6 +1,6 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { WORKER_API_BASE } from './worker-config.js';
-import { normalizeInstagramProfileUrl } from './profile-utils.js';
+import { normalizeInstagramProfileUrl, parseArsPrice } from './profile-utils.js';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -1073,13 +1073,17 @@ export function createSparkApi({ firebaseConfig, state }) {
     const uid = currentUid();
     const ref = doc(db(), 'barbers', uid);
     const schedule = data.schedule && typeof data.schedule === 'object' ? data.schedule : { mode: 'continuous', days: [] };
-    const services = Array.isArray(data.services) ? data.services.slice(0, 20).map((s,i) => ({
-      id: cleanText(s.id || 'service-' + (i + 1), 80).replace(/[^a-zA-Z0-9_-]/g, ''),
-      name: cleanText(s.name, 80),
-      description: cleanText(s.description, 180),
-      price: s.price === null || s.price === undefined || s.price === '' ? null : Math.max(0, Math.min(10000000, Number(s.price) || 0)),
-      active: s.active !== false
-    })).filter(s => s.name) : [];
+    const services = Array.isArray(data.services) ? data.services.slice(0, 20).map((s,i) => {
+      const price = parseArsPrice(s.price);
+      if (Number.isNaN(price)) throw fail('Ingresá precios en pesos enteros, por ejemplo 8.000 o 5,000.');
+      return {
+        id: cleanText(s.id || 'service-' + (i + 1), 80).replace(/[^a-zA-Z0-9_-]/g, ''),
+        name: cleanText(s.name, 80),
+        description: cleanText(s.description, 180),
+        price,
+        active: s.active !== false
+      };
+    }).filter(s => s.name) : [];
     const rawInstagram = cleanText(data.instagramUrl ?? data.instagramUsername, 500);
     const instagram = normalizeInstagramProfileUrl(rawInstagram);
     if (rawInstagram && !instagram) throw fail('Pegá un usuario o enlace de perfil válido de Instagram.');

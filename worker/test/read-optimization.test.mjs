@@ -57,7 +57,7 @@ test("Clients keeps the real latest-visit order and a single centered create act
 });
 
 test("directory cache persists across logout and is scoped by both Firebase UIDs", () => {
-  assert.match(html, /barberVipAdminCustomers:v5:/);
+  assert.match(html, /barberVipAdminCustomers:v6:/);
   const key = functionBody(html, "function adminCustomersCacheKey()", "function customerDirectoryQueryKey()");
   assert.match(key, /state\.user\?\.uid/);
   assert.match(key, /state\.barberUid/);
@@ -85,7 +85,9 @@ test("directory starts with thirteen records and explicitly loads six-record cur
   assert.match(more, /cursorValue:state\.customersCursorValue\?\?cursorValue/);
   assert.match(more, /refreshFirstPage/);
   assert.match(list, /Math\.min\(15, Number\(data\.pageSize\) \|\| 15\)/);
-  assert.match(list, /limit\(pageSize\)/);
+  assert.match(list, /limit\(pageSize \+ 1\)/);
+  assert.match(list, /const hasMore = snap\.docs\.length > pageSize/);
+  assert.match(list, /snap\.docs\.slice\(0, pageSize\)/);
   assert.match(list, /startAfter\(cursorValue, String\(data\.cursorId\)\)/);
   assert.doesNotMatch(list, /getCountFromServer|includeCount/);
   assert.match(html, /function observeCustomersPagination/);
@@ -189,14 +191,14 @@ test("the directory revision is watched only while Clients or quick visit search
 });
 test("directory revisions carry a precise mutation descriptor for one-document synchronization", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
-  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
-  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
+  const update = functionBody(api, "async function updateCustomer", "async function deleteCustomer");
+  const remove = functionBody(worker, "async function deleteCustomerAccount", "async function route");
   const visit = functionBody(api, "async function addCut(data)", "async function listCustomers");
   const migration = functionBody(api, "async function migrateCustomerDirectoryFieldsForBarber", "async function getMe");
   assert.match(create, /changeType: 'upsert'/);
   assert.match(create, /customerId: credential\.user\.uid/);
   assert.match(update, /changeType: 'upsert', customerId: id/);
-  assert.match(disable, /changeType: 'remove', customerId: id/);
+  assert.match(remove, /changeType: "remove", customerId/);
   assert.match(visit, /changeType: 'upsert', customerId: id/);
   assert.match(migration, /changeType: 'refresh', customerId: ''/);
   assert.match(worker, /changeType: "upsert", customerId/);
@@ -204,20 +206,22 @@ test("directory revisions carry a precise mutation descriptor for one-document s
   assert.match(rules, /'changeType', 'customerId'/);
 });
 
-test("create, edit and disable increment the revision inside the same Firestore transaction", () => {
+test("create and edit use transactions; permanent delete delegates to the secured Worker", () => {
   const create = functionBody(api, "async function createCustomerForBarber", "async function updateCustomer");
-  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
-  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
-  for (const source of [update, disable]) {
-    assert.match(source, /runTransaction\(db\(\)/);
-    assert.match(source, /customerDirectory', 'state'/);
-    assert.match(source, /increment\(1\)/);
-    assert.doesNotMatch(source, /customerRoster|signupSource/);
-  }
+  const update = functionBody(api, "async function updateCustomer", "async function deleteCustomer");
+  const remove = functionBody(api, "async function deleteCustomer", "async function addCut");
+  const workerDelete = functionBody(worker, "async function deleteCustomerAccount", "async function route");
   assert.match(create, /limit\(1\)/);
+  assert.match(update, /runTransaction\(db\(\)/);
+  assert.match(update, /customerDirectory', 'state'/);
+  assert.match(update, /increment\(1\)/);
   assert.match(update, /transaction\.get\(customerRef\)/);
   assert.match(update, /passwordResetFailed/);
-  assert.match(disable, /active: false/);
+  assert.match(remove, /workerRequest\('\/api\/customers\/delete'/);
+  assert.match(workerDelete, /accounts:delete/);
+  assert.match(workerDelete, /fsCommit\(env, writes\)/);
+  assert.match(workerDelete, /changeType: "remove", customerId/);
+  assert.doesNotMatch(remove, /active: false|disabledAt/);
 });
 
 test("a visit updates the loaded directory locally without a redundant first-page read", () => {
@@ -272,7 +276,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v83-admin-cache-mobile-session/);
+  assert.match(serviceWorker, /v84-directory-paging-persistence/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);
@@ -338,16 +342,18 @@ test("manual customer creation uses document-only transaction reads and an atomi
   assert.doesNotMatch(create, /transaction\.get\([^)]*Query\)/);
 });
 
-test("customer edits and disables maintain phone uniqueness locks without transactional queries", () => {
-  const update = functionBody(api, "async function updateCustomer", "async function disableCustomer");
-  const disable = functionBody(api, "async function disableCustomer", "async function addCut");
+test("customer edits maintain phone uniqueness; permanent delete releases all phone locks", () => {
+  const update = functionBody(api, "async function updateCustomer", "async function deleteCustomer");
+  const remove = functionBody(api, "async function deleteCustomer", "async function addCut");
+  const workerDelete = functionBody(worker, "async function deleteCustomerAccount", "async function route");
   assert.match(update, /const phoneMatches = await getDocs\(phoneQuery\)/);
   assert.match(update, /transaction\.get\(newPhoneLookupRef\)/);
   assert.match(update, /transaction\.set\(newPhoneLookupRef/);
   assert.doesNotMatch(update, /transaction\.get\(phoneQuery\)/);
-  assert.match(disable, /transaction\.get\(phoneLookupRef\)/);
-  assert.match(disable, /active: false/);
-  assert.doesNotMatch(disable, /transaction\.get\([^)]*Query\)/);
+  assert.match(remove, /workerRequest\('\/api\/customers\/delete'/);
+  assert.match(workerDelete, /fsQueryBarberCollection\(env, barber\.uid, "customerPhoneIndex", "uid", customerId/);
+  assert.match(workerDelete, /phoneLookup\.data\?\.uid === customerId/);
+  assert.doesNotMatch(workerDelete, /active: false|disabledAt/);
 });
 
 test("phone uniqueness indexes are private to the owning barber", () => {
@@ -359,7 +365,7 @@ test("phone uniqueness indexes are private to the owning barber", () => {
 });
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {
-  const update = functionBody(api, "async function updateCustomer(data)", "async function disableCustomer(data)");
+  const update = functionBody(api, "async function updateCustomer(data)", "async function deleteCustomer(data)");
   assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
   assert.match(update, /transaction\.update\(customerRef, updates\)/);
   assert.doesNotMatch(update, /totalCuts\s*[:,=]|cycleCuts\s*[:,=]|actualCutsRegistered\s*[:,=]/);
@@ -620,4 +626,37 @@ test("direct signup uses the Auth UID for metadata and atomically claims the nor
   assert.match(signup, /const phoneLookupWrite/);
   assert.match(signup, /currentDocument:\s*latestPhoneLookup\?\.updateTime/);
   assert.match(signup, /fsCommit\(env, \[\.\.\.customerWrites, lookupWrite, phoneLookupWrite, directoryWrite\]\)/);
+});
+
+test("an unexpected empty customer page remains retryable instead of ending the directory", () => {
+  const more = functionBody(html, "async function loadMoreAdminCustomers()", "async function loadMoreCustomerSearch");
+  assert.match(more, /state\.customersHasMore=true/);
+  assert.match(more, /No pudimos confirmar la siguiente página/);
+  assert.match(more, /adminCustomersDirectoryRefreshPending=true/);
+  assert.match(more, /adminCustomersRefreshOnNextEntry=true/);
+});
+
+test("Pip visibility is a persistent professional preference shared across devices", () => {
+  const save = functionBody(api, "async function saveBarberPreferences", "async function saveProfile");
+  const handler = html.slice(html.indexOf("if(target.id==='settingPipVisible')"), html.indexOf("if(firebaseConfigured())"));
+  assert.match(save, /updateDoc\(doc\(db\(\), 'barbers', uid\)/);
+  assert.match(save, /pipVisible: data\.pipVisible/);
+  assert.match(html, /state\.barber\?\.pipVisible/);
+  assert.match(handler, /api\('\/api\/preferences'/);
+  assert.match(api, /path === '\/api\/preferences'/);
+  assert.match(rules, /'theme', 'pipVisible'/);
+  assert.match(rules, /request\.resource\.data\.pipVisible is bool/);
+});
+
+test("permanent customer deletion removes Firebase Auth, profile, customer and lookup indexes", () => {
+  const remove = functionBody(worker, "async function deleteCustomerAccount", "async function route");
+  assert.match(remove, /requireBarber\(env, request, false\)/);
+  assert.match(remove, /accounts:delete/);
+  assert.match(remove, /firestoreResourceName\(env, customerPath\)/);
+  assert.match(remove, /firestoreResourceName\(env, profilePath\)/);
+  assert.match(remove, /allLoginLookups/);
+  assert.match(remove, /phoneLookups/);
+  assert.match(remove, /writes\.push\(\{ delete:/);
+  assert.match(remove, /changeType: "remove", customerId/);
+  assert.match(worker, /path === "\/api\/customers\/delete"/);
 });

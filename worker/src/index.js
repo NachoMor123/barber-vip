@@ -1072,9 +1072,15 @@ async function handleMercadoPagoWebhook(request, env) {
     }
     return json({ ok: true, received: true, duplicate: true });
   }
-  if (preference.data.processedAt
-    && String(preference.data.paymentId || "") !== String(payment.id)) {
-    return json({ ok: true, received: true, ignored: true, reason: "preference-already-used" });
+  if (preference.data.processedAt) {
+    const samePayment = String(preference.data.paymentId || "") === String(payment.id);
+    return json({
+      ok: true,
+      received: true,
+      duplicate: samePayment,
+      ignored: !samePayment,
+      reason: samePayment ? "payment-already-processed" : "preference-already-used"
+    });
   }
 
   const approvedAt = payment.date_approved ? new Date(payment.date_approved) : now;

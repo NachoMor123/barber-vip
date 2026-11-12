@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v88-loyalty-cycle-consistency';
+const CACHE_NAME = 'barber-vip-shell-v89-stale-cycle-ui-repair';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/loyalty-core.mjs', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

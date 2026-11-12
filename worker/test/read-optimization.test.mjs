@@ -285,7 +285,7 @@ test("stale cycle flags cannot pin the barber or customer card at the final mile
 });
 
 test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v89-stale-cycle-ui-repair/);
+  assert.match(serviceWorker, /v90-customer-document-id-authority/);
   assert.match(serviceWorker, /loyalty-core\.mjs/);
   assert.match(packageWorkflow, /loyalty-core\.mjs/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);

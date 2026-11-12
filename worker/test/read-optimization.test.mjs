@@ -277,7 +277,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v85-profile-price-hardening/);
+  assert.match(serviceWorker, /v87-subscription-state-hardening/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);

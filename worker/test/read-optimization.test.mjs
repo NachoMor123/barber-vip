@@ -277,7 +277,7 @@ test("professional profile and loyalty settings use a separate cache scope", () 
 });
 
 test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v88-loyalty-cycle-consistency/);
+  assert.match(serviceWorker, /v89-stale-cycle-ui-repair/);
   assert.match(serviceWorker, /loyalty-core\.mjs/);
   assert.match(packageWorkflow, /loyalty-core\.mjs/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);

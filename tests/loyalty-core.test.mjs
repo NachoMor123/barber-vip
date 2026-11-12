@@ -109,6 +109,19 @@ test("lagging auxiliary visit counter cannot reduce total visits or cycle progre
   assert.equal(next.cycleForVisit, 5);
 });
 
+test("six completed real visits remain 6/6 even when the saved cursor is wrong", () => {
+  const customer = {
+    totalCuts: 12, actualCutsRegistered: 12, referralCreditsReceived: 0,
+    cycleVersion: 2, cycleCuts: 3, cyclePausedAtMax: false,
+    lastRewardAppliedOnFinalMilestone: false
+  };
+  assert.equal(loyaltyCycleCount(customer), 6);
+  const next = calculateLoyaltyVisit(customer);
+  assert.equal(next.cycleForVisit, 1);
+  assert.equal(next.fields.cycleCuts, 1);
+  assert.equal(next.fields.totalCuts, 13);
+});
+
 test("incorrect saved cycle 6 is repaired from nine cumulative visits", () => {
   const customer = {
     totalCuts: 9, actualCutsRegistered: 9, referralCreditsReceived: 0,

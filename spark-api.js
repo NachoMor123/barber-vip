@@ -67,7 +67,7 @@ function subscription(barber, now = Date.now()) {
   if (!expiry) return { status: 'suspended', label: 'Fecha de vencimiento sin configurar', daysRemaining: null, expiresAt: null, isTrial: false };
   const ms = expiry.getTime() - now;
   const days = Math.ceil(ms / DAY_MS);
-  if (ms >= 0) return { status: 'active', label: isTrial ? 'Prueba gratuita' : 'Cuenta activa', daysRemaining: days, expiresAt: expiry.toISOString(), isTrial };
+  if (ms > 0) return { status: 'active', label: isTrial ? 'Prueba gratuita' : 'Cuenta activa', daysRemaining: days, expiresAt: expiry.toISOString(), isTrial };
   if (isTrial) return { status: 'suspended', label: 'Prueba finalizada', daysRemaining: days, expiresAt: expiry.toISOString(), isTrial: false, trialEnded: true };
   const grace = expiry.getTime() + GRACE_DAYS * DAY_MS - now;
   if (barber?.hasPaidSubscription === true && grace > 0) return { status: 'grace', label: 'Período de gracia', daysRemaining: Math.ceil(grace / DAY_MS), expiresAt: expiry.toISOString(), isTrial: false };

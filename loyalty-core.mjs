@@ -52,8 +52,10 @@ export function loyaltyCycleLength(rewards = DEFAULT_LOYALTY_REWARDS) {
 }
 
 /**
- * cycleCuts is the source of truth for version-2 records. Historical
- * availableRewards must never override a valid current cursor.
+ * Cumulative real visits are authoritative for version-2 cycle progress.
+ * Saved cursors and historical reward markers are fallback-only for imports
+ * that have no cumulative visit count. Historical availableRewards never
+ * override the derived cycle position.
  */
 export function loyaltyCycleCount(customer = {}, rewards = DEFAULT_LOYALTY_REWARDS) {
   const length = loyaltyCycleLength(rewards);

@@ -64,6 +64,17 @@ test("stale historical availableRewards cannot pin a version-2 customer at the f
   assert.equal(next.fields.cycleCuts, 4);
 });
 
+test("a stale final-reward marker cannot override a newer version-2 cycle cursor", () => {
+  assert.equal(loyaltyCycleCount({
+    cycleVersion: 2, cycleCuts: 3, lastRewardAppliedOnFinalMilestone: true,
+    cyclePausedAtMax: true, totalCuts: 9, actualCutsRegistered: 9
+  }), 3);
+  assert.equal(loyaltyCycleCount({
+    cycleVersion: 2, cycleCuts: 0, lastRewardAppliedOnFinalMilestone: true,
+    cyclePausedAtMax: false
+  }), 6);
+});
+
 test("referral credits do not overwrite a valid version-2 cycle cursor", () => {
   const customer = {
     cycleVersion: 2, cycleCuts: 3, totalCuts: 17, actualCutsRegistered: 15,

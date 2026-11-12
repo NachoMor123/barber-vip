@@ -276,6 +276,14 @@ test("professional profile and loyalty settings use a separate cache scope", () 
   assert.match(changed, /adminCustomersRefreshOnNextEntry=true/);
 });
 
+test("stale cycle flags cannot pin the barber or customer card at the final milestone", () => {
+  const loyalty = functionBody(html, "function loyaltyPrograms(", "function safeExternalUrl");
+  assert.match(loyalty, /function finalMilestoneApplied\(c\)\{return cycleCount\(c\)>=cycleLength\(c\);\}/);
+  assert.doesNotMatch(loyalty, /cyclePausedAtMax|lastRewardAppliedOnFinalMilestone/);
+  assert.doesNotMatch(loyalty, /if\(c\?\.lastRewardAppliedOnFinalMilestone===true\)return 100/);
+  assert.match(loyalty, /if\(count>=max\)/);
+});
+
 test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
   assert.match(serviceWorker, /v89-stale-cycle-ui-repair/);
   assert.match(serviceWorker, /loyalty-core\.mjs/);

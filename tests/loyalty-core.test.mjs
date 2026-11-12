@@ -101,10 +101,47 @@ test("lagging auxiliary visit counter cannot reduce total visits or cycle progre
     cycleVersion: 2, cycleCuts: 3, totalCuts: 10, actualCutsRegistered: 3,
     referralCreditsReceived: 0, cyclePausedAtMax: false
   };
+  assert.equal(loyaltyCycleCount(customer), 4);
   const next = calculateLoyaltyVisit(customer);
   assert.equal(next.fields.totalCuts, 11);
   assert.equal(next.fields.actualCutsRegistered, 11);
+  assert.equal(next.fields.cycleCuts, 5);
+  assert.equal(next.cycleForVisit, 5);
+});
+
+test("incorrect saved cycle 6 is repaired from nine cumulative visits", () => {
+  const customer = {
+    totalCuts: 9, actualCutsRegistered: 9, referralCreditsReceived: 0,
+    cycleVersion: 2, cycleCuts: 6, cyclePausedAtMax: false,
+    lastRewardAppliedOnFinalMilestone: false,
+    availableRewards: [{ cut: 6, discount: 30 }]
+  };
+  assert.equal(loyaltyCycleCount(customer), 3);
+  const next = calculateLoyaltyVisit(customer);
+  assert.equal(next.cycleForVisit, 4);
   assert.equal(next.fields.cycleCuts, 4);
+  assert.equal(next.fields.totalCuts, 10);
+});
+
+test("the real visit total repairs a lagging actual counter before deriving the cycle", () => {
+  const customer = {
+    totalCuts: 9, actualCutsRegistered: 3, referralCreditsReceived: 0,
+    cycleVersion: 2, cycleCuts: 6
+  };
+  assert.equal(loyaltyCycleCount(customer), 3);
+  const next = calculateLoyaltyVisit(customer);
+  assert.equal(next.cycleForVisit, 4);
+  assert.equal(next.fields.actualCutsRegistered, 10);
+});
+
+test("referral credits are excluded while real visits determine cycle progress", () => {
+  const customer = {
+    totalCuts: 17, actualCutsRegistered: 10, referralCreditsReceived: 2,
+    cycleVersion: 2, cycleCuts: 6
+  };
+  // 17 cumulative visits minus 2 non-visit credits = 15 real visits.
+  assert.equal(loyaltyCycleCount(customer), 3);
+  assert.equal(calculateLoyaltyVisit(customer).cycleForVisit, 4);
 });
 
 test("legacy progress ignores stale availableRewards and uses actual visits", () => {

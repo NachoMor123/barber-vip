@@ -859,8 +859,6 @@ export function createSparkApi({ firebaseConfig, state }) {
       const appliedReward = transition.appliedReward;
       const now = serverTimestamp();
       const updates = {
-        uid: id,
-        barberUid: uid,
         ...transition.fields,
         lastCutAt: now,
         lastCutOperationId: operationId,

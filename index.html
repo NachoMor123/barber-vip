@@ -1586,6 +1586,61 @@
       });
       return firestoreNetworkTransition;
     }
+    function watchSubscriptionAfterPaymentReturn(paymentResult){
+      if(!['success','pending'].includes(paymentResult)||state.role!=='barber'||!state.db||!state.barberUid||!state.user?.uid)return;
+      const accountUid=state.user.uid;
+      const barberUid=state.barberUid;
+      const barberRef=doc(state.db,'barbers',barberUid);
+      const baselineExpiry=dateIso(state.barber?.subscriptionExpiresAt);
+      const baselinePaymentAt=dateIso(state.barber?.lastPaymentAt);
+      let unsubscribe=()=>{};
+      let stopped=false;
+      let timeoutId=null;
+      const stop=()=>{
+        if(stopped)return;
+        stopped=true;
+        if(timeoutId)clearTimeout(timeoutId);
+        try{unsubscribe();}catch(_){}
+        const index=state.unsubscribers.indexOf(stop);
+        if(index>=0)state.unsubscribers.splice(index,1);
+      };
+      try{
+        unsubscribe=onSnapshot(barberRef,snapshot=>{
+          if(stopped)return;
+          if(state.role!=='barber'||state.user?.uid!==accountUid||state.barberUid!==barberUid){
+            stop();
+            return;
+          }
+          if(!snapshot.exists()||snapshot.metadata?.fromCache===true)return;
+          const data=snapshot.data()||{};
+          const nextExpiry=dateIso(data.subscriptionExpiresAt);
+          const nextPaymentAt=dateIso(data.lastPaymentAt);
+          const confirmed=(nextPaymentAt&&nextPaymentAt!==baselinePaymentAt)
+            ||(nextExpiry&&nextExpiry!==baselineExpiry&&data.hasPaidSubscription===true);
+          state.barber={...state.barber,
+            subscriptionExpiresAt:data.subscriptionExpiresAt??state.barber?.subscriptionExpiresAt,
+            hasPaidSubscription:data.hasPaidSubscription??state.barber?.hasPaidSubscription,
+            lastPaymentAt:data.lastPaymentAt??state.barber?.lastPaymentAt,
+            subscriptionLastPaymentId:data.subscriptionLastPaymentId??state.barber?.subscriptionLastPaymentId
+          };
+          if(confirmed&&data.hasPaidSubscription===true){
+            state.subscriptionStatusKey=undefined;
+            renderApp();
+            toast('¡Pago confirmado! Tu plan está activo hasta '+dateLabel(data.subscriptionExpiresAt)+'.','success');
+            stop();
+          }
+        },error=>{
+          console.warn('[Barber VIP] No se pudo observar la confirmación del pago.',error?.message||error);
+          stop();
+        });
+        state.unsubscribers.push(stop);
+        timeoutId=setTimeout(stop,10*60_000);
+      }catch(error){
+        stop();
+        console.warn('[Barber VIP] No se pudo iniciar la actualización del estado de suscripción.',error?.message||error);
+      }
+    }
+
     function resumePaymentReturnSession(){
       if(!new URLSearchParams(location.search).has('payment'))return;
       const current=state.auth?.currentUser;
@@ -2372,12 +2427,13 @@
       if(payment){
         history.replaceState({},'',location.pathname);
         const messages={
-          success:['Mercado Pago recibió tu pago. Estamos esperando la confirmación segura para activar los 30 días.','success'],
-          pending:['Tu pago quedó pendiente en Mercado Pago. El plan se activará cuando se confirme.',''],
-          failure:['El pago no se completó. No se modificó tu suscripción. Podés volver a intentarlo.','error']
+          success:['Volviste desde Mercado Pago. Todavía esperamos la confirmación segura; regresar al sitio no activa los 30 días por sí solo.',''],
+          pending:['Mercado Pago informó que el pago está pendiente. El plan se habilitará únicamente cuando se confirme.',''],
+          failure:['El pago no se completó o fue rechazado. Tu suscripción no se modificó; podés volver a intentarlo.','error']
         };
         const [message,type]=messages[payment]||['Volviste de Mercado Pago. Revisá el estado de tu suscripción.',''];
         setTimeout(()=>toast(message,type),300);
+        watchSubscriptionAfterPaymentReturn(payment);
       }
     }
     async function resumeSession(user) {

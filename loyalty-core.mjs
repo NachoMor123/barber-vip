@@ -77,7 +77,12 @@ export function loyaltyCycleCount(customer = {}, rewards = DEFAULT_LOYALTY_REWAR
 
   // Preserve a saved position only when there is no cumulative visit count
   // from which to safely recover it (e.g. a partial legacy import).
-  if (version >= 2 && savedCycle !== null) return savedCycle;
+  if (version >= 2 && savedCycle !== null) {
+    if (savedCycle === 0 && (
+      customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true
+    )) return length;
+    return savedCycle;
+  }
   if (customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true) return length;
   return 0;
 }

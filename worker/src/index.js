@@ -46,7 +46,8 @@ async function googleAccessToken(env) {
   const assertion = unsigned + "." + b64url(signature);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion })
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+    signal: AbortSignal.timeout(12_000)
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.access_token) throw new Error("No se pudo obtener un token seguro de Google para Firebase.");
@@ -155,11 +156,11 @@ async function fsSet(env, path, data) {
   const url = new URL(firestoreBase(env) + "/" + encodePath(path));
   for (const key of Object.keys(data || {})) url.searchParams.append("updateMask.fieldPaths", key);
   const token = await googleAccessToken(env);
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url.toString(), {
     method: "PATCH",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
     body: JSON.stringify({ fields: encodeFields(data) })
-  });
+  }, { readOnly: false });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("Firestore no pudo guardar el documento (" + response.status + ").");
   return result;
@@ -245,7 +246,8 @@ async function verifyFirebaseToken(env, request) {
   const apiKey = env.FIREBASE_WEB_API_KEY;
   if (!apiKey) throw new Error("FIREBASE_WEB_API_KEY no está configurada.");
   const response = await fetch("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + encodeURIComponent(apiKey), {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: match[1] })
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: match[1] }),
+    signal: AbortSignal.timeout(12_000)
   });
   const result = await response.json().catch(() => ({}));
   const user = result.users && result.users[0];
@@ -724,6 +726,7 @@ async function createPaymentPreference(request, env) {
         },
         auto_return: "approved",
         expires: true,
+        expiration_date_from: new Date(now - 60_000).toISOString(),
         expiration_date_to: expiresAt.toISOString(),
         notification_url: workerOrigin + "/api/mercadopago-webhook"
       })

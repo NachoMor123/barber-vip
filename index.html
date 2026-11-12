@@ -1872,7 +1872,7 @@
       return typeof value==='string'&&value?value:null;
     }
     function adminCustomersCacheKey(){
-      return 'barberVipAdminCustomers:v6:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
+      return 'barberVipAdminCustomers:v7:'+String(state.user?.uid||'')+':'+String(state.barberUid||'')+':lastCut-desc';
     }
     function customerDirectoryQueryKey(){return 'lastCut-desc-v1';}
     function compareCustomersByLastVisit(a,b){

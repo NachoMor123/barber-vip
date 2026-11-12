@@ -1,5 +1,5 @@
-const CACHE_NAME = 'barber-vip-shell-v87-subscription-state-hardening';
-const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
+const CACHE_NAME = 'barber-vip-shell-v88-loyalty-cycle-consistency';
+const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/loyalty-core.mjs', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

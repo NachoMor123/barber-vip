@@ -65,10 +65,12 @@ test("stale historical availableRewards cannot pin a version-2 customer at the f
 });
 
 test("a stale final-reward marker cannot override a newer version-2 cycle cursor", () => {
-  assert.equal(loyaltyCycleCount({
+  const inconsistent = {
     cycleVersion: 2, cycleCuts: 3, lastRewardAppliedOnFinalMilestone: true,
     cyclePausedAtMax: true, totalCuts: 9, actualCutsRegistered: 9
-  }), 3);
+  };
+  assert.equal(loyaltyCycleCount(inconsistent), 3);
+  assert.equal(calculateLoyaltyVisit(inconsistent).cycleForVisit, 4);
   assert.equal(loyaltyCycleCount({
     cycleVersion: 2, cycleCuts: 0, lastRewardAppliedOnFinalMilestone: true,
     cyclePausedAtMax: false

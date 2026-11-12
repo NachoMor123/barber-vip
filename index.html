@@ -1245,10 +1245,14 @@
       if(ms<86400000){const n=Math.floor(ms/3600000);return n+' hora'+(n===1?'':'s');}
       const n=Math.floor(ms/86400000);return n+' día'+(n===1?'':'s');
     }
+    function durationLead(value){
+      const label=remainingDurationText(value);
+      return (label==='menos de un minuto'||label.startsWith('1 ')?'Queda ':'Quedan ')+label;
+    }
     function subscriptionTimeLabel(s){
       if(s.unknown)return 'Fecha de vencimiento no disponible';
-      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':'Queda '+remainingDurationText(s.remainingMs)+(s.isTrial?' de prueba':' de plan');
-      if(s.status==='grace')return 'Quedan '+remainingDurationText(s.remainingMs)+' de gracia';
+      if(s.status==='active')return durationLead(s.remainingMs)+(s.isTrial?' de prueba gratuita':' de plan');
+      if(s.status==='grace')return durationLead(s.remainingMs)+' de gracia';
       if(s.expiresAt)return (s.trialEnded?'Prueba finalizada':'Vencida')+' hace '+elapsedDurationText(s.elapsedMs);
       return 'Sin fecha de vencimiento';
     }
@@ -2621,7 +2625,7 @@
       const statusText=unknown
         ? 'No tenemos una fecha de vencimiento válida para confirmar el estado de tu cuenta. No vamos a iniciar un cobro hasta poder verificarlo. Actualizá la app y volvé a revisar.'
         : trial
-          ? 'Tu prueba gratuita dura 7 días y no tiene período de gracia. Si activás ahora, los 30 días pagos comienzan únicamente cuando Mercado Pago confirme el pago.'
+          ? 'Te '+durationLead(status.remainingMs).toLowerCase()+' de prueba gratuita. La prueba dura 7 días y no tiene período de gracia. Si activás ahora, los 30 días pagos comienzan únicamente cuando Mercado Pago confirme el pago.'
           : trialEnded
             ? 'Tu prueba gratuita de 7 días terminó y el acceso quedó pausado. La prueba no tiene días de gracia. Podés reactivar el espacio con un pago confirmado.'
             : grace

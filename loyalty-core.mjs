@@ -101,7 +101,7 @@ export function calculateLoyaltyVisit(customer = {}, standardRewards = DEFAULT_L
   const cycleBefore = version >= 2 && hasSavedCycle
     ? Math.max(0, Math.min(max, Number(customer.cycleCuts)))
     : actualBefore % max;
-  const shouldRestart = customer.cyclePausedAtMax === true || cycleBefore >= max;
+  const shouldRestart = cycleBefore >= max;
   const cycleForVisit = shouldRestart ? 1 : Math.min(max, cycleBefore + 1);
   const appliedReward = rewards.find(reward => Number(reward.cut) === cycleForVisit) || null;
   const appliedOnFinalMilestone = Boolean(appliedReward && Number(appliedReward.cut) >= max);

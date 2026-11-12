@@ -417,7 +417,8 @@ async function registerCustomerAccount(request, env) {
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: loginEmail, password, returnSecureToken: true })
+      body: JSON.stringify({ email: loginEmail, password, returnSecureToken: true }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const authResult = await authResponse.json().catch(() => ({}));
@@ -542,7 +543,8 @@ async function registerCustomerAccount(request, env) {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ idToken: authResult.idToken })
+        body: JSON.stringify({ idToken: authResult.idToken }),
+        signal: AbortSignal.timeout(12_000)
       }
     ).catch(() => null);
     if (error?.status === 409) throw error;
@@ -1185,7 +1187,8 @@ async function resetCustomerPassword(request, env) {
     {
       method: "POST",
       headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ localId: customerId, password })
+      body: JSON.stringify({ localId: customerId, password }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const result = await response.json().catch(() => ({}));
@@ -1235,7 +1238,8 @@ async function deleteCustomerAccount(request, env) {
     {
       method: "POST",
       headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ localId: customerId })
+      body: JSON.stringify({ localId: customerId }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const authResult = await authResponse.json().catch(() => ({}));

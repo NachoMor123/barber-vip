@@ -58,7 +58,7 @@ test("Clients keeps the real latest-visit order and a single centered create act
 });
 
 test("directory cache persists across logout and is scoped by both Firebase UIDs", () => {
-  assert.match(html, /barberVipAdminCustomers:v6:/);
+  assert.match(html, /barberVipAdminCustomers:v7:/);
   const key = functionBody(html, "function adminCustomersCacheKey()", "function customerDirectoryQueryKey()");
   assert.match(key, /state\.user\?\.uid/);
   assert.match(key, /state\.barberUid/);

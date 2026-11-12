@@ -908,18 +908,35 @@ async function handleMercadoPagoWebhook(request, env) {
       currentDocument: { updateTime: paymentDoc.updateTime }
     }];
 
-    if (barberDoc?.data?.subscriptionLastPaymentId === String(payment.id)
-      && paymentDoc.data.previousSubscription) {
-      const previous = await previousValidSubscriptionSnapshot(
-        env, barberUid, paymentDoc.data.previousSubscription
-      );
-      const restoredFields = {
-        subscriptionExpiresAt: toDate(previous.subscriptionExpiresAt),
-        hasPaidSubscription: previous.hasPaidSubscription === true,
-        lastPaymentAt: toDate(previous.lastPaymentAt),
-        subscriptionLastPaymentId: previous.subscriptionLastPaymentId || null,
-        updatedAt: now
-      };
+    const lastPaymentAt = toDate(barberDoc?.data?.lastPaymentAt)?.getTime();
+    const paymentApprovedAt = toDate(paymentDoc.data.approvedAt)?.getTime();
+    const isCurrentPayment = barberDoc?.data?.subscriptionLastPaymentId === String(payment.id)
+      || (!barberDoc?.data?.subscriptionLastPaymentId && Number.isFinite(lastPaymentAt)
+        && Number.isFinite(paymentApprovedAt) && lastPaymentAt === paymentApprovedAt);
+    if (isCurrentPayment && barberDoc) {
+      let restoredFields;
+      if (paymentDoc.data.previousSubscription) {
+        const previous = await previousValidSubscriptionSnapshot(
+          env, barberUid, paymentDoc.data.previousSubscription
+        );
+        restoredFields = {
+          subscriptionExpiresAt: toDate(previous.subscriptionExpiresAt),
+          hasPaidSubscription: previous.hasPaidSubscription === true,
+          lastPaymentAt: toDate(previous.lastPaymentAt),
+          subscriptionLastPaymentId: previous.subscriptionLastPaymentId || null,
+          updatedAt: now
+        };
+      } else {
+        // Older payment records did not keep a rollback snapshot. On a reversal,
+        // fail closed rather than leave access enabled for a payment that was returned.
+        restoredFields = {
+          subscriptionExpiresAt: new Date(now.getTime() - 1),
+          hasPaidSubscription: false,
+          lastPaymentAt: null,
+          subscriptionLastPaymentId: null,
+          updatedAt: now
+        };
+      }
       writes.push({
         update: { name: barberDoc.name, fields: encodeFields(restoredFields) },
         updateMask: { fieldPaths: Object.keys(restoredFields) },
@@ -1015,7 +1032,42 @@ async function handleMercadoPagoWebhook(request, env) {
     return json({ ok: true, received: true, status: "in_mediation", activated: false });
   }
 
-  if (paymentDoc && ["approved", "partially_refunded"].includes(String(paymentDoc.data.status || ""))) {
+  if (paymentDoc?.data?.previousSubscription && paymentDoc.data.newExpiry
+    && ["approved", "partially_refunded", "in_mediation"].includes(String(paymentDoc.data.status || ""))) {
+    if (paymentDoc.data.status === "approved" && partialRefund) {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: paymentDoc.name,
+            fields: encodeFields({
+              status: "partially_refunded",
+              statusDetail,
+              transactionAmountRefunded: Number(payment.transaction_amount_refunded || 0),
+              updatedAt: now
+            })
+          },
+          updateMask: { fieldPaths: ["status", "statusDetail", "transactionAmountRefunded", "updatedAt"] },
+          currentDocument: { updateTime: paymentDoc.updateTime }
+        }]);
+        return json({ ok: true, received: true, duplicate: true, status: "partially_refunded" });
+      } catch (error) {
+        const current = await fsGet(env, paymentPath).catch(() => null);
+        if (current?.data?.status === "partially_refunded") return json({ ok: true, received: true, duplicate: true });
+        return json({ ok: false, error: "No se pudo actualizar el estado del reembolso parcial. Mercado Pago puede reintentar." }, 500);
+      }
+    }
+    if (paymentDoc.data.status === "in_mediation") {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: paymentDoc.name,
+            fields: encodeFields({ status: partialRefund ? "partially_refunded" : "approved", statusDetail, updatedAt: now })
+          },
+          updateMask: { fieldPaths: ["status", "statusDetail", "updatedAt"] },
+          currentDocument: { updateTime: paymentDoc.updateTime }
+        }]);
+      } catch (_) {}
+    }
     return json({ ok: true, received: true, duplicate: true });
   }
   if (preference.data.processedAt

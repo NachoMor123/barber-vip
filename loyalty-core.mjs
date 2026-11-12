@@ -48,21 +48,21 @@ export function loyaltyCycleLength(rewards = DEFAULT_LOYALTY_REWARDS) {
  */
 export function loyaltyCycleCount(customer = {}, rewards = DEFAULT_LOYALTY_REWARDS) {
   const length = loyaltyCycleLength(rewards);
-  if (customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true) return length;
-
   const version = hasNumber(customer.cycleVersion) ? Number(customer.cycleVersion) : 0;
   const savedCycle = hasNumber(customer.cycleCuts) ? Math.max(0, Number(customer.cycleCuts)) : null;
-  if (version >= 2) {
-    if (savedCycle !== null) return Math.min(length, savedCycle);
-    const credits = nonNegative(customer.referralCreditsReceived);
-    const actual = hasNumber(customer.actualCutsRegistered)
-      ? nonNegative(customer.actualCutsRegistered)
-      : Math.max(0, nonNegative(customer.totalCuts) - credits);
-    return actual % length;
+  if (version >= 2 && savedCycle !== null) {
+    const current = Math.min(length, savedCycle);
+    // A final-milestone marker is valid only while the version-2 cursor is
+    // still at zero. Once a newer cycle cursor exists, trust that cursor.
+    if (current === 0 && (
+      customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true
+    )) return length;
+    return current;
   }
+  if (customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true) return length;
 
-  // Legacy records derive progress from real visits. A stale historical
-  // availableRewards array is display metadata, not a cycle counter.
+  // Legacy records derive progress from real visits. Historical reward arrays
+  // and auxiliary flags must not override the actual visit count.
   const credits = nonNegative(customer.referralCreditsReceived);
   const actual = hasNumber(customer.actualCutsRegistered)
     ? nonNegative(customer.actualCutsRegistered)

@@ -819,7 +819,7 @@
       // Recalculate subscription boundaries locally once per minute; never poll Firestore for time.
       if(state.role==='barber'&&state.barber){
         const subscriptionNow=subStatus();
-        const subscriptionKey=[subscriptionNow.status,subscriptionNow.isTrial,subscriptionNow.trialEnded,subscriptionNow.daysRemaining].join('|');
+        const subscriptionKey=[subscriptionNow.status,subscriptionNow.isTrial,subscriptionNow.trialEnded,Math.floor(Number(subscriptionNow.remainingMs||0)/60000),Math.floor(Number(subscriptionNow.elapsedMs||0)/60000)].join('|');
         if(state.subscriptionStatusKey!==undefined&&state.subscriptionStatusKey!==subscriptionKey){
           state.subscriptionStatusKey=subscriptionKey;
           renderApp();
@@ -1219,25 +1219,40 @@
 
 
     function subStatus() {
-      const raw=state.barber?.subscriptionExpiresAt;
-      const expiry=asDate(raw);
+      const expiry=asDate(state.barber?.subscriptionExpiresAt);
       const isTrial=!!expiry&&!!state.barber?.trialStartedAt&&state.barber?.hasPaidSubscription!==true;
-      if(!expiry)return {status:'suspended',label:'Fecha de vencimiento sin configurar',daysRemaining:null,expiresAt:null,isTrial:false};
-      const ms=expiry.getTime()-Date.now();
-      const days=Math.ceil(ms/86400000);
-      if(ms>=0)return {status:'active',label:isTrial?'Prueba gratuita':'Cuenta activa',daysRemaining:days,expiresAt:expiry.toISOString(),isTrial};
-      if(isTrial)return {status:'suspended',label:'Prueba finalizada',daysRemaining:days,expiresAt:expiry.toISOString(),isTrial:false,trialEnded:true};
-      const graceRemaining=expiry.getTime()+5*86400000-Date.now();
-      if(state.barber?.hasPaidSubscription===true&&graceRemaining>0)return {status:'grace',label:'Período de gracia',daysRemaining:Math.ceil(graceRemaining/86400000),expiresAt:expiry.toISOString(),isTrial:false};
-      return {status:'suspended',label:'Cuenta vencida',daysRemaining:days,expiresAt:expiry.toISOString(),isTrial:false,trialEnded:false};
+      if(!expiry)return {status:'suspended',unknown:true,label:'Estado sin verificar',daysRemaining:null,remainingMs:null,elapsedMs:null,expiresAt:null,isTrial:false};
+      const now=Date.now();
+      const ms=expiry.getTime()-now;
+      const days=Math.ceil(Math.max(0,ms)/86400000);
+      if(ms>0)return {status:'active',label:isTrial?'Prueba gratuita':'Cuenta activa',daysRemaining:days,remainingMs:ms,elapsedMs:0,expiresAt:expiry.toISOString(),isTrial};
+      if(isTrial)return {status:'suspended',label:'Prueba finalizada',daysRemaining:0,remainingMs:0,elapsedMs:-ms,expiresAt:expiry.toISOString(),isTrial:false,trialEnded:true};
+      const graceRemaining=expiry.getTime()+5*86400000-now;
+      if(state.barber?.hasPaidSubscription===true&&graceRemaining>0)return {status:'grace',label:'Período de gracia',daysRemaining:Math.ceil(graceRemaining/86400000),remainingMs:graceRemaining,elapsedMs:Math.max(0,-ms),expiresAt:expiry.toISOString(),isTrial:false};
+      return {status:'suspended',label:'Cuenta vencida',daysRemaining:0,remainingMs:0,elapsedMs:Math.max(0,-ms),expiresAt:expiry.toISOString(),isTrial:false,trialEnded:false};
     }
-    function remainingDaysText(value){const n=Math.max(0,Number(value)||0);return n===0?'menos de un día':`${n} día${n===1?'':'s'}`;}
+    function remainingDurationText(value){
+      const ms=Math.max(0,Number(value)||0);
+      if(ms<60000)return 'menos de un minuto';
+      if(ms<3600000){const n=Math.floor(ms/60000);return n+' minuto'+(n===1?'':'s');}
+      if(ms<86400000){const n=Math.floor(ms/3600000);return n+' hora'+(n===1?'':'s');}
+      const n=Math.floor(ms/86400000);return n+' día'+(n===1?'':'s');
+    }
+    function elapsedDurationText(value){
+      const ms=Math.max(0,Number(value)||0);
+      if(ms<60000)return 'menos de un minuto';
+      if(ms<3600000){const n=Math.floor(ms/60000);return n+' minuto'+(n===1?'':'s');}
+      if(ms<86400000){const n=Math.floor(ms/3600000);return n+' hora'+(n===1?'':'s');}
+      const n=Math.floor(ms/86400000);return n+' día'+(n===1?'':'s');
+    }
     function subscriptionTimeLabel(s){
-      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':`${s.daysRemaining===1?'Queda':'Quedan'} ${remainingDaysText(s.daysRemaining)} ${s.isTrial?'de prueba gratuita':'de plan'}`;
-      if(s.status==='grace')return `${s.daysRemaining===1?'Queda':'Quedan'} ${remainingDaysText(s.daysRemaining)} de gracia`;
-      if(s.expiresAt){const expiredAt=asDate(s.expiresAt);if(expiredAt){const elapsed=Math.max(1,Math.ceil((Date.now()-expiredAt.getTime())/86400000));return `${s.trialEnded?'Prueba finalizada':'Vencida'} hace ${elapsed} día${elapsed===1?'':'s'}`;}}
+      if(s.unknown)return 'Fecha de vencimiento no disponible';
+      if(s.status==='active')return s.daysRemaining===0?'Vence hoy':'Queda '+remainingDurationText(s.remainingMs)+(s.isTrial?' de prueba':' de plan');
+      if(s.status==='grace')return 'Quedan '+remainingDurationText(s.remainingMs)+' de gracia';
+      if(s.expiresAt)return (s.trialEnded?'Prueba finalizada':'Vencida')+' hace '+elapsedDurationText(s.elapsedMs);
       return 'Sin fecha de vencimiento';
     }
+
     function filteredCustomers() {
       const term=state.query.trim();
       if(term){
@@ -1538,7 +1553,7 @@
         <section class="panel pip-settings-card"><div class="setting-subheading"><span class="eyebrow">AYUDA</span><h3 class="setting-section-title">Pip · guía rápida</h3><p class="field-hint">Un empujoncito breve cuando lo necesites.</p></div><div class="form-field"><label for="settingPipVisible">Botón Pip</label><select id="settingPipVisible" class="setting-input"><option value="on" ${pipEnabled()?'selected':''}>Mostrar botón Pip</option><option value="off" ${!pipEnabled()?'selected':''}>Ocultar botón Pip</option></select></div></section>
         <section class="panel loyalty-settings-card"><div class="setting-subheading"><span class="eyebrow">FIDELIZACIÓN</span><h3 class="setting-section-title">Programa de premios</h3><p class="field-hint">Los beneficios se aplican automáticamente según las visitas registradas.</p></div><form id="loyaltySettingsForm" autocomplete="off">${loyaltyProgramEditorMarkup(defaultProgram)}<button class="btn btn-primary btn-block" type="submit">Guardar programa de premios</button></form></section>
         
-        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Tiempo restante</span><strong>${escapeHtml(subscriptionTimeLabel(s))}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):'Renovar plan'}</button></div>
+        <section class="panel subscription-settings-card"><div class="setting-subheading"><span class="eyebrow">TU PLAN</span><h3 class="setting-section-title">Suscripción de Barber VIP</h3></div><div class="subscription-card"><div class="eyebrow">PLAN MENSUAL</div><div class="sub-price">${money(price)} <span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:0">/ 30 días</span></div><div class="subscription-details"><div class="sub-detail"><span>Estado</span><strong>${escapeHtml(s.label)}</strong></div><div class="sub-detail"><span>Tiempo restante</span><strong>${escapeHtml(subscriptionTimeLabel(s))}</strong></div><div class="sub-detail"><span>Vencimiento</span><strong>${s.expiresAt?escapeHtml(dateLabel(s.expiresAt)):'Sin configurar'}</strong></div></div><button class="btn ${s.status==='active'?'btn-soft':'btn-primary'} btn-block" data-action="pay">${s.unknown?'Revisar estado':s.status==='active'?(s.isTrial?'Ver plan · activar 30 días':'Ver plan y vencimiento'):'Renovar plan'}</button></div>
 <div class="subscription-extra-actions">
   <div class="subscription-resource">
     <div><strong>Guía PIP · Estrategias de uso</strong><small>13 ideas prácticas, con el porqué y cómo aplicarlas.</small></div>
@@ -2543,32 +2558,39 @@
       const trial=status.status==='active'&&status.isTrial===true;
       const trialEnded=status.trialEnded===true;
       const grace=status.status==='grace';
-      const expired=status.status==='suspended';
-      const canCheckout=trial||grace||expired;
-      const title=trial?'Tu prueba gratuita está activa':trialEnded?'Tu prueba gratuita terminó':grace?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
-      const statusText=trial
-        ? `Te ${status.daysRemaining===1?'queda':'quedan'} ${remainingDaysText(status.daysRemaining)} de prueba gratuita. Si activás ahora, los 30 días pagos comienzan cuando Mercado Pago confirme el pago.`
-        : trialEnded
-          ? 'Tu prueba gratuita terminó y el acceso quedó pausado. La prueba no tiene días de gracia.'
-          : grace
-            ? `Tu plan ya venció. Te ${status.daysRemaining===1?'queda':'quedan'} ${remainingDaysText(status.daysRemaining)} de gracia para renovar antes de que se pause el acceso.`
-            : expired
-              ? 'Tu cuenta está pausada. Renovala para volver a registrar visitas y administrar clientes.'
-              : 'Tu suscripción está activa. No se realizan débitos automáticos.';
+      const unknown=status.unknown===true;
+      const expired=status.status==='suspended'&&!trialEnded&&!unknown;
+      const canCheckout=trial||grace||trialEnded||expired;
+      const title=unknown?'No pudimos verificar tu plan':trial?'Tu prueba gratuita está activa':trialEnded?'Tu prueba gratuita terminó':grace?'Estás en período de gracia':expired?'Tu plan está vencido':'Tu cuenta está activa';
+      const statusText=unknown
+        ? 'No tenemos una fecha de vencimiento válida para confirmar el estado de tu cuenta. No vamos a iniciar un cobro hasta poder verificarlo. Actualizá la app y volvé a revisar.'
+        : trial
+          ? 'Tu prueba gratuita dura 7 días y no tiene período de gracia. Si activás ahora, los 30 días pagos comienzan únicamente cuando Mercado Pago confirme el pago.'
+          : trialEnded
+            ? 'Tu prueba gratuita de 7 días terminó y el acceso quedó pausado. La prueba no tiene días de gracia. Podés reactivar el espacio con un pago confirmado.'
+            : grace
+              ? 'Tu período de 30 días terminó. Tenés '+remainingDurationText(status.remainingMs)+' de gracia para renovar. Durante ese plazo podés seguir usando Barber VIP; después el acceso se pausa.'
+              : expired
+                ? 'Tu plan y los 5 días de gracia terminaron. El acceso quedó pausado. Renovalo para volver a administrar clientes y registrar visitas.'
+                : 'Tu plan está activo. La renovación es manual y no se realizan débitos automáticos.';
       const expiry=status.expiresAt?' Vencimiento: '+escapeHtml(dateLabel(status.expiresAt))+'.':'';
       const paymentText=canCheckout
-        ? '<p>El pago se procesa de forma segura en Mercado Pago. Cuando Mercado Pago confirme el pago, Barber VIP habilitará automáticamente 30 días. Es un pago manual: no hay débitos automáticos.</p>'
-        : '<p>Tu plan sigue activo. Podés consultar aquí el vencimiento y el tiempo restante.</p>';
+        ? '<p>Pago único y manual en Mercado Pago. Barber VIP habilita 30 días cuando recibe y valida la confirmación del pago. Volver desde Mercado Pago no activa el plan por sí solo; no hay débitos automáticos.</p>'
+        : '<p>'+(unknown?'No se generará un enlace de pago mientras la fecha de tu plan no pueda verificarse.':'Podés consultar aquí el vencimiento y el tiempo restante. La renovación es manual; no hay débitos automáticos.')+'</p>';
+      const buttonLabel=trial?'Activar 30 días':trialEnded?'Reactivar 30 días':grace||expired?'Renovar 30 días':'';
       const paymentButton=canCheckout
-        ? '<button class="btn btn-primary" data-action="checkout">'+(trial?'Activar':'Renovar')+' 30 días · '+money(subscriptionPrice())+'</button>'
+        ? '<button class="btn btn-primary" data-action="checkout">'+buttonLabel+' · '+money(subscriptionPrice())+'</button>'
         : '';
       modalRoot.innerHTML='<div class="modal-backdrop" data-action="backdrop-close"><section class="modal-card plan-info-card" role="dialog" aria-modal="true" aria-labelledby="planInfoTitle"><div class="modal-header"><div><span class="eyebrow">TU SUSCRIPCIÓN</span><h2 id="planInfoTitle">'+title+'</h2><p>'+statusText+expiry+'</p></div><button class="close-modal btn-back" data-action="close-modal" aria-label="Cerrar">×</button></div><div class="pip-answer"><strong>Plan mensual · '+money(subscriptionPrice())+' / 30 días</strong>'+paymentText+'</div><div class="modal-footer"><button class="btn btn-ghost" data-action="close-modal">Cerrar</button>'+paymentButton+'</div></section></div>';
     }
     async function paySubscription(button){
+      if(paymentRequestInFlight)return;
       const status=subStatus();
+      if(status.unknown===true){openPlanInfo();return;}
       if(status.status==='active'&&status.isTrial!==true){openPlanInfo();return;}
       const action=status.isTrial===true?'skip-trial':'renew';
       const original=button?.textContent||'Pagar $8.000 · activar 30 días';
+      paymentRequestInFlight=true;
       if(button){button.disabled=true;button.textContent='Conectando con Mercado Pago…';}
       try{
         const preference=await api('/api/create-preference',{method:'POST',body:{action}});
@@ -2580,6 +2602,8 @@
       }catch(error){
         toast(userFacingError(error,'No se pudo iniciar el pago. Revisá la conexión e intentá nuevamente.'),'error');
         if(button?.isConnected){button.disabled=false;button.textContent=original;}
+      }finally{
+        paymentRequestInFlight=false;
       }
     }
 

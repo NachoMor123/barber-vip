@@ -43,7 +43,7 @@ test("a visit targets and returns the selected Firestore document, never a store
   const updates = functionBody(transaction, "const updates = {", "transaction.update(customerRef, updates);");
   assert.doesNotMatch(updates, /^\s*(uid|barberUid):/m);
   assert.match(transaction, /transaction\.update\(customerRef, updates\)/);
-  assert.match(transaction, /resultCustomer = \\{\\s*\\.\\.\\.customer, \\.\\.\\.updates, uid: id,/);
+  assert.match(transaction, /resultCustomer = \{\s*\.\.\.customer, \.\.\.updates, uid: id,/);
 });
 
 test("the persistent directory cache and installed PWA cannot restore the previous identity mapping", () => {

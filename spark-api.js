@@ -1,6 +1,7 @@
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { WORKER_API_BASE } from './worker-config.js';
 import { normalizeInstagramProfileUrl, parseArsPrice } from './profile-utils.js';
+import { DEFAULT_LOYALTY_REWARDS, normalizeLoyaltyRewards, calculateLoyaltyVisit } from './loyalty-core.mjs';
 import {
   getAuth, createUserWithEmailAndPassword, updateProfile as updateAuthProfile,
   deleteUser, signOut, setPersistence, inMemoryPersistence
@@ -14,11 +15,7 @@ const DAY_MS = 86400000;
 const TRIAL_DAYS = 7;
 const GRACE_DAYS = 5;
 const SUBSCRIPTION_PRICE_ARS = 8000;
-const DEFAULT_REWARDS = [
-  { cut: 2, discount: 10, label: '10% OFF' },
-  { cut: 4, discount: 20, label: '20% OFF' },
-  { cut: 6, discount: 30, label: '30% OFF' }
-];
+const DEFAULT_REWARDS = DEFAULT_LOYALTY_REWARDS;
 
 function fail(message, status = 400) {
   const error = new Error(message);
@@ -77,23 +74,28 @@ function labelReward(discount) {
   const n = Math.max(0, Math.min(100, Number(discount) || 0));
   return n === 100 ? 'Servicio gratis' : n + '% OFF';
 }
-function safeRewards(input) {
-  const source = Array.isArray(input) ? input.slice().sort((a, b) => Number(a.cut) - Number(b.cut)) : [];
-  return [2, 4, 6].map((cut, i) => {
-    const d = Number(source[i]?.discount);
-    const discount = Number.isInteger(d) && d >= 0 && d <= 100 ? d : DEFAULT_REWARDS[i].discount;
-    return { cut, discount, label: labelReward(discount) };
-  });
+function safeRewards(input, fallback = DEFAULT_REWARDS) {
+  return normalizeLoyaltyRewards(input, fallback);
 }
 function cleanProfileForCustomer(source = {}) {
-  const programs = (Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [])
-    .filter(p => p && p.audience === 'all').slice(0, 1).map(p => ({
-      id: cleanText(p.id || 'program-general', 80),
-      name: cleanText(p.name || 'Programa de premios', 60),
-      audience: 'all',
-      customerIds: [],
-      rewards: safeRewards(p.rewards)
-    }));
+  const rawPrograms = Array.isArray(source.loyaltyPrograms) ? source.loyaltyPrograms : [];
+  const chosen = rawPrograms.find(program => program?.id === source.defaultLoyaltyProgramId)
+    || rawPrograms.find(program => program?.audience === 'all')
+    || rawPrograms[0]
+    || (Array.isArray(source.rewards) && source.rewards.length
+      ? { id: source.defaultLoyaltyProgramId || 'program-general', name: 'Programa de premios', rewards: source.rewards }
+      : null)
+    || { id: 'program-general', name: 'Programa de premios', rewards: DEFAULT_REWARDS };
+  const program = {
+    id: cleanText(chosen.id || 'program-general', 80),
+    name: cleanText(chosen.name || 'Programa de premios', 60),
+    audience: 'all',
+    customerIds: [],
+    rewards: safeRewards(
+      Array.isArray(chosen.rewards) && chosen.rewards.length ? chosen.rewards : source.rewards,
+      DEFAULT_REWARDS
+    )
+  };
   const services = source.showServices === true && Array.isArray(source.services)
     ? source.services.slice(0, 20).map(s => ({
         id: cleanText(s?.id, 80),
@@ -115,8 +117,8 @@ function cleanProfileForCustomer(source = {}) {
     services,
     showServices: source.showServices === true,
     theme: { accent: '#3478ff', density: source.theme?.density === 'compact' ? 'compact' : 'comfortable' },
-    loyaltyPrograms: programs,
-    defaultLoyaltyProgramId: cleanText(source.defaultLoyaltyProgramId || programs[0]?.id || 'program-general', 80),
+    loyaltyPrograms: [program],
+    defaultLoyaltyProgramId: program.id
   };
 }
 async function hashHex(value) {
@@ -144,8 +146,13 @@ function customerDefaults({ uid, barberUid, fullName, usernameNormalized, loginE
 }
 function standardProgram(barber = {}) {
   const programs = Array.isArray(barber.loyaltyPrograms) ? barber.loyaltyPrograms : [];
-  return programs.find(p => p?.id === barber.defaultLoyaltyProgramId) || programs.find(p => p?.audience === 'all') || programs[0] || {
-    id: 'program-general', name: 'Programa de premios', rewards: DEFAULT_REWARDS
+  const selected = programs.find(p => p?.id === barber.defaultLoyaltyProgramId)
+    || programs.find(p => p?.audience === 'all') || programs[0];
+  const fallbackRewards = Array.isArray(barber.rewards) && barber.rewards.length ? barber.rewards : DEFAULT_REWARDS;
+  if (!selected) return { id: 'program-general', name: 'Programa de premios', rewards: fallbackRewards };
+  return {
+    ...selected,
+    rewards: Array.isArray(selected.rewards) && selected.rewards.length ? selected.rewards : fallbackRewards
   };
 }
 function normalizeOverride(mode, input, barber = {}) {
@@ -847,53 +854,15 @@ export function createSparkApi({ firebaseConfig, state }) {
         throw fail('La cuenta está vencida. Para registrar nuevas visitas, primero renová tu plan desde Configuración.', 402);
       }
 
-      const programs = Array.isArray(freshBarber.loyaltyPrograms) ? freshBarber.loyaltyPrograms : [];
-      const program = customer.loyaltyOverride?.mode === 'custom'
-        ? { id: 'customer-override', rewards: customer.loyaltyOverride.rewards }
-        : programs.find(p => p.id === freshBarber.defaultLoyaltyProgramId)
-          || programs.find(p => p.audience === 'all')
-          || { rewards: DEFAULT_REWARDS };
-      const rewards = safeRewards(program.rewards);
-      const cycleMax = Math.max(1, ...rewards.map(r => Number(r.cut) || 1));
-      const legacyNonVisitCredits = Math.max(0, Number(customer.referralCreditsReceived || 0));
-      const ownCutsBefore = Number.isFinite(Number(customer.actualCutsRegistered))
-        ? Math.max(0, Number(customer.actualCutsRegistered))
-        : Math.max(0, Number(customer.totalCuts || 0) - legacyNonVisitCredits);
-      const totalCuts = ownCutsBefore + 1;
-      const actualCutsRegistered = ownCutsBefore + 1;
-      const pendingRewards = Array.isArray(customer.availableRewards) ? customer.availableRewards : [];
-      let pendingReward = null;
-      if (pendingRewards.length) {
-        const saved = pendingRewards.slice().sort((a, b) => Number(b.cut || 0) - Number(a.cut || 0))[0];
-        const discount = Math.min(100, Math.max(0, Number(saved.discount) || 0));
-        const cut = Number(saved.cut) <= 2 ? 2 : Number(saved.cut) <= 4 ? 4 : 6;
-        pendingReward = { cut, discount, label: discount === 100 ? 'Servicio gratis' : (discount + '% OFF') };
-      } else if (customer.rewardReady) {
-        const n = Number(customer.cycleCuts || 0);
-        pendingReward = [...rewards].filter(r => Number(r.cut) <= n).pop() || rewards[0];
-      }
-
-      let cycleBefore = customer.cycleVersion === 2
-        ? Math.max(0, Math.min(cycleMax, Number(customer.cycleCuts || 0)))
-        : (ownCutsBefore % cycleMax);
-      if (legacyNonVisitCredits > 0 && !pendingReward) cycleBefore = ownCutsBefore % cycleMax;
-      const shouldRestart = Boolean(customer.cyclePausedAtMax) || cycleBefore >= cycleMax
-        || Boolean(pendingReward && Number(pendingReward.cut) >= cycleMax);
-      const cycleForVisit = shouldRestart ? 1 : Math.min(cycleMax, cycleBefore + 1);
-      const milestoneReward = rewards.find(r => Number(r.cut) === cycleForVisit) || null;
-      const appliedReward = pendingReward || milestoneReward || null;
-      const appliedOnFinalMilestone = Boolean(!pendingReward && milestoneReward
-        && Number(milestoneReward.cut) >= cycleMax && appliedReward === milestoneReward);
-      const cycleNext = appliedOnFinalMilestone ? 0 : cycleForVisit;
+      const standard = standardProgram(freshBarber);
+      const transition = calculateLoyaltyVisit(customer, standard.rewards);
+      const appliedReward = transition.appliedReward;
       const now = serverTimestamp();
       const updates = {
-        totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2,
-        cyclePausedAtMax: false, availableRewards: [], rewardReady: false,
-        lastCutAt: now, lastCutOperationId: operationId,
-        lastRewardAppliedLabel: appliedReward ? cleanText(appliedReward.label || labelReward(appliedReward.discount), 50) : null,
+        ...transition.fields,
+        lastCutAt: now,
+        lastCutOperationId: operationId,
         lastRewardAppliedAt: appliedReward ? now : null,
-        lastRewardAppliedCut: appliedReward ? Number(appliedReward.cut || 0) : null,
-        lastRewardAppliedOnFinalMilestone: appliedReward ? appliedOnFinalMilestone : null,
         updatedAt: now
       };
       transaction.update(customerRef, updates);
@@ -901,12 +870,12 @@ export function createSparkApi({ firebaseConfig, state }) {
         version: increment(1), updatedAt: serverTimestamp(), changeType: 'upsert', customerId: id
       }, { merge: true });
       resultCustomer = {
-        ...customer, ...updates, totalCuts, actualCutsRegistered, cycleCuts: cycleNext, cycleVersion: 2,
-        loyaltyProgramId: customer.loyaltyProgramId || program.id,
+        ...customer, ...updates, uid: id,
+        loyaltyProgramId: customer.loyaltyProgramId || standard.id,
         lastCutAt: new Date().toISOString(),
         lastRewardAppliedAt: appliedReward ? new Date().toISOString() : null
       };
-      outcome = { appliedReward, cycleReset: appliedOnFinalMilestone };
+      outcome = { appliedReward, cycleReset: transition.cycleReset };
     });
 
     if (outcome.duplicate) {

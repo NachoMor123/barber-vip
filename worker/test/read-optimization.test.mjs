@@ -276,8 +276,10 @@ test("professional profile and loyalty settings use a separate cache scope", () 
   assert.match(changed, /adminCustomersRefreshOnNextEntry=true/);
 });
 
-test("PWA shell and production package no longer ship roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v87-subscription-state-hardening/);
+test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
+  assert.match(serviceWorker, /v88-loyalty-cycle-consistency/);
+  assert.match(serviceWorker, /loyalty-core\.mjs/);
+  assert.match(packageWorkflow, /loyalty-core\.mjs/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
   assert.doesNotMatch(packageWorkflow, /customer-roster/);
   assert.equal(indexes.indexes.length, 3);

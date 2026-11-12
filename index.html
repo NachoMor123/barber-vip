@@ -773,6 +773,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
     import { createSparkApi } from './spark-api.js';
     import { normalizeInstagramProfileUrl, parseArsPrice, formatArsPriceInput } from './profile-utils.js';
+    import { normalizeLoyaltyRewards, loyaltyCycleCount, loyaltyCycleLength } from './loyalty-core.mjs';
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
     import { getFirestore, doc, collection, getDoc, getDocs, query, where, onSnapshot, disableNetwork, enableNetwork } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
@@ -1274,27 +1275,26 @@
       return `<div class="loyalty-program-editor" data-program-card data-program-id="${escapeHtml(program?.id||DEFAULT_LOYALTY_PROGRAM.id)}"><div class="program-reward-rows">${rewards.map(r=>`<div class="program-reward-row" data-reward-row><label><span>Hito de visitas</span><strong>Visita ${r.cut}</strong><input type="hidden" data-reward-cut value="${r.cut}"></label><label><span>Descuento (%)</span><input class="setting-input" type="number" min="0" max="100" step="1" data-reward-discount value="${r.discount}" required></label></div>`).join('')}</div></div>`;
     }
     function loyaltyPrograms(barber=state.barber){
-      const programs=Array.isArray(barber?.loyaltyPrograms)?barber.loyaltyPrograms.filter(p=>Array.isArray(p.rewards)&&p.rewards.length):[];
-      const chosen=programs.find(p=>p.id===barber?.defaultLoyaltyProgramId)||programs.find(p=>p.audience==='all')||programs[0];
-      if(!chosen)return [DEFAULT_LOYALTY_PROGRAM];
-      const raw=(Array.isArray(chosen.rewards)?chosen.rewards:[]).slice().sort((a,b)=>Number(a.cut)-Number(b.cut)).slice(0,3);
-      const rewards=[2,4,6].map((cut,i)=>{const discount=Math.max(0,Math.min(100,Number(raw[i]?.discount??DEFAULT_LOYALTY_PROGRAM.rewards[i].discount)||0));return {cut,discount,label:discount===100?'Servicio gratis':`${discount}% OFF`};});
-      return [{...chosen,rewards,audience:'all',customerIds:[]}];
+      const programs=Array.isArray(barber?.loyaltyPrograms)?barber.loyaltyPrograms:[];
+      const chosen=programs.find(p=>p?.id===barber?.defaultLoyaltyProgramId)||programs.find(p=>p?.audience==='all')||programs[0]||null;
+      const legacyRewards=Array.isArray(barber?.rewards)&&barber.rewards.length?barber.rewards:DEFAULT_LOYALTY_PROGRAM.rewards;
+      const rewards=normalizeLoyaltyRewards(Array.isArray(chosen?.rewards)&&chosen.rewards.length?chosen.rewards:legacyRewards,DEFAULT_LOYALTY_PROGRAM.rewards);
+      const base=chosen||{id:barber?.defaultLoyaltyProgramId||DEFAULT_LOYALTY_PROGRAM.id,name:'Programa de premios'};
+      return [{...base,rewards,audience:'all',customerIds:[]}];
     }
     function programForCustomer(c,barber=state.barber){
-      if(c?.loyaltyOverride?.mode==='custom'&&Array.isArray(c.loyaltyOverride.rewards)&&c.loyaltyOverride.rewards.length){
-        const raw=c.loyaltyOverride.rewards.slice().sort((a,b)=>Number(a.cut)-Number(b.cut)).slice(0,3);
-        const standard=loyaltyPrograms(barber)[0]||DEFAULT_LOYALTY_PROGRAM;
-        const rewards=[2,4,6].map((cut,i)=>{const discount=Math.max(0,Math.min(100,Number(raw[i]?.discount??standard.rewards[i].discount)||0));return {cut,discount,label:discount===100?'Servicio gratis':`${discount}% OFF`};});
+      const standard=loyaltyPrograms(barber)[0]||DEFAULT_LOYALTY_PROGRAM;
+      if(c?.loyaltyOverride?.mode==='custom'){
+        const rewards=normalizeLoyaltyRewards(c.loyaltyOverride.rewards,standard.rewards);
         return {id:'customer-override',name:'Programa personalizado',rewards};
       }
-      return loyaltyPrograms(barber)[0]||DEFAULT_LOYALTY_PROGRAM;
+      return standard;
     }
     function rewardsForCustomer(c,barber=state.barber){return [...(programForCustomer(c,barber).rewards||CYCLE_REWARDS)].map(r=>({...r,cut:Number(r.cut),discount:Number(r.discount),label:r.label||(Number(r.discount)===100?'Servicio gratis':`${Number(r.discount)}% OFF`)})).sort((a,b)=>a.cut-b.cut);}
-    function cycleLength(c,barber=state.barber){const rewards=rewardsForCustomer(c,barber);return Math.max(1,...rewards.map(r=>Number(r.cut)||1));}
-    function cycleCount(c){const length=cycleLength(c);if(c?.lastRewardAppliedOnFinalMilestone===true||c?.cyclePausedAtMax||Number(c?.cycleCuts||0)>=length||(Array.isArray(c?.availableRewards)&&c.availableRewards.some(r=>Number(r.cut)>=length)))return length;if(c?.cycleVersion>=2)return Math.max(0,Math.min(length,Number(c.cycleCuts||0)));const actual=Number.isFinite(Number(c?.actualCutsRegistered))?Math.max(0,Number(c.actualCutsRegistered)):Math.max(0,Number(c?.totalCuts||0)-Math.max(0,Number(c?.referralCreditsReceived||0)));return actual%length;}
+    function cycleLength(c,barber=state.barber){return loyaltyCycleLength(rewardsForCustomer(c,barber));}
+    function cycleCount(c,barber=state.barber){return loyaltyCycleCount(c,rewardsForCustomer(c,barber));}
     function progress(c) { if(c?.lastRewardAppliedOnFinalMilestone===true)return 100; return Math.min(100,Math.max(0,(cycleCount(c)/cycleLength(c))*100)); }
-    function availableRewards(c){if(Array.isArray(c?.availableRewards)&&c.availableRewards.length)return [c.availableRewards.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0]];if(!c?.rewardReady)return [];const program=programForCustomer(c);const n=Number(c?.cycleCuts||0);const cut=c?.cyclePausedAtMax||n>=cycleLength(c)?cycleLength(c):[...program.rewards].filter(r=>Number(r.cut)<=n).pop()?.cut;return [program.rewards.find(r=>Number(r.cut)===Number(cut))||program.rewards[0]||{cut:2,discount:10,label:'10% OFF'}];}
+    function availableRewards(c){if(Number(c?.cycleVersion||0)>=2||c?.rewardReady!==true)return [];if(!Array.isArray(c?.availableRewards)||!c.availableRewards.length)return [];return [c.availableRewards.slice().sort((a,b)=>Number(b.cut||0)-Number(a.cut||0))[0]];}
     function rewardForNextVisit(c){const saved=availableRewards(c);if(saved.length)return saved;const max=cycleLength(c),count=cycleCount(c);if(c?.cyclePausedAtMax||count>=max)return rewardsForCustomer(c).filter(r=>Number(r.cut)===max).slice(-1);const nextCut=count+1;return rewardsForCustomer(c).filter(r=>Number(r.cut)===nextCut);}
     function lastAppliedReward(c){const label=String(c?.lastRewardAppliedLabel||'').trim(),cut=Number(c?.lastRewardAppliedCut||0),appliedAt=asDate(c?.lastRewardAppliedAt),lastCutAt=asDate(c?.lastCutAt);if(!label||!cut||!appliedAt||!lastCutAt||cut!==cycleCount(c)||Math.abs(appliedAt.getTime()-lastCutAt.getTime())>5000)return null;return {label,cut,finalMilestone:c?.lastRewardAppliedOnFinalMilestone===true,appliedAt};}
     function nextCycleReward(c){ const rewards=rewardsForCustomer(c), count=cycleCount(c); if(c?.cyclePausedAtMax||count>=cycleLength(c))return rewards.find(r=>Number(r.cut)===cycleLength(c))||rewards[rewards.length-1]||CYCLE_REWARDS[2]; return rewards.find(r=>r.cut>count)||rewards[0]||CYCLE_REWARDS[0]; }

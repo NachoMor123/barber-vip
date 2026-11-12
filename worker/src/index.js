@@ -619,37 +619,173 @@ async function createPaymentPreference(request, env) {
   const data = await parseBody(request);
   const skipTrial = data.action === "skip-trial";
   const paid = barber.barber.hasPaidSubscription === true;
-  if (subscriptionStatus(barber.barber) === "active" && (!skipTrial || paid)) {
+  const status = subscriptionStatus(barber.barber);
+  const expiry = toDate(barber.barber.subscriptionExpiresAt);
+  if (!expiry) {
+    throw Object.assign(new Error("No pudimos verificar la fecha de tu suscripción. Actualizá tu cuenta antes de iniciar un pago."), { status: 409 });
+  }
+  if (status === "active" && (!skipTrial || paid)) {
     throw Object.assign(new Error(paid ? "Tu plan ya está activo. No hace falta pagar otra vez." : "Tu prueba todavía está activa."), { status: 409 });
   }
   if (skipTrial && paid) throw Object.assign(new Error("Tu cuenta ya registra un pago."), { status: 409 });
-  const price = Number.parseInt(env.SUBSCRIPTION_PRICE_ARS || "8000", 10);
-  if (!Number.isFinite(price) || price < 1 || !env.MP_ACCESS_TOKEN) throw new Error("La configuración de Mercado Pago está incompleta.");
+
+  const configuredPrice = String(env.SUBSCRIPTION_PRICE_ARS || "8000").trim();
+  const price = Number(configuredPrice);
+  if (!/^\d+$/.test(configuredPrice) || !Number.isSafeInteger(price) || price < 1
+    || !env.MP_ACCESS_TOKEN || !env.MP_WEBHOOK_SECRET) {
+    throw Object.assign(new Error("Mercado Pago no está configurado de forma completa. No se inició ningún cobro."), { status: 503 });
+  }
+
+  const now = Date.now();
+  const billingAction = skipTrial ? "skip-trial" : "renew";
+  const lockPath = "barbers/" + barber.uid + "/paymentCheckout/current";
+  const lock = await fsGet(env, lockPath);
+  const lockExpiresAt = toDate(lock?.data?.expiresAt)?.getTime() || 0;
+
+  if (lock?.data?.status === "pending" && lockExpiresAt > now
+    && lock.data.preferenceId && lock.data.initPoint
+    && Number(lock.data.amount) === price) {
+    return {
+      ok: true,
+      url: String(lock.data.initPoint),
+      preferenceId: String(lock.data.preferenceId),
+      reused: true,
+      expiresAt: new Date(lockExpiresAt).toISOString()
+    };
+  }
+  if (lock?.data?.status === "creating" && lockExpiresAt > now) {
+    throw Object.assign(new Error("Ya estamos preparando tu enlace de pago. Esperá unos segundos antes de volver a intentarlo."), { status: 409 });
+  }
+
+  // A conditional Firestore write makes the reservation single-writer across
+  // tabs/devices; no Mercado Pago preference is created until the lease is won.
+  const reservationId = crypto.randomUUID();
+  const lockName = lock?.name || firestoreResourceName(env, lockPath);
+  const reservationFields = {
+    status: "creating",
+    reservationId,
+    billingAction,
+    amount: price,
+    createdAt: new Date(now),
+    expiresAt: new Date(now + 45_000)
+  };
+  try {
+    await fsCommit(env, [{
+      update: { name: lockName, fields: encodeFields(reservationFields) },
+      updateMask: { fieldPaths: Object.keys(reservationFields) },
+      currentDocument: lock?.updateTime ? { updateTime: lock.updateTime } : { exists: false }
+    }]);
+  } catch (error) {
+    const current = await fsGet(env, lockPath).catch(() => null);
+    const currentExpiry = toDate(current?.data?.expiresAt)?.getTime() || 0;
+    if (current?.data?.status === "pending" && currentExpiry > Date.now()
+      && current.data.preferenceId && current.data.initPoint
+      && Number(current.data.amount) === price) {
+      return {
+        ok: true,
+        url: String(current.data.initPoint),
+        preferenceId: String(current.data.preferenceId),
+        reused: true,
+        expiresAt: new Date(currentExpiry).toISOString()
+      };
+    }
+    throw Object.assign(new Error("El enlace de pago ya se está preparando. Esperá unos segundos y volvé a intentarlo."), { status: 409, cause: error });
+  }
+
+  const reservation = await fsGet(env, lockPath);
+  if (!reservation || reservation.data.reservationId !== reservationId || !reservation.updateTime) {
+    throw Object.assign(new Error("No se pudo reservar el inicio del pago. No se generó ningún cobro."), { status: 503 });
+  }
+
+  const expiresAt = new Date(now + 15 * 60_000);
   const origin = frontendReturnOrigin(request, env);
   const workerOrigin = new URL(request.url).origin;
-  // Leave payment_methods unrestricted: Checkout Pro keeps all eligible methods available, including account money.
-  const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
-    method: "POST",
-    headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN, "content-type": "application/json" },
-    body: JSON.stringify({
-      items: [{
-        id: "barber-vip-monthly", title: "Barber VIP — acceso por 30 días",
-        description: "Acceso a Barber VIP por 30 días; renovación manual desde la app",
-        quantity: 1, currency_id: "ARS", unit_price: price
-      }],
-      external_reference: barber.uid,
-      metadata: { barber_uid: barber.uid, product: "barber-vip-monthly", billing_action: skipTrial ? "skip-trial" : "renew" },
-      back_urls: { success: origin + "/?payment=success", failure: origin + "/?payment=failure", pending: origin + "/?payment=pending" },
-      auto_return: "approved",
-      notification_url: workerOrigin + "/api/mercadopago-webhook"
-    })
-  });
+  let response;
+  try {
+    response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN, "content-type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({
+        items: [{
+          id: "barber-vip-monthly",
+          title: "Barber VIP — acceso por 30 días",
+          description: "Acceso a Barber VIP por 30 días; renovación manual desde la app",
+          quantity: 1,
+          currency_id: "ARS",
+          unit_price: price
+        }],
+        external_reference: barber.uid,
+        metadata: { barber_uid: barber.uid, product: "barber-vip-monthly", billing_action: billingAction },
+        back_urls: {
+          success: origin + "/?payment=success",
+          failure: origin + "/?payment=failure",
+          pending: origin + "/?payment=pending"
+        },
+        auto_return: "approved",
+        expires: true,
+        expiration_date_to: expiresAt.toISOString(),
+        notification_url: workerOrigin + "/api/mercadopago-webhook"
+      })
+    });
+  } catch (error) {
+    await fsCommit(env, [{
+      update: { name: reservation.name, fields: encodeFields({ status: "failed", expiresAt: new Date(), updatedAt: new Date() }) },
+      updateMask: { fieldPaths: ["status", "expiresAt", "updatedAt"] },
+      currentDocument: { updateTime: reservation.updateTime }
+    }]).catch(() => null);
+    throw Object.assign(new Error("Mercado Pago no respondió al preparar el enlace. No se confirmó ningún pago; podés volver a intentarlo."), { status: 502, cause: error });
+  }
+
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.init_point || !result.id) throw Object.assign(new Error("Mercado Pago no pudo crear el enlace de pago."), { status: 502 });
-  await fsSet(env, "barbers/" + barber.uid + "/paymentPreferences/" + String(result.id), {
-    preferenceId: String(result.id), billingAction: skipTrial ? "skip-trial" : "renew", createdAt: new Date()
-  });
-  return { ok: true, url: result.init_point, preferenceId: String(result.id) };
+  if (!response.ok || !result.init_point || !result.id) {
+    await fsCommit(env, [{
+      update: { name: reservation.name, fields: encodeFields({ status: "failed", expiresAt: new Date(), updatedAt: new Date() }) },
+      updateMask: { fieldPaths: ["status", "expiresAt", "updatedAt"] },
+      currentDocument: { updateTime: reservation.updateTime }
+    }]).catch(() => null);
+    throw Object.assign(new Error("Mercado Pago no pudo crear el enlace de pago. No se inició ningún cobro."), { status: 502 });
+  }
+
+  const preferenceId = String(result.id);
+  const preferencePath = "barbers/" + barber.uid + "/paymentPreferences/" + preferenceId;
+  const preferenceName = firestoreResourceName(env, preferencePath);
+  const preferenceFields = {
+    preferenceId,
+    billingAction,
+    amount: price,
+    currency: "ARS",
+    createdAt: new Date(now),
+    expiresAt
+  };
+  const pendingLockFields = {
+    status: "pending",
+    reservationId,
+    billingAction,
+    amount: price,
+    preferenceId,
+    initPoint: String(result.init_point),
+    createdAt: new Date(now),
+    expiresAt
+  };
+  await fsCommit(env, [
+    {
+      update: { name: preferenceName, fields: encodeFields(preferenceFields) },
+      currentDocument: { exists: false }
+    },
+    {
+      update: { name: reservation.name, fields: encodeFields(pendingLockFields) },
+      updateMask: { fieldPaths: Object.keys(pendingLockFields) },
+      currentDocument: { updateTime: reservation.updateTime }
+    }
+  ]);
+
+  return {
+    ok: true,
+    url: String(result.init_point),
+    preferenceId,
+    expiresAt: expiresAt.toISOString()
+  };
 }
 
 async function handleMercadoPagoWebhook(request, env) {

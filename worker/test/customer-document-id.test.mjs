@@ -40,7 +40,8 @@ test("a visit targets and returns the selected Firestore document, never a store
   assert.match(uiVisit, /customerId:id/);
   assert.match(transaction, /const id = cleanText\(data\.customerId, 100\)/);
   assert.match(transaction, /doc\(db\(\), 'barbers', uid, 'customers', id\)/);
-  assert.match(transaction, /uid: id,\s*barberUid: uid/);
+  const updates = functionBody(transaction, "const updates = {", "transaction.update(customerRef, updates);");
+  assert.doesNotMatch(updates, /^\s*(uid|barberUid):/m);
   assert.match(transaction, /transaction\.update\(customerRef, updates\)/);
   assert.match(transaction, /resultCustomer = \{\s*\.\.\.customer, uid: id\s*\}/);
 });

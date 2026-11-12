@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v86-remove-entry-tagline';
+const CACHE_NAME = 'barber-vip-shell-v87-subscription-state-hardening';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

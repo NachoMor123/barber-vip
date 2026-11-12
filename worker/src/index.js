@@ -46,7 +46,8 @@ async function googleAccessToken(env) {
   const assertion = unsigned + "." + b64url(signature);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion })
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+    signal: AbortSignal.timeout(12_000)
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.access_token) throw new Error("No se pudo obtener un token seguro de Google para Firebase.");
@@ -155,11 +156,11 @@ async function fsSet(env, path, data) {
   const url = new URL(firestoreBase(env) + "/" + encodePath(path));
   for (const key of Object.keys(data || {})) url.searchParams.append("updateMask.fieldPaths", key);
   const token = await googleAccessToken(env);
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url.toString(), {
     method: "PATCH",
     headers: { authorization: "Bearer " + token, "content-type": "application/json" },
     body: JSON.stringify({ fields: encodeFields(data) })
-  });
+  }, { readOnly: false });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("Firestore no pudo guardar el documento (" + response.status + ").");
   return result;
@@ -245,7 +246,8 @@ async function verifyFirebaseToken(env, request) {
   const apiKey = env.FIREBASE_WEB_API_KEY;
   if (!apiKey) throw new Error("FIREBASE_WEB_API_KEY no está configurada.");
   const response = await fetch("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + encodeURIComponent(apiKey), {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: match[1] })
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: match[1] }),
+    signal: AbortSignal.timeout(12_000)
   });
   const result = await response.json().catch(() => ({}));
   const user = result.users && result.users[0];
@@ -415,7 +417,8 @@ async function registerCustomerAccount(request, env) {
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: loginEmail, password, returnSecureToken: true })
+      body: JSON.stringify({ email: loginEmail, password, returnSecureToken: true }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const authResult = await authResponse.json().catch(() => ({}));
@@ -540,7 +543,8 @@ async function registerCustomerAccount(request, env) {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ idToken: authResult.idToken })
+        body: JSON.stringify({ idToken: authResult.idToken }),
+        signal: AbortSignal.timeout(12_000)
       }
     ).catch(() => null);
     if (error?.status === 409) throw error;
@@ -619,111 +623,554 @@ async function createPaymentPreference(request, env) {
   const data = await parseBody(request);
   const skipTrial = data.action === "skip-trial";
   const paid = barber.barber.hasPaidSubscription === true;
-  if (subscriptionStatus(barber.barber) === "active" && (!skipTrial || paid)) {
+  const status = subscriptionStatus(barber.barber);
+  const expiry = toDate(barber.barber.subscriptionExpiresAt);
+  if (!expiry) {
+    throw Object.assign(new Error("No pudimos verificar la fecha de tu suscripción. Actualizá tu cuenta antes de iniciar un pago."), { status: 409 });
+  }
+  if (status === "active" && (!skipTrial || paid)) {
     throw Object.assign(new Error(paid ? "Tu plan ya está activo. No hace falta pagar otra vez." : "Tu prueba todavía está activa."), { status: 409 });
   }
   if (skipTrial && paid) throw Object.assign(new Error("Tu cuenta ya registra un pago."), { status: 409 });
-  const price = Number.parseInt(env.SUBSCRIPTION_PRICE_ARS || "8000", 10);
-  if (!Number.isFinite(price) || price < 1 || !env.MP_ACCESS_TOKEN) throw new Error("La configuración de Mercado Pago está incompleta.");
+
+  const configuredPrice = String(env.SUBSCRIPTION_PRICE_ARS || "8000").trim();
+  const price = Number(configuredPrice);
+  if (!/^\d+$/.test(configuredPrice) || !Number.isSafeInteger(price) || price < 1
+    || !env.MP_ACCESS_TOKEN || !env.MP_WEBHOOK_SECRET) {
+    throw Object.assign(new Error("Mercado Pago no está configurado de forma completa. No se inició ningún cobro."), { status: 503 });
+  }
+
+  const now = Date.now();
+  const billingAction = skipTrial ? "skip-trial" : "renew";
+  const lockPath = "barbers/" + barber.uid + "/paymentCheckout/current";
+  const lock = await fsGet(env, lockPath);
+  const lockExpiresAt = toDate(lock?.data?.expiresAt)?.getTime() || 0;
+
+  if (lock?.data?.status === "pending" && lockExpiresAt > now
+    && lock.data.preferenceId && lock.data.initPoint
+    && Number(lock.data.amount) === price) {
+    return {
+      ok: true,
+      url: String(lock.data.initPoint),
+      preferenceId: String(lock.data.preferenceId),
+      reused: true,
+      expiresAt: new Date(lockExpiresAt).toISOString()
+    };
+  }
+  if (lock?.data?.status === "creating" && lockExpiresAt > now) {
+    throw Object.assign(new Error("Ya estamos preparando tu enlace de pago. Esperá unos segundos antes de volver a intentarlo."), { status: 409 });
+  }
+
+  // A conditional Firestore write makes the reservation single-writer across
+  // tabs/devices; no Mercado Pago preference is created until the lease is won.
+  const reservationId = crypto.randomUUID();
+  const lockName = lock?.name || firestoreResourceName(env, lockPath);
+  const reservationFields = {
+    status: "creating",
+    reservationId,
+    billingAction,
+    amount: price,
+    createdAt: new Date(now),
+    expiresAt: new Date(now + 45_000)
+  };
+  try {
+    await fsCommit(env, [{
+      update: { name: lockName, fields: encodeFields(reservationFields) },
+      updateMask: { fieldPaths: Object.keys(reservationFields) },
+      currentDocument: lock?.updateTime ? { updateTime: lock.updateTime } : { exists: false }
+    }]);
+  } catch (error) {
+    const current = await fsGet(env, lockPath).catch(() => null);
+    const currentExpiry = toDate(current?.data?.expiresAt)?.getTime() || 0;
+    if (current?.data?.status === "pending" && currentExpiry > Date.now()
+      && current.data.preferenceId && current.data.initPoint
+      && Number(current.data.amount) === price) {
+      return {
+        ok: true,
+        url: String(current.data.initPoint),
+        preferenceId: String(current.data.preferenceId),
+        reused: true,
+        expiresAt: new Date(currentExpiry).toISOString()
+      };
+    }
+    throw Object.assign(new Error("El enlace de pago ya se está preparando. Esperá unos segundos y volvé a intentarlo."), { status: 409, cause: error });
+  }
+
+  const reservation = await fsGet(env, lockPath);
+  if (!reservation || reservation.data.reservationId !== reservationId || !reservation.updateTime) {
+    throw Object.assign(new Error("No se pudo reservar el inicio del pago. No se generó ningún cobro."), { status: 503 });
+  }
+
+  const expiresAt = new Date(now + 15 * 60_000);
   const origin = frontendReturnOrigin(request, env);
   const workerOrigin = new URL(request.url).origin;
-  // Leave payment_methods unrestricted: Checkout Pro keeps all eligible methods available, including account money.
-  const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
-    method: "POST",
-    headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN, "content-type": "application/json" },
-    body: JSON.stringify({
-      items: [{
-        id: "barber-vip-monthly", title: "Barber VIP — acceso por 30 días",
-        description: "Acceso a Barber VIP por 30 días; renovación manual desde la app",
-        quantity: 1, currency_id: "ARS", unit_price: price
-      }],
-      external_reference: barber.uid,
-      metadata: { barber_uid: barber.uid, product: "barber-vip-monthly", billing_action: skipTrial ? "skip-trial" : "renew" },
-      back_urls: { success: origin + "/?payment=success", failure: origin + "/?payment=failure", pending: origin + "/?payment=pending" },
-      auto_return: "approved",
-      notification_url: workerOrigin + "/api/mercadopago-webhook"
-    })
-  });
+  let response;
+  try {
+    response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN, "content-type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({
+        items: [{
+          id: "barber-vip-monthly",
+          title: "Barber VIP — acceso por 30 días",
+          description: "Acceso a Barber VIP por 30 días; renovación manual desde la app",
+          quantity: 1,
+          currency_id: "ARS",
+          unit_price: price
+        }],
+        external_reference: barber.uid,
+        metadata: { barber_uid: barber.uid, product: "barber-vip-monthly", billing_action: billingAction },
+        back_urls: {
+          success: origin + "/?payment=success",
+          failure: origin + "/?payment=failure",
+          pending: origin + "/?payment=pending"
+        },
+        auto_return: "approved",
+        expires: true,
+        expiration_date_from: new Date(now - 60_000).toISOString(),
+        expiration_date_to: expiresAt.toISOString(),
+        notification_url: workerOrigin + "/api/mercadopago-webhook"
+      })
+    });
+  } catch (error) {
+    await fsCommit(env, [{
+      update: { name: reservation.name, fields: encodeFields({ status: "failed", expiresAt: new Date(), updatedAt: new Date() }) },
+      updateMask: { fieldPaths: ["status", "expiresAt", "updatedAt"] },
+      currentDocument: { updateTime: reservation.updateTime }
+    }]).catch(() => null);
+    throw Object.assign(new Error("Mercado Pago no respondió al preparar el enlace. No se confirmó ningún pago; podés volver a intentarlo."), { status: 502, cause: error });
+  }
+
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.init_point || !result.id) throw Object.assign(new Error("Mercado Pago no pudo crear el enlace de pago."), { status: 502 });
-  await fsSet(env, "barbers/" + barber.uid + "/paymentPreferences/" + String(result.id), {
-    preferenceId: String(result.id), billingAction: skipTrial ? "skip-trial" : "renew", createdAt: new Date()
-  });
-  return { ok: true, url: result.init_point, preferenceId: String(result.id) };
+  if (!response.ok || !result.init_point || !result.id) {
+    await fsCommit(env, [{
+      update: { name: reservation.name, fields: encodeFields({ status: "failed", expiresAt: new Date(), updatedAt: new Date() }) },
+      updateMask: { fieldPaths: ["status", "expiresAt", "updatedAt"] },
+      currentDocument: { updateTime: reservation.updateTime }
+    }]).catch(() => null);
+    throw Object.assign(new Error("Mercado Pago no pudo crear el enlace de pago. No se inició ningún cobro."), { status: 502 });
+  }
+
+  const preferenceId = String(result.id);
+  const preferencePath = "barbers/" + barber.uid + "/paymentPreferences/" + preferenceId;
+  const preferenceName = firestoreResourceName(env, preferencePath);
+  const preferenceFields = {
+    preferenceId,
+    billingAction,
+    amount: price,
+    currency: "ARS",
+    createdAt: new Date(now),
+    expiresAt
+  };
+  const pendingLockFields = {
+    status: "pending",
+    reservationId,
+    billingAction,
+    amount: price,
+    preferenceId,
+    initPoint: String(result.init_point),
+    createdAt: new Date(now),
+    expiresAt
+  };
+  await fsCommit(env, [
+    {
+      update: { name: preferenceName, fields: encodeFields(preferenceFields) },
+      currentDocument: { exists: false }
+    },
+    {
+      update: { name: reservation.name, fields: encodeFields(pendingLockFields) },
+      updateMask: { fieldPaths: Object.keys(pendingLockFields) },
+      currentDocument: { updateTime: reservation.updateTime }
+    }
+  ]);
+
+  return {
+    ok: true,
+    url: String(result.init_point),
+    preferenceId,
+    expiresAt: expiresAt.toISOString()
+  };
+}
+
+async function previousValidSubscriptionSnapshot(env, barberUid, snapshot, depth = 0) {
+  const previous = snapshot && typeof snapshot === "object" ? snapshot : {};
+  if (depth >= 12) return previous;
+  const paymentId = String(previous.subscriptionLastPaymentId || "");
+  if (!paymentId) return previous;
+  const priorPayment = await fsGet(env, "barbers/" + barberUid + "/payments/" + paymentId);
+  const priorStatus = String(priorPayment?.data?.status || "");
+  if (!priorPayment || !["refunded", "charged_back"].includes(priorStatus)) return previous;
+  return previousValidSubscriptionSnapshot(env, barberUid, priorPayment.data.previousSubscription, depth + 1);
+}
+
+function paymentStatusFields(payment, preference, now = new Date()) {
+  return {
+    paymentId: String(payment.id),
+    amount: Number(payment.transaction_amount),
+    currency: String(payment.currency_id || ""),
+    status: String(payment.status || "unknown"),
+    statusDetail: String(payment.status_detail || ""),
+    billingAction: String(preference.data.billingAction || ""),
+    updatedAt: now
+  };
 }
 
 async function handleMercadoPagoWebhook(request, env) {
   let body = {};
   try { body = await request.json(); } catch (_) {}
   const url = new URL(request.url);
-  const paymentId = String(url.searchParams.get("data.id") || url.searchParams.get("id") || body.data?.id || body.id || "");
+  // The signed manifest is built with the exact data.id query parameter.
+  const paymentId = String(url.searchParams.get("data.id") || "");
   const topic = String(url.searchParams.get("type") || url.searchParams.get("topic") || body.type || body.topic || "");
-  if (!paymentId || (topic && !["payment", "payments"].includes(topic))) return json({ ok: true, ignored: true });
-  if (!await validMercadoPagoSignature(request, paymentId, env.MP_WEBHOOK_SECRET)) return json({ ok: false, error: "Firma de notificación inválida." }, 401);
-  if (!env.MP_ACCESS_TOKEN) return json({ ok: false, error: "Falta configurar Mercado Pago." }, 503);
-  const response = await fetch("https://api.mercadopago.com/v1/payments/" + encodeURIComponent(paymentId), {
-    headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN }
-  });
-  const payment = await response.json().catch(() => ({}));
-  if (!response.ok) return json({ ok: false, error: "No se pudo consultar el pago." }, 502);
-  if (payment.status !== "approved") return json({ ok: true, ignored: true, status: payment.status || "unknown" });
-  const amount = Number.parseInt(env.SUBSCRIPTION_PRICE_ARS || "8000", 10);
-  if (Number(payment.transaction_amount) !== amount || payment.currency_id !== "ARS") return json({ ok: false, error: "El importe o la moneda no coinciden." }, 400);
-  const barberUid = String(payment.external_reference || payment.metadata?.barber_uid || "");
-  if (!barberUid || (payment.metadata?.barber_uid && payment.metadata.barber_uid !== barberUid)) return json({ ok: false, error: "El pago no pertenece a una cuenta de Barber VIP." }, 400);
-  const preferenceId = String(payment.preference_id || "");
-  if (!preferenceId) return json({ ok: false, error: "El pago no tiene preferencia asociada." }, 400);
-  const preferencePath = "barbers/" + barberUid + "/paymentPreferences/" + preferenceId;
-  const preference = await fsGet(env, preferencePath);
-  if (!preference || !["renew", "skip-trial"].includes(preference.data.billingAction)) {
-    return json({ ok: false, error: "No se encontró una preferencia de pago válida." }, 503);
+  if (!paymentId) return json({ ok: false, error: "Falta el identificador firmado del pago." }, 401);
+  if (topic && !["payment", "payments"].includes(topic)) return json({ ok: true, ignored: true });
+  if (!await validMercadoPagoSignature(request, paymentId, env.MP_WEBHOOK_SECRET)) {
+    return json({ ok: false, error: "Firma de notificación inválida." }, 401);
   }
-  if (preference.data.processedAt) return json({ ok: true, received: true, duplicate: true });
-  const approvedAt = payment.date_approved ? new Date(payment.date_approved) : new Date();
-  const barberDoc = await fsGet(env, "barbers/" + barberUid);
-  if (!barberDoc) return json({ ok: false, error: "No existe el profesional asociado al pago." }, 404);
-  const expiry = renewalExpiry(barberDoc.data.subscriptionExpiresAt, approvedAt, preference.data.billingAction);
-  const paymentPath = "barbers/" + barberUid + "/payments/" + String(payment.id);
-  const paymentDocName = firestoreResourceName(env, paymentPath);
+  if (!env.MP_ACCESS_TOKEN) return json({ ok: false, error: "Falta configurar Mercado Pago." }, 503);
+
+  let response;
   try {
-    await fsCommit(env, [
-      {
-        update: {
-          name: barberDoc.name,
-          fields: encodeFields({
-            subscriptionExpiresAt: expiry, hasPaidSubscription: true,
-            lastPaymentAt: approvedAt, updatedAt: new Date()
-          })
-        },
-        updateMask: { fieldPaths: ["subscriptionExpiresAt", "hasPaidSubscription", "lastPaymentAt", "updatedAt"] },
+    response = await fetch("https://api.mercadopago.com/v1/payments/" + encodeURIComponent(paymentId), {
+      headers: { authorization: "Bearer " + env.MP_ACCESS_TOKEN },
+      signal: AbortSignal.timeout(15_000)
+    });
+  } catch (error) {
+    console.error("Mercado Pago payment lookup failed:", error?.message || "");
+    return json({ ok: false, error: "Mercado Pago no respondió al verificar el pago." }, 502);
+  }
+  const payment = await response.json().catch(() => ({}));
+  if (!response.ok) return json({ ok: false, error: "No se pudo consultar el pago en Mercado Pago." }, 502);
+  // Test credentials must never grant a production subscription.
+  if (payment.live_mode !== true) return json({ ok: true, received: true, ignored: true, reason: "test-payment" });
+
+  const barberUid = String(payment.external_reference || payment.metadata?.barber_uid || "");
+  if (!barberUid || (payment.metadata?.barber_uid && String(payment.metadata.barber_uid) !== barberUid)) {
+    return json({ ok: false, error: "El pago no pertenece a una cuenta de Barber VIP." }, 400);
+  }
+  const preferenceId = String(payment.preference_id || "");
+  if (!preferenceId) return json({ ok: false, error: "El pago no tiene una preferencia asociada." }, 400);
+
+  const preferencePath = "barbers/" + barberUid + "/paymentPreferences/" + preferenceId;
+  const paymentPath = "barbers/" + barberUid + "/payments/" + String(payment.id || paymentId);
+  const lockPath = "barbers/" + barberUid + "/paymentCheckout/current";
+  const [preference, paymentDoc, barberDoc, lockDoc] = await Promise.all([
+    fsGet(env, preferencePath),
+    fsGet(env, paymentPath),
+    fsGet(env, "barbers/" + barberUid),
+    fsGet(env, lockPath)
+  ]);
+  if (!preference || !["renew", "skip-trial"].includes(preference.data.billingAction)) {
+    return json({ ok: false, error: "No se encontró una preferencia de Barber VIP válida. Se solicitará una nueva notificación." }, 503);
+  }
+  if (!payment.id || String(payment.id) !== paymentId) {
+    return json({ ok: false, error: "El identificador del pago no coincide con la notificación firmada." }, 400);
+  }
+
+  const configuredPrice = Number(preference.data.amount ?? env.SUBSCRIPTION_PRICE_ARS ?? 8000);
+  if (!Number.isSafeInteger(configuredPrice) || configuredPrice < 1
+    || Number(payment.transaction_amount) !== configuredPrice || payment.currency_id !== "ARS") {
+    return json({ ok: false, error: "El importe o la moneda del pago no coinciden con la preferencia registrada." }, 400);
+  }
+
+  const status = String(payment.status || "unknown");
+  const statusDetail = String(payment.status_detail || "");
+  const now = new Date();
+  const basePaymentFields = paymentStatusFields(payment, preference, now);
+
+  if (["refunded", "charged_back"].includes(status)) {
+    if (!paymentDoc) {
+      // A refund notification can arrive without a prior approved notification.
+      // Record it, but never alter a subscription that this payment did not grant.
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: firestoreResourceName(env, paymentPath),
+            fields: encodeFields({ ...basePaymentFields, createdAt: now })
+          },
+          currentDocument: { exists: false }
+        }]);
+        return json({ ok: true, received: true, status, entitlementChanged: false });
+      } catch (error) {
+        const current = await fsGet(env, paymentPath).catch(() => null);
+        if (current) return json({ ok: true, received: true, duplicate: true });
+        console.error("Mercado Pago reversal record failed:", error?.message || "");
+        return json({ ok: false, error: "No se pudo guardar el estado del pago devuelto. Mercado Pago puede reintentar." }, 500);
+      }
+    }
+    if (paymentDoc.data.status === status) return json({ ok: true, received: true, duplicate: true });
+
+    const writes = [{
+      update: {
+        name: paymentDoc.name,
+        fields: encodeFields({ ...basePaymentFields, reversedAt: now })
+      },
+      updateMask: { fieldPaths: [...Object.keys(basePaymentFields), "reversedAt"] },
+      currentDocument: { updateTime: paymentDoc.updateTime }
+    }];
+
+    const lastPaymentAt = toDate(barberDoc?.data?.lastPaymentAt)?.getTime();
+    const paymentApprovedAt = toDate(paymentDoc.data.approvedAt)?.getTime();
+    const isCurrentPayment = barberDoc?.data?.subscriptionLastPaymentId === String(payment.id)
+      || (!barberDoc?.data?.subscriptionLastPaymentId && Number.isFinite(lastPaymentAt)
+        && Number.isFinite(paymentApprovedAt) && lastPaymentAt === paymentApprovedAt);
+    if (isCurrentPayment && barberDoc) {
+      let restoredFields;
+      if (paymentDoc.data.previousSubscription) {
+        const previous = await previousValidSubscriptionSnapshot(
+          env, barberUid, paymentDoc.data.previousSubscription
+        );
+        restoredFields = {
+          subscriptionExpiresAt: toDate(previous.subscriptionExpiresAt),
+          hasPaidSubscription: previous.hasPaidSubscription === true,
+          lastPaymentAt: toDate(previous.lastPaymentAt),
+          subscriptionLastPaymentId: previous.subscriptionLastPaymentId || null,
+          updatedAt: now
+        };
+      } else {
+        // Older payment records did not keep a rollback snapshot. On a reversal,
+        // fail closed rather than leave access enabled for a payment that was returned.
+        restoredFields = {
+          subscriptionExpiresAt: new Date(now.getTime() - 1),
+          hasPaidSubscription: false,
+          lastPaymentAt: null,
+          subscriptionLastPaymentId: null,
+          updatedAt: now
+        };
+      }
+      writes.push({
+        update: { name: barberDoc.name, fields: encodeFields(restoredFields) },
+        updateMask: { fieldPaths: Object.keys(restoredFields) },
         currentDocument: { updateTime: barberDoc.updateTime }
-      },
-      {
-        update: {
-          name: paymentDocName,
-          fields: encodeFields({
-            paymentId: String(payment.id), amount: Number(payment.transaction_amount),
-            currency: payment.currency_id, status: "approved",
-            billingAction: preference.data.billingAction,
-            approvedAt, newExpiry: expiry, createdAt: new Date()
-          })
-        },
-        currentDocument: { exists: false }
-      },
-      {
+      });
+    }
+
+    if (preference.updateTime) {
+      writes.push({
         update: {
           name: preference.name,
-          fields: encodeFields({ processedAt: new Date(), paymentId: String(payment.id) })
+          fields: encodeFields({ lastPaymentStatus: status, lastPaymentId: String(payment.id), lastPaymentUpdatedAt: now })
         },
-        updateMask: { fieldPaths: ["processedAt", "paymentId"] },
+        updateMask: { fieldPaths: ["lastPaymentStatus", "lastPaymentId", "lastPaymentUpdatedAt"] },
         currentDocument: { updateTime: preference.updateTime }
+      });
+    }
+    if (lockDoc?.data?.preferenceId === preferenceId && lockDoc.updateTime) {
+      writes.push({
+        update: {
+          name: lockDoc.name,
+          fields: encodeFields({ status: "reversed", reversedAt: now, paymentId: String(payment.id) })
+        },
+        updateMask: { fieldPaths: ["status", "reversedAt", "paymentId"] },
+        currentDocument: { updateTime: lockDoc.updateTime }
+      });
+    }
+    try {
+      await fsCommit(env, writes);
+      return json({
+        ok: true,
+        received: true,
+        reversed: true,
+        subscriptionRestored: barberDoc?.data?.subscriptionLastPaymentId === String(payment.id)
+      });
+    } catch (error) {
+      const current = await fsGet(env, paymentPath).catch(() => null);
+      if (current && current.data.status === status) return json({ ok: true, received: true, duplicate: true });
+      console.error("Mercado Pago reversal commit failed:", error?.message || "");
+      return json({ ok: false, error: "No se pudo actualizar la suscripción después de la devolución. Mercado Pago puede reintentar." }, 500);
+    }
+  }
+
+  const partialRefund = status === "approved"
+    && (statusDetail === "partially_refunded" || Number(payment.transaction_amount_refunded || 0) > 0);
+  if (status !== "approved" && status !== "in_mediation") {
+    if (paymentDoc && ["approved", "partially_refunded", "in_mediation"].includes(String(paymentDoc.data.status || ""))) {
+      return json({ ok: true, received: true, duplicate: true, status: paymentDoc.data.status });
+    }
+    const fields = { ...basePaymentFields, createdAt: paymentDoc?.data?.createdAt ? toDate(paymentDoc.data.createdAt) : now };
+    const write = {
+      update: { name: paymentDoc?.name || firestoreResourceName(env, paymentPath), fields: encodeFields(fields) },
+      updateMask: { fieldPaths: Object.keys(fields) },
+      currentDocument: paymentDoc?.updateTime ? { updateTime: paymentDoc.updateTime } : { exists: false }
+    };
+    try {
+      await fsCommit(env, [write]);
+      return json({ ok: true, received: true, status, activated: false });
+    } catch (error) {
+      const current = await fsGet(env, paymentPath).catch(() => null);
+      if (current && current.data.status === status) return json({ ok: true, received: true, duplicate: true });
+      console.error("Mercado Pago non-approved status record failed:", error?.message || "");
+      return json({ ok: false, error: "No se pudo registrar el estado del pago. Mercado Pago puede reintentar." }, 500);
+    }
+  }
+
+  if (!barberDoc) return json({ ok: false, error: "No existe el profesional asociado al pago." }, 404);
+
+  // A mediation event is tracked, but it does not grant or extend access.
+  if (status === "in_mediation") {
+    if (!paymentDoc) {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: firestoreResourceName(env, paymentPath),
+            fields: encodeFields({ ...basePaymentFields, createdAt: now })
+          },
+          currentDocument: { exists: false }
+        }]);
+      } catch (_) {}
+    } else if (paymentDoc.data.status !== "in_mediation") {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: paymentDoc.name,
+            fields: encodeFields({ ...basePaymentFields })
+          },
+          updateMask: { fieldPaths: Object.keys(basePaymentFields) },
+          currentDocument: { updateTime: paymentDoc.updateTime }
+        }]);
+      } catch (_) {}
+    }
+    return json({ ok: true, received: true, status: "in_mediation", activated: false });
+  }
+
+  if (paymentDoc?.data?.previousSubscription && paymentDoc.data.newExpiry
+    && ["approved", "partially_refunded", "in_mediation"].includes(String(paymentDoc.data.status || ""))) {
+    if (paymentDoc.data.status === "approved" && partialRefund) {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: paymentDoc.name,
+            fields: encodeFields({
+              status: "partially_refunded",
+              statusDetail,
+              transactionAmountRefunded: Number(payment.transaction_amount_refunded || 0),
+              updatedAt: now
+            })
+          },
+          updateMask: { fieldPaths: ["status", "statusDetail", "transactionAmountRefunded", "updatedAt"] },
+          currentDocument: { updateTime: paymentDoc.updateTime }
+        }]);
+        return json({ ok: true, received: true, duplicate: true, status: "partially_refunded" });
+      } catch (error) {
+        const current = await fsGet(env, paymentPath).catch(() => null);
+        if (current?.data?.status === "partially_refunded") return json({ ok: true, received: true, duplicate: true });
+        return json({ ok: false, error: "No se pudo actualizar el estado del reembolso parcial. Mercado Pago puede reintentar." }, 500);
       }
-    ]);
-    return json({ ok: true, received: true });
+    }
+    if (paymentDoc.data.status === "in_mediation") {
+      try {
+        await fsCommit(env, [{
+          update: {
+            name: paymentDoc.name,
+            fields: encodeFields({ status: partialRefund ? "partially_refunded" : "approved", statusDetail, updatedAt: now })
+          },
+          updateMask: { fieldPaths: ["status", "statusDetail", "updatedAt"] },
+          currentDocument: { updateTime: paymentDoc.updateTime }
+        }]);
+      } catch (_) {}
+    }
+    return json({ ok: true, received: true, duplicate: true });
+  }
+  if (preference.data.processedAt) {
+    const samePayment = String(preference.data.paymentId || "") === String(payment.id);
+    return json({
+      ok: true,
+      received: true,
+      duplicate: samePayment,
+      ignored: !samePayment,
+      reason: samePayment ? "payment-already-processed" : "preference-already-used"
+    });
+  }
+
+  const approvedAt = payment.date_approved ? new Date(payment.date_approved) : now;
+  if (Number.isNaN(approvedAt.getTime())) {
+    return json({ ok: false, error: "Mercado Pago devolvió una fecha de aprobación inválida." }, 400);
+  }
+  const previousSubscription = {
+    subscriptionExpiresAt: toDate(barberDoc.data.subscriptionExpiresAt),
+    hasPaidSubscription: barberDoc.data.hasPaidSubscription === true,
+    lastPaymentAt: toDate(barberDoc.data.lastPaymentAt),
+    subscriptionLastPaymentId: barberDoc.data.subscriptionLastPaymentId || null
+  };
+  const expiry = renewalExpiry(
+    barberDoc.data.subscriptionExpiresAt,
+    approvedAt,
+    preference.data.billingAction
+  );
+  const paymentFields = {
+    ...basePaymentFields,
+    status: partialRefund ? "partially_refunded" : "approved",
+    approvedAt,
+    newExpiry: expiry,
+    previousSubscription,
+    createdAt: paymentDoc?.data?.createdAt ? toDate(paymentDoc.data.createdAt) : now
+  };
+  const processedPaymentIds = [...new Set(
+    (Array.isArray(preference.data.processedPaymentIds) ? preference.data.processedPaymentIds : [])
+      .map(String).concat(String(payment.id))
+  )];
+  const preferenceFields = {
+    processedAt: now,
+    paymentId: String(payment.id),
+    processedPaymentIds,
+    lastPaymentStatus: paymentFields.status,
+    lastPaymentUpdatedAt: now
+  };
+  const writes = [
+    {
+      update: {
+        name: barberDoc.name,
+        fields: encodeFields({
+          subscriptionExpiresAt: expiry,
+          hasPaidSubscription: true,
+          lastPaymentAt: approvedAt,
+          subscriptionLastPaymentId: String(payment.id),
+          updatedAt: now
+        })
+      },
+      updateMask: { fieldPaths: ["subscriptionExpiresAt", "hasPaidSubscription", "lastPaymentAt", "subscriptionLastPaymentId", "updatedAt"] },
+      currentDocument: { updateTime: barberDoc.updateTime }
+    },
+    {
+      update: {
+        name: paymentDoc?.name || firestoreResourceName(env, paymentPath),
+        fields: encodeFields(paymentFields)
+      },
+      updateMask: { fieldPaths: Object.keys(paymentFields) },
+      currentDocument: paymentDoc?.updateTime ? { updateTime: paymentDoc.updateTime } : { exists: false }
+    },
+    {
+      update: { name: preference.name, fields: encodeFields(preferenceFields) },
+      updateMask: { fieldPaths: Object.keys(preferenceFields) },
+      currentDocument: { updateTime: preference.updateTime }
+    }
+  ];
+  if (lockDoc?.data?.preferenceId === preferenceId && lockDoc.updateTime) {
+    writes.push({
+      update: {
+        name: lockDoc.name,
+        fields: encodeFields({ status: "paid", paidAt: approvedAt, paymentId: String(payment.id) })
+      },
+      updateMask: { fieldPaths: ["status", "paidAt", "paymentId"] },
+      currentDocument: { updateTime: lockDoc.updateTime }
+    });
+  }
+  try {
+    await fsCommit(env, writes);
+    return json({ ok: true, received: true, activated: true, status: paymentFields.status });
   } catch (error) {
-    const prior = await fsGet(env, paymentPath).catch(() => null);
-    if (prior) return json({ ok: true, received: true, duplicate: true });
-    console.error("Mercado Pago webhook commit failed:", error.message);
+    const [currentPayment, currentPreference] = await Promise.all([
+      fsGet(env, paymentPath).catch(() => null),
+      fsGet(env, preferencePath).catch(() => null)
+    ]);
+    if (currentPayment && ["approved", "partially_refunded"].includes(String(currentPayment.data.status || ""))) {
+      return json({ ok: true, received: true, duplicate: true });
+    }
+    if (currentPreference?.data?.processedAt) {
+      return json({ ok: true, received: true, ignored: true, reason: "preference-already-used" });
+    }
+    console.error("Mercado Pago approval commit failed:", error?.message || "");
     return json({ ok: false, error: "No se pudo aplicar el pago. Mercado Pago puede reintentar la notificación." }, 500);
   }
 }
@@ -746,7 +1193,8 @@ async function resetCustomerPassword(request, env) {
     {
       method: "POST",
       headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ localId: customerId, password })
+      body: JSON.stringify({ localId: customerId, password }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const result = await response.json().catch(() => ({}));
@@ -796,7 +1244,8 @@ async function deleteCustomerAccount(request, env) {
     {
       method: "POST",
       headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ localId: customerId })
+      body: JSON.stringify({ localId: customerId }),
+      signal: AbortSignal.timeout(12_000)
     }
   );
   const authResult = await authResponse.json().catch(() => ({}));

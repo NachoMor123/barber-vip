@@ -65,14 +65,9 @@ export function loyaltyCycleCount(customer = {}, rewards = DEFAULT_LOYALTY_REWAR
   // The cumulative count of real visits is the reliable cycle position.
   // Old cycle cursors/flags may disagree after earlier buggy releases.
   if (actual > 0) {
-    if (remainder === 0 && (
-      customer.lastRewardAppliedOnFinalMilestone === true
-      || customer.cyclePausedAtMax === true
-      || Number(customer.lastRewardAppliedCut || 0) >= length
-      || (version >= 2 && savedCycle === 0)
-      || (version >= 2 && savedCycle === length)
-    )) return length;
-    return remainder;
+    // The sixth real visit completes the cycle. A non-multiple visit count
+    // always wins over stale saved cursors and historical final flags.
+    return remainder === 0 ? length : remainder;
   }
 
   // Preserve a saved position only when there is no cumulative visit count

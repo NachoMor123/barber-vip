@@ -731,7 +731,7 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (!customerSnap.exists() || customerSnap.data().active === false) {
         throw fail('El cliente ya no está activo. Actualizá la lista y volvé a intentarlo.', 404);
       }
-      const fresh = { uid: id, ...customerSnap.data() };
+      const fresh = { ...customerSnap.data(), uid: id };
       const oldNormalized = fresh.usernameNormalized || normalizeName(fresh.fullName);
       const newNormalized = requestedName === null ? oldNormalized : normalizeName(requestedName);
       const oldWhatsapp = normalizePhone(fresh.whatsapp);
@@ -891,6 +891,12 @@ export function createSparkApi({ firebaseConfig, state }) {
     return { ok: true, customer: resultCustomer, message };
   }
 
+  function customerFromSnapshot(item) {
+    // Firestore's document path is authoritative; never let a stored `uid` redirect a visit.
+    const data = item.data() || {};
+    return { ...data, uid: item.id };
+  }
+
     async function listCustomers(data = {}) {
     const uid = currentUid();
     const ref = collection(db(), 'barbers', uid, 'customers');
@@ -915,7 +921,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     const pageDocs = snap.docs.slice(0, pageSize);
     const hasMore = snap.docs.length > pageSize;
     const customers = pageDocs.map(item => {
-      const customer = { uid: item.id, ...item.data() };
+      const customer = customerFromSnapshot(item);
       delete customer.isOnline;
       delete customer.lastSeenAt;
       delete customer.lastConnectedAt;
@@ -974,7 +980,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     constraints.push(limit(pageSize));
     const snap = await getDocs(query(customersRef, ...constraints));
     const customers = snap.docs.map(item => {
-      const customer = { uid: item.id, ...item.data() };
+      const customer = customerFromSnapshot(item);
       delete customer.isOnline;
       delete customer.lastSeenAt;
       delete customer.lastConnectedAt;

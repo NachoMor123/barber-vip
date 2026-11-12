@@ -15,9 +15,12 @@ function labelForDiscount(discount) {
 }
 function actualVisitCount(customer = {}) {
   const credits = nonNegative(customer.referralCreditsReceived);
-  return hasNumber(customer.actualCutsRegistered)
+  const recorded = hasNumber(customer.actualCutsRegistered)
     ? nonNegative(customer.actualCutsRegistered)
-    : Math.max(0, nonNegative(customer.totalCuts) - credits);
+    : 0;
+  const inferredFromTotal = Math.max(0, nonNegative(customer.totalCuts) - credits);
+  // Recover an auxiliary counter that fell behind the cumulative visit total.
+  return Math.max(recorded, inferredFromTotal);
 }
 
 /**
@@ -54,23 +57,29 @@ export function loyaltyCycleLength(rewards = DEFAULT_LOYALTY_REWARDS) {
  */
 export function loyaltyCycleCount(customer = {}, rewards = DEFAULT_LOYALTY_REWARDS) {
   const length = loyaltyCycleLength(rewards);
+  const actual = actualVisitCount(customer);
+  const remainder = actual % length;
   const version = hasNumber(customer.cycleVersion) ? Number(customer.cycleVersion) : 0;
-  const savedCycle = hasNumber(customer.cycleCuts) ? Math.max(0, Number(customer.cycleCuts)) : null;
-  if (version >= 2 && savedCycle !== null) {
-    const current = Math.min(length, savedCycle);
-    const actualRemainder = actualVisitCount(customer) % length;
-    // Recover a stale zero cursor when historical final markers contradict
-    // the monotonic actual-visit counter.
-    if (current === 0 && (
-      customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true
-    )) return actualRemainder === 0 ? length : actualRemainder;
-    return current;
-  }
-  if (customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true) return length;
+  const savedCycle = hasNumber(customer.cycleCuts) ? Math.max(0, Math.min(length, Number(customer.cycleCuts))) : null;
 
-  // Legacy records derive progress from real visits. Historical reward arrays
-  // and auxiliary flags must not override the actual visit count.
-  return actualVisitCount(customer) % length;
+  // The cumulative count of real visits is the reliable cycle position.
+  // Old cycle cursors/flags may disagree after earlier buggy releases.
+  if (actual > 0) {
+    if (remainder === 0 && (
+      customer.lastRewardAppliedOnFinalMilestone === true
+      || customer.cyclePausedAtMax === true
+      || Number(customer.lastRewardAppliedCut || 0) >= length
+      || (version >= 2 && savedCycle === 0)
+      || (version >= 2 && savedCycle === length)
+    )) return length;
+    return remainder;
+  }
+
+  // Preserve a saved position only when there is no cumulative visit count
+  // from which to safely recover it (e.g. a partial legacy import).
+  if (version >= 2 && savedCycle !== null) return savedCycle;
+  if (customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true) return length;
+  return 0;
 }
 
 /**
@@ -99,16 +108,10 @@ export function calculateLoyaltyVisit(customer = {}, standardRewards = DEFAULT_L
   // field is behind due to records written by older versions.
   const nextTotal = Math.max(totalBefore, actualBefore + credits) + 1;
 
-  const version = hasNumber(customer.cycleVersion) ? Number(customer.cycleVersion) : 0;
-  const hasSavedCycle = hasNumber(customer.cycleCuts);
-  const actualRemainder = actualBefore % max;
-  const hasStaleFinalMarker = customer.lastRewardAppliedOnFinalMilestone === true || customer.cyclePausedAtMax === true;
-  const savedCursor = hasSavedCycle ? Math.max(0, Math.min(max, Number(customer.cycleCuts))) : null;
-  const cycleBefore = version >= 2 && savedCursor !== null
-    ? (savedCursor === 0 && hasStaleFinalMarker && actualRemainder !== 0 ? actualRemainder : savedCursor)
-    : actualRemainder;
-  const shouldRestart = cycleBefore >= max;
-  const cycleForVisit = shouldRestart ? 1 : Math.min(max, cycleBefore + 1);
+  // Always derive the next cycle visit from cumulative real visits.
+  // This repairs cycleCuts values left incorrect by earlier releases.
+  const cycleBefore = actualBefore % max;
+  const cycleForVisit = cycleBefore + 1;
   const appliedReward = rewards.find(reward => Number(reward.cut) === cycleForVisit) || null;
   const appliedOnFinalMilestone = Boolean(appliedReward && Number(appliedReward.cut) >= max);
   const cycleNext = appliedOnFinalMilestone ? 0 : cycleForVisit;

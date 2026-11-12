@@ -15,7 +15,7 @@ assert.ok(html.includes("api('/api/create-preference'"), "the app must request a
 assert.ok(html.includes("window.location.assign(checkoutUrl.href)"), "the app must redirect to the validated Mercado Pago URL");
 assert.ok(html.includes("Volviste desde Mercado Pago") && html.includes("no activa los 30 días por sí solo"), "the app must not treat a Checkout redirect as payment approval");
 assert.ok(html.includes("Estado sin verificar") && html.includes("No vamos a iniciar un cobro"), "missing subscription dates must not be mislabeled as expired or chargeable");
-assert.ok(html.includes("Tu prueba gratuita dura 7 días") && html.includes("no tiene días de gracia"), "trial copy must state its seven-day limit and lack of grace");
+assert.ok(html.includes("La prueba dura 7 días") && html.includes("no tiene período de gracia"), "trial copy must state its seven-day limit and lack of grace");
 assert.ok(html.includes("los 5 días de gracia terminaron"), "expired paid accounts must explain when access pauses");
 assert.ok(html.includes("function elapsedDurationText") && html.includes("function remainingDurationText"), "subscription countdowns must use precise minute, hour and day units");
 assert.ok(html.includes("function watchSubscriptionAfterPaymentReturn"), "a delayed payment webhook must be able to refresh the barber subscription without reloading customers");

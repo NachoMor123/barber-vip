@@ -14,6 +14,11 @@ assert.ok(html.includes('data-action="checkout"'), "subscription modal must expo
 assert.ok(html.includes("api('/api/create-preference'"), "the app must request a payment preference from the Worker");
 assert.ok(html.includes("window.location.assign(checkoutUrl.href)"), "the app must redirect to the validated Mercado Pago URL");
 assert.ok(html.includes("Volviste desde Mercado Pago") && html.includes("no activa los 30 días por sí solo"), "the app must not treat a Checkout redirect as payment approval");
+assert.ok(html.includes("Estado sin verificar") && html.includes("No vamos a iniciar un cobro"), "missing subscription dates must not be mislabeled as expired or chargeable");
+assert.ok(html.includes("Tu prueba gratuita dura 7 días") && html.includes("no tiene días de gracia"), "trial copy must state its seven-day limit and lack of grace");
+assert.ok(html.includes("los 5 días de gracia terminaron"), "expired paid accounts must explain when access pauses");
+assert.ok(html.includes("function elapsedDurationText") && html.includes("function remainingDurationText"), "subscription countdowns must use precise minute, hour and day units");
+assert.ok(html.includes("function watchSubscriptionAfterPaymentReturn"), "a delayed payment webhook must be able to refresh the barber subscription without reloading customers");
 assert.ok(html.includes("setPersistence(state.auth,browserLocalPersistence)"), "the app must persist the Firebase session across external Checkout navigation");
 const resumeSessionStart = html.indexOf("async function resumeSession(user)");
 const resumeSessionEnd = html.indexOf("async function signOutAndReturn()", resumeSessionStart);
@@ -35,7 +40,7 @@ assert.ok(worker.includes('status: partialRefund ? "partially_refunded" : "appro
 assert.ok(worker.includes('data.id') && worker.includes('validMercadoPagoSignature(request, paymentId, env.MP_WEBHOOK_SECRET)'), "webhook must verify the signed data.id query parameter");
 assert.ok(worker.includes('env.MP_ACCESS_TOKEN || !env.MP_WEBHOOK_SECRET'), "Checkout must be disabled if webhook signature verification is not configured");
 assert.ok(worker.includes('paymentCheckout/current'), "parallel checkout requests must reuse a single active preference");
-assert.ok(worker.includes('expiration_date_to: expiresAt.toISOString()'), "Checkout preferences must expire");
+assert.ok(worker.includes('expiration_date_from: new Date(now - 60_000).toISOString()') && worker.includes('expiration_date_to: expiresAt.toISOString()'), "Checkout preferences must have an explicit validity window");
 assert.ok(worker.includes('AbortSignal.timeout(15_000)'), "Mercado Pago requests must have bounded timeouts");
 assert.ok(worker.includes('Number(payment.transaction_amount) !== configuredPrice || payment.currency_id !== "ARS"'), "webhook must validate the price and currency against its stored preference");
 

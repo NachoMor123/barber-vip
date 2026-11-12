@@ -77,6 +77,15 @@ test("a stale final-reward marker cannot override a newer version-2 cycle cursor
   }), 6);
 });
 
+test("a zero cycle cursor with stale final flags recovers the actual visit position", () => {
+  const customer = {
+    cycleVersion: 2, cycleCuts: 0, lastRewardAppliedOnFinalMilestone: true,
+    cyclePausedAtMax: true, totalCuts: 9, actualCutsRegistered: 9
+  };
+  assert.equal(loyaltyCycleCount(customer), 3);
+  assert.equal(calculateLoyaltyVisit(customer).cycleForVisit, 4);
+});
+
 test("referral credits do not overwrite a valid version-2 cycle cursor", () => {
   const customer = {
     cycleVersion: 2, cycleCuts: 3, totalCuts: 17, actualCutsRegistered: 15,

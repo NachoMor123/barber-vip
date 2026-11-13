@@ -1454,7 +1454,7 @@
             :state.customerSearchResults;
           state.cutSearchResults=state.cutSearchResults.map(x=>x.uid===id?{...x,...result.customer,uid:id}:x);
           // lastCutAt changes the global order; apply the returned document locally.
-          // The transaction already advanced the directory revision, so avoid rereading page one.
+          // Visits update the local directory and do not bump its shared revision.
           applyCustomerVisitToDirectory(result.customer);
         }else if(result.customer&&result.duplicate){
           const mergeCustomer=customer=>customer.uid===id?{...customer,...result.customer,uid:id}:customer;

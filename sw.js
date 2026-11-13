@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barber-vip-shell-v91-firestore-search-read-reduction';
+const CACHE_NAME = 'barber-vip-shell-v92-avoid-repeat-visit-search';
 const APP_SHELL = ['/', '/index.html', '/profile-utils.js', '/loyalty-core.mjs', '/manifest.webmanifest', '/assets/icon-192.webp', '/assets/icon-512.png'];
 
 self.addEventListener('install', event => {

@@ -994,7 +994,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     };
     customerSearchCache.set(cacheKey, {
       ...result, customers: customers.map(customer => ({ ...customer })),
-      expiresAt: Date.now() + 30000
+      expiresAt: Date.now() + 5000
     });
     if (customerSearchCache.size > 250) customerSearchCache.delete(customerSearchCache.keys().next().value);
     return result;

@@ -1465,9 +1465,18 @@
         }
         toast(result.message||(result.duplicate?'La visita ya estaba registrada. No se sumó nuevamente.':'Visita registrada para '+c.fullName+'.'),'success');
         if($('#cutSearch',modalRoot)){
+          // The search order is by name/WhatsApp, neither changes after a visit.
+          // Reuse the updated results instead of issuing the same Firestore query again.
+          const updatedCutSearchResults=state.cutSearchResults.map(customer=>({...customer}));
           openCutModal();
           const search=$('#cutSearch',modalRoot);
-          if(search&&searchTerm){search.value=searchTerm;state.cutSearchTerm=searchTerm;void runCustomerSearch(searchTerm,'cut');}
+          if(search&&searchTerm){
+            search.value=searchTerm;
+            state.cutSearchTerm=searchTerm;
+            state.cutSearchResults=updatedCutSearchResults;
+            const holder=$('.cut-picker-list',modalRoot);
+            if(holder)holder.innerHTML=cutPickerResultsMarkup(state.cutSearchResults,subStatus().status==='suspended');
+          }
         }else modalRoot.innerHTML='';
         renderApp();
       }catch(error){

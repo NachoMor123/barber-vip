@@ -5,7 +5,12 @@
   "targets": {
     "barbervip-309dc": {
       "hosting": {
-        "app": ["barbervip-309dc"]
+        "app": [
+          "barbervip-309dc"
+        ],
+        "comercial": [
+          "barber-vip-comercial-309dc"
+        ]
       }
     }
   }

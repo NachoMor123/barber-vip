@@ -156,7 +156,7 @@ test("name and WhatsApp searches are prefix-based and capped at six matches", ()
   assert.match(search, /where\(field, '<='/);
   assert.match(search, /rawDigits\.length < requiredDigits/);
   assert.match(search, /normalizeName\(term\)\.length < 2/);
-  assert.match(search, /Date\.now\(\) \+ 30000/);
+  assert.match(search, /Date\.now\(\) \+ 5000/);
   assert.match(input, /term\.length>=2/);
   assert.match(input, /digits\.length<4/);
   assert.match(input, /setTimeout\(\(\)=>\{void runCustomerSearch\(term,'clients'\);\},650\)/);
@@ -178,6 +178,13 @@ test("a complete customer directory is searched locally and local pages do not q
   assert.match(run, /state\.customerSearchLocalResults=localResults/);
   assert.match(more, /Array\.isArray\(state\.customerSearchLocalResults\)/);
   assert.ok(more.indexOf("state.customerSearchLocalResults") < more.indexOf("api('/api/customers/search'"));
+});
+
+test("the visit picker reuses its current matches after a visit instead of querying again", () => {
+  const ui = functionBody(html, "async function addCut(id, button)", "function contactClient");
+  assert.match(ui, /const updatedCutSearchResults=state\.cutSearchResults\.map/);
+  assert.match(ui, /state\.cutSearchResults=updatedCutSearchResults/);
+  assert.doesNotMatch(ui, /runCustomerSearch\(searchTerm,'cut'\)/);
 });
 
 test("search and visit picker never read the full client collection", () => {
@@ -216,7 +223,7 @@ test("directory revisions carry a precise mutation descriptor for one-document s
   assert.match(create, /customerId: credential\.user\.uid/);
   assert.match(update, /changeType: 'upsert', customerId: id/);
   assert.match(remove, /changeType: "remove", customerId/);
-  assert.match(visit, /changeType: 'upsert', customerId: id/);
+  assert.doesNotMatch(visit, /customerDirectory|changeType: 'upsert'/);
   assert.match(migration, /changeType: 'refresh', customerId: ''/);
   assert.match(worker, /changeType: "upsert", customerId/);
   assert.match(worker, /"changeType", "customerId"/);
@@ -249,14 +256,18 @@ test("a visit updates the loaded directory locally without a redundant first-pag
   assert.match(visit, /transaction\.get\(customerRef\)/);
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /lastCutAt: now/);
-  assert.match(visit, /transaction\.set\(directoryRef,\s*\{\s*version: increment\(1\)/);
-  assert.match(visit, /changeType: 'upsert', customerId: id/);
+  assert.doesNotMatch(visit, /directoryRef|customerDirectory|transaction\.set\(/);
+  assert.doesNotMatch(visit, /customerDirectory|changeType: 'upsert'/);
   assert.doesNotMatch(visit, /rosterRef|customerRoster/);
-  assert.match(localUpdate, /applyCustomerUpsertToDirectory\(customer\)/);
+  assert.match(localUpdate, /applyCustomerUpsertToDirectory\(customer,\{directoryVersion:revision\}\)/);
+  assert.match(localUpdate, /const revision=Math\.max/);
   assert.match(merge, /compareCustomersByLastVisit/);
   assert.match(merge, /saveAdminCustomersCache\(\)/);
   assert.doesNotMatch(localUpdate, /ensureAdminCustomersLoaded|api\(['"]\/api\/customers\/list/);
   assert.match(ui, /applyCustomerVisitToDirectory\(result\.customer\)/);
+  assert.match(ui, /const updatedCutSearchResults=state\.cutSearchResults\.map/);
+  assert.match(ui, /state\.cutSearchResults=updatedCutSearchResults/);
+  assert.doesNotMatch(ui, /runCustomerSearch\(searchTerm,'cut'\)/);
   assert.doesNotMatch(ui, /markCustomerDirectoryChanged\(\{reorder:true\}\)/);
 });
 

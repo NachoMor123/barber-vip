@@ -49,5 +49,5 @@ test("a visit targets and returns the selected Firestore document, never a store
 test("the persistent directory cache and installed PWA cannot restore the previous identity mapping", () => {
   assert.match(html, /barberVipAdminCustomers:v7:/);
   assert.doesNotMatch(html, /barberVipAdminCustomers:v6:/);
-  assert.match(serviceWorker, /v91-firestore-search-read-reduction/);
+  assert.match(serviceWorker, /v92-skip-per-visit-directory-revision/);
 });

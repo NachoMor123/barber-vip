@@ -5,17 +5,46 @@ Barber VIP es una PWA de fidelización para profesionales independientes. La pla
 ## Proyecto y enlaces
 
 - Firebase: `barbervip-309dc`
-- Hosting previsto para la app: `https://barbervip-309dc.web.app`
-- Hosting comercial: `https://barber-vip-comercial-309dc.web.app`
+- Aplicación: `https://barbervip-309dc.web.app`
+- Sitio comercial: `https://barber-vip-comercial-309dc.web.app`
 - Backend auxiliar: `https://barber-vip.barbervip.workers.dev`
 
 No crear otro proyecto Firebase ni otra base de datos. Las cuentas, perfiles, clientes, visitas y pagos existentes se conservan.
 
+## Hosting separado
+
+El proyecto usa dos sitios de Firebase Hosting dentro del mismo proyecto Firebase:
+
+- `app`: sirve la PWA desde la raíz del repositorio.
+- `comercial`: sirve únicamente `web-comercial/`.
+
+Cada destino se despliega por separado. Publicar la página comercial no reemplaza ni modifica la app ni Firestore.
+
+Si el sitio comercial todavía no existe en Firebase, crealo una sola vez desde la raíz del repositorio:
+
+```bash
+firebase hosting:sites:create barber-vip-comercial-309dc --project barbervip-309dc
+```
+
+Los destinos `app` y `comercial` ya están declarados en `.firebaserc`. Para publicar exclusivamente la página comercial:
+
+```bash
+firebase deploy --only hosting:comercial --project barbervip-309dc
+```
+
+Para publicar exclusivamente la aplicación:
+
+```bash
+firebase deploy --only hosting:app --project barbervip-309dc
+```
+
+No uses `firebase deploy --only hosting` si solo querés actualizar uno de los sitios: ese comando publica todos los sitios configurados.
+
 ## Responsabilidades
 
 **Firebase Spark**
-- Firebase Hosting para la PWA.
-- Authentication para cuentas de profesionales y clientes.
+- Firebase Hosting para la PWA y el sitio comercial.
+- Firebase Authentication para cuentas de profesionales y clientes.
 - Firestore para perfiles, clientes, visitas, ciclos e hitos de beneficios, servicios y horarios.
 
 **Cloudflare Worker**
@@ -47,19 +76,13 @@ npm test
 npx wrangler deploy --dry-run
 ```
 
-Desde la raíz, para publicar reglas y Hosting en el proyecto existente:
+Antes de difundir los enlaces, verificar ambos sitios, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. El sitio comercial no debe usar dependencias ni endpoints de Vercel.
 
-```bash
-firebase login
-firebase use barbervip-309dc
-firebase deploy --only firestore:rules,hosting:app
-```
+## Cuotas gratuitas
 
-Antes de difundir el enlace de acceso, verificar el webhook de Mercado Pago, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. El acceso productivo queda en Firebase Hosting.
+Los límites de Firebase Hosting son compartidos por todos los sitios del proyecto: 10 GB de almacenamiento y 10 GB/mes de transferencia sin costo. Las cuotas no se multiplican por tener dos sitios. Revisar Firebase Console → Hosting → Usage. Si se llega al límite mensual de transferencia en Spark, los sitios pueden deshabilitarse hasta el siguiente ciclo.
 
-## Lecturas y cuotas
-
-La app evita listeners de presencia/última conexión y carga los clientes bajo demanda al abrir la sección correspondiente. Firestore Spark tiene cuotas limitadas: revisar Firebase Console → Firestore → Usage durante las pruebas y el uso inicial. No se promete una capacidad fija de cuentas sin medir lecturas, escrituras, almacenamiento y transferencia reales.
+Firestore también tiene cuotas gratuitas compartidas del proyecto. Revisar Firebase Console → Firestore → Usage durante las pruebas y el uso inicial.
 
 ## Pruebas automáticas
 

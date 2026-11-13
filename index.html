@@ -1893,10 +1893,7 @@
       return aId===bId?0:(aId>bId?-1:1);
     }
     function applyCustomerVisitToDirectory(customer){
-      // The visit transaction does not bump the shared directory revision anymore.
-      // Keep this session's known server revision while updating its local list/cache.
-      const revision=Math.max(0,Number(state.customersDirectoryVersion)||0,Number(state.customersCacheVersion)||0);
-      applyCustomerUpsertToDirectory(customer,{directoryVersion:revision});
+      applyCustomerUpsertToDirectory(customer);
     }
     function setAdminDirectoryVersion(version,{cacheCurrent=true}={}){
       const next=Math.max(0,Number(version)||0);

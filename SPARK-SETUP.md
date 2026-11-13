@@ -1,6 +1,6 @@
-# Puesta en marcha — Barber VIP híbrido (Firebase Spark + Cloudflare Workers)
+# Puesta en marcha — Barber VIP (Firebase Spark + Cloudflare Workers)
 
-Esta guía conserva el proyecto existente y publica la versión centrada en visitas y beneficios. La rama de integración debe superar las pruebas automáticas antes de fusionarse o desplegarse. No desactivar el frontend anterior hasta completar la validación funcional.
+Esta guía describe la arquitectura que se publica actualmente. La PWA y la web comercial están alojadas en Firebase Hosting; los datos continúan en el proyecto Firebase existente.
 
 ## 1. Conservar Firebase
 
@@ -9,7 +9,11 @@ Esta guía conserva el proyecto existente y publica la versión centrada en visi
 - No crear otra base de datos ni importar usuarios a otro proyecto.
 - No activar Blaze ni desplegar Cloud Functions.
 
-Hosting previsto para la app: `https://barbervip-309dc.web.app`. Confirmar que ese Site ID existe antes de publicar.
+Sitios de Firebase Hosting:
+- Aplicación: `barbervip-309dc` → https://barbervip-309dc.web.app
+- Web comercial: `barber-vip-comercial-309dc` → https://barber-vip-comercial-309dc.web.app
+
+Ambos sitios pertenecen al mismo proyecto Firebase. La web comercial publica sólo `web-comercial/`; la app publica la raíz del repositorio y excluye esa carpeta.
 
 ## 2. Cloudflare Worker
 
@@ -18,7 +22,7 @@ Seguir [worker/README.md](worker/README.md). El Worker necesita:
 - Secretos productivos de Mercado Pago: Access Token y secreto de firma del webhook.
 - Firebase Web API Key pública en `wrangler.jsonc`.
 
-No cargar claves VAPID; la aplicación ya no utiliza Push. El Worker puede seguir atendiendo los cobros y el cambio de contraseña sin VAPID.
+No cargar claves VAPID; la aplicación no utiliza Push. El Worker atiende las operaciones protegidas de clientes, la creación de preferencias de pago y el webhook.
 
 Desde `worker/`:
 
@@ -36,43 +40,52 @@ npx wrangler deploy
 
 Worker configurado: `https://barber-vip.barbervip.workers.dev`.
 
+Webhook productivo: `https://barber-vip.barbervip.workers.dev/api/mercadopago-webhook`.
+
 ## 3. Firebase Hosting
 
-En Firebase Console, proyecto `barbervip-309dc`:
-1. Abrir Hosting y confirmar el Site ID `barbervip-309dc`.
-2. En Authentication → Settings → Authorized domains, confirmar `barbervip-309dc.web.app`.
-3. No crear una nueva app Firebase ni una nueva base de Firestore.
+El proyecto usa dos destinos configurados en `.firebaserc` y `firebase.json`.
 
-Desde la raíz del repositorio:
+Desde la raíz del repositorio, para publicar únicamente la aplicación:
 
 ```bash
-firebase login
-firebase use barbervip-309dc
-firebase deploy --only firestore:rules,hosting:app
+firebase deploy --only hosting:app --project barbervip-309dc
 ```
 
-El sitio comercial se publica desde el repositorio separado `NachoMor123/barber-vip-web`.
+Para publicar únicamente la web comercial:
+
+```bash
+firebase deploy --only hosting:comercial --project barbervip-309dc
+```
+
+Para comprobar los sitios creados:
+
+```bash
+firebase hosting:sites:list --project barbervip-309dc
+```
+
+No uses `firebase deploy --only hosting` cuando sólo quieras actualizar uno de los dos sitios, porque publicaría ambos.
 
 ## 4. Mercado Pago
 
-- La pantalla de suscripción crea una preferencia autenticada de ARS 8.000.
+- La pantalla de suscripción crea una preferencia autenticada de ARS 8.000 a través del Worker.
 - El usuario es enviado al Checkout de Mercado Pago.
-- El webhook valida la firma, consulta el pago en la API de Mercado Pago y exige estado `approved`, importe ARS 8.000 y moneda `ARS`.
+- El webhook del Worker valida la firma, consulta el pago en la API de Mercado Pago y exige estado `approved`, importe ARS 8.000 y moneda `ARS`.
 - Se comprueba que el pago corresponda a una preferencia válida de esa cuenta y que su ID no se haya procesado anteriormente.
 - Un pago aprobado agrega 30 días. Si la suscripción estaba vencida, los 30 días parten de la aprobación; si estaba vigente, se extienden desde el vencimiento.
 - El período gratis es de 7 días sin gracia. Los 5 días de gracia se aplican sólo después de una suscripción paga.
 
-Mantener `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` exclusivamente como secretos del Worker. No sustituirlos por credenciales de prueba en el Worker productivo.
+Mantener `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` exclusivamente como secretos de Cloudflare Worker. No sustituirlos por credenciales de prueba en producción.
 
 ## 5. Programa de visitas
 
 - El panel crea clientes y registra sus visitas.
-- Los hitos de beneficios son 2, 4 y 6; cada visita queda vinculada al UID del cliente dentro de la barbería correspondiente.
+- Los hitos de beneficios son 2, 4 y 6; cada visita actualiza el registro del cliente correcto dentro de la barbería correspondiente.
 - La tarjeta del cliente lee su propio perfil y los datos profesionales públicos.
 - El selector del panel ordena clientes por total de visitas o por la fecha de su última visita.
-- Las sesiones y cachés deben conservar separación por cliente y profesional incluso cuando varias cuentas se usen en un mismo teléfono.
+- Las sesiones y cachés conservan separación por cliente y profesional incluso cuando varias cuentas se usan en un mismo teléfono.
 
-No hay sistema de promociones comerciales ni notificaciones Push. El service worker permanece para instalación y caché/offline de la PWA.
+La aplicación no incluye promociones comerciales ni notificaciones Push. El service worker permanece para instalación y caché/offline de la PWA.
 
 ## 6. Cambio de contraseña del cliente
 
@@ -84,23 +97,22 @@ Al guardar una nueva contraseña desde el panel:
 
 La contraseña no se guarda en Firestore ni en logs.
 
-## 7. Pruebas antes de reemplazar enlaces
+## 7. Comprobaciones de producción
 
-Usar un profesional de prueba y dos cuentas distintas de clientes:
-1. Login de profesional y clientes con credenciales existentes.
-2. Alta de cliente, autorregistro por código y edición.
-3. Registro de visitas y premios en hitos 2/4/6.
-4. Dos cuentas de cliente en el mismo navegador/teléfono sin mezcla de tarjetas o sesiones.
-5. Checkout de prueba, pago aprobado, webhook y 30 días añadidos.
-6. Reenvío del mismo webhook sin duplicar renovación.
-7. Cambio de contraseña y acceso con la nueva.
-8. Rechazo de un intento de cambiar la contraseña de un cliente de otro profesional.
-9. Revisión de Workers Analytics y Firebase Usage.
+Después de publicar, comprobar:
+1. La web comercial carga en `barber-vip-comercial-309dc.web.app`.
+2. El botón de prueba gratuita abre `barbervip-309dc.web.app/?signup=1`.
+3. El botón de acceso abre `barbervip-309dc.web.app`.
+4. La aplicación permite entrar con cuentas existentes de profesionales y clientes.
+5. Alta, búsqueda, visitas, hitos 2/4/6 y beneficios individuales funcionan.
+6. Checkout y webhook se completan mediante Cloudflare Worker.
+7. Un cliente no puede consultar la tarjeta de otro cliente.
+8. Firebase Usage y Workers Analytics muestran actividad dentro de las cuotas.
 
-## 8. Enlaces
+## 8. Enlaces oficiales
 
-- Frontend Vercel anterior: `https://barber-vip-three.vercel.app/`.
-- App Firebase prevista: `https://barbervip-309dc.web.app/`.
-- Web comercial: `https://barber-vip-comercial-309dc.web.app/`.
+- Aplicación: https://barbervip-309dc.web.app/
+- Web comercial: https://barber-vip-comercial-309dc.web.app/
+- Cloudflare Worker: https://barber-vip.barbervip.workers.dev/
 
-Mantener el frontend anterior disponible hasta que todas las pruebas funcionales estén aprobadas. Cambiar QR, enlaces de invitación y difusión sólo al final.
+La arquitectura productiva no requiere Vercel. Los proyectos antiguos de Vercel se pueden retirar una vez comprobados los enlaces, el alta, el acceso y el flujo de pagos en estos destinos.

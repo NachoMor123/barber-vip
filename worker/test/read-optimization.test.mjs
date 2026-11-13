@@ -156,12 +156,28 @@ test("name and WhatsApp searches are prefix-based and capped at six matches", ()
   assert.match(search, /where\(field, '<='/);
   assert.match(search, /rawDigits\.length < requiredDigits/);
   assert.match(search, /normalizeName\(term\)\.length < 2/);
-  assert.match(search, /Date\.now\(\) \+ 5000/);
+  assert.match(search, /Date\.now\(\) \+ 30000/);
   assert.match(input, /term\.length>=2/);
   assert.match(input, /digits\.length<4/);
-  assert.match(input, /setTimeout\(\(\)=>\{void runCustomerSearch\(term,'clients'\);\},350\)/);
+  assert.match(input, /setTimeout\(\(\)=>\{void runCustomerSearch\(term,'clients'\);\},650\)/);
+  const cutModal = functionBody(html, "function openCutModal()", "async function saveCustomerForm");
+  assert.match(cutModal, /setTimeout\(\(\)=>\{void runCustomerSearch\(term,'cut'\);\},650\)/);
   assert.match(html, /minDigits:isCut\?3:4/);
   assert.match(html, /minDigits:4/);
+});
+
+
+test("a complete customer directory is searched locally and local pages do not query Firestore", () => {
+  const localSearch = functionBody(html, "function searchLoadedCustomerDirectory", "async function runCustomerSearch");
+  const more = functionBody(html, "async function loadMoreCustomerSearch", "function searchLoadedCustomerDirectory");
+  const run = functionBody(html, "async function runCustomerSearch", "function sectionPreferenceKey");
+  assert.match(localSearch, /state\.customersLoaded/);
+  assert.match(localSearch, /state\.customersHasMore/);
+  assert.match(localSearch, /adminCustomersDirectoryRefreshPending/);
+  assert.match(run, /searchLoadedCustomerDirectory\(clean,numericOnly\)/);
+  assert.match(run, /state\.customerSearchLocalResults=localResults/);
+  assert.match(more, /Array\.isArray\(state\.customerSearchLocalResults\)/);
+  assert.ok(more.indexOf("state.customerSearchLocalResults") < more.indexOf("api('/api/customers/search'"));
 });
 
 test("search and visit picker never read the full client collection", () => {

@@ -223,7 +223,7 @@ test("directory revisions carry a precise mutation descriptor for one-document s
   assert.match(create, /customerId: credential\.user\.uid/);
   assert.match(update, /changeType: 'upsert', customerId: id/);
   assert.match(remove, /changeType: "remove", customerId/);
-  assert.doesNotMatch(visit, /customerDirectory|changeType: 'upsert'/);
+  assert.match(visit, /changeType: 'upsert', customerId: id/);
   assert.match(migration, /changeType: 'refresh', customerId: ''/);
   assert.match(worker, /changeType: "upsert", customerId/);
   assert.match(worker, /"changeType", "customerId"/);
@@ -256,11 +256,10 @@ test("a visit updates the loaded directory locally without a redundant first-pag
   assert.match(visit, /transaction\.get\(customerRef\)/);
   assert.match(visit, /transaction\.get\(barberRef\)/);
   assert.match(visit, /lastCutAt: now/);
-  assert.doesNotMatch(visit, /directoryRef|customerDirectory|transaction\.set\(/);
-  assert.doesNotMatch(visit, /customerDirectory|changeType: 'upsert'/);
+  assert.match(visit, /transaction\.set\(directoryRef,\s*\{\s*version: increment\(1\)/);
+  assert.match(visit, /changeType: 'upsert', customerId: id/);
   assert.doesNotMatch(visit, /rosterRef|customerRoster/);
-  assert.match(localUpdate, /applyCustomerUpsertToDirectory\(customer,\{directoryVersion:revision\}\)/);
-  assert.match(localUpdate, /const revision=Math\.max/);
+  assert.match(localUpdate, /applyCustomerUpsertToDirectory\(customer\)/);
   assert.match(merge, /compareCustomersByLastVisit/);
   assert.match(merge, /saveAdminCustomersCache\(\)/);
   assert.doesNotMatch(localUpdate, /ensureAdminCustomersLoaded|api\(['"]\/api\/customers\/list/);

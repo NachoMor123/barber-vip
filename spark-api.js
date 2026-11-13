@@ -833,7 +833,6 @@ export function createSparkApi({ firebaseConfig, state }) {
     const operationId = cleanText(data.operationId, 100) || crypto.randomUUID();
     const customerRef = doc(db(), 'barbers', uid, 'customers', id);
     const barberRef = doc(db(), 'barbers', uid);
-    const directoryRef = doc(db(), 'barbers', uid, 'customerDirectory', 'state');
     let resultCustomer = null;
     let outcome = { appliedReward: null, cycleReset: false };
 
@@ -866,9 +865,6 @@ export function createSparkApi({ firebaseConfig, state }) {
         updatedAt: now
       };
       transaction.update(customerRef, updates);
-      transaction.set(directoryRef, {
-        version: increment(1), updatedAt: serverTimestamp(), changeType: 'upsert', customerId: id
-      }, { merge: true });
       resultCustomer = {
         ...customer, ...updates, uid: id,
         loyaltyProgramId: customer.loyaltyProgramId || standard.id,
@@ -994,7 +990,7 @@ export function createSparkApi({ firebaseConfig, state }) {
     };
     customerSearchCache.set(cacheKey, {
       ...result, customers: customers.map(customer => ({ ...customer })),
-      expiresAt: Date.now() + 30000
+      expiresAt: Date.now() + 5000
     });
     if (customerSearchCache.size > 250) customerSearchCache.delete(customerSearchCache.keys().next().value);
     return result;

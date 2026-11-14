@@ -1334,7 +1334,7 @@ async function notifyNewBarberRegistration(request, env) {
   }
 
   const displayName = String(user.displayName || user.email.split("@")[0])
-    .trim().replace(/\\s+/g, " ").slice(0, 80);
+    .trim().replace(/\s+/g, " ").slice(0, 80);
   const registeredAt = new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Mendoza",
     day: "2-digit", month: "2-digit", year: "numeric",
@@ -1349,7 +1349,7 @@ async function notifyNewBarberRegistration(request, env) {
     "Plan: Prueba gratuita · 7 días",
     "",
     "¡Una nueva persona se sumó a Barber VIP!"
-  ].join("\\n");
+  ].join("\n");
 
   try {
     const response = await fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {

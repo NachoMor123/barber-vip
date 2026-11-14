@@ -252,7 +252,12 @@ async function verifyFirebaseToken(env, request) {
   const result = await response.json().catch(() => ({}));
   const user = result.users && result.users[0];
   if (!response.ok || !user || user.disabled) throw Object.assign(new Error("La sesión no es válida o venció. Volvé a ingresar."), { status: 401 });
-  return { uid: user.localId, email: user.email || "" };
+  return {
+    uid: user.localId,
+    email: user.email || "",
+    displayName: user.displayName || "",
+    createdAt: Number(user.createdAt || 0)
+  };
 }
 async function requireBarber(env, request, checkPlan = true) {
   const user = await verifyFirebaseToken(env, request);
@@ -1294,6 +1299,79 @@ async function deleteCustomerAccount(request, env) {
   throw Object.assign(new Error("No se pudo confirmar el borrado definitivo. Volvé a intentarlo."), { status: 502 });
 }
 
+const recentSignupNotifications = new Map();
+const NEW_BARBER_NOTIFICATION_WINDOW_MS = 30 * 60 * 1000;
+
+async function notifyNewBarberRegistration(request, env) {
+  const user = await verifyFirebaseToken(env, request);
+  const createdAt = Number(user.createdAt || 0);
+  const ageMs = Date.now() - createdAt;
+
+  // Only send for a newly created, real-email account. Customer accounts use
+  // the internal @accounts.barbervip.app address and must never trigger this.
+  if (!Number.isFinite(createdAt) || createdAt <= 0
+    || ageMs < -60_000 || ageMs > NEW_BARBER_NOTIFICATION_WINDOW_MS
+    || !user.email || user.email.toLowerCase().endsWith("@accounts.barbervip.app")) {
+    return json({ ok: true, sent: false, ignored: true }, 200, corsHeaders(request, env));
+  }
+
+  const botToken = String(env.TELEGRAM_BOT_TOKEN || "").trim();
+  const chatId = String(env.TELEGRAM_CHAT_ID || "").trim();
+  if (!botToken || !chatId) {
+    throw Object.assign(new Error("Las notificaciones privadas no están configuradas."), { status: 503 });
+  }
+
+  const now = Date.now();
+  const duplicateExpiry = recentSignupNotifications.get(user.uid) || 0;
+  if (duplicateExpiry > now) {
+    return json({ ok: true, sent: false, duplicate: true }, 200, corsHeaders(request, env));
+  }
+  recentSignupNotifications.set(user.uid, now + 24 * 60 * 60 * 1000);
+  if (recentSignupNotifications.size > 1000) {
+    for (const [uid, expiry] of recentSignupNotifications) {
+      if (expiry <= now || recentSignupNotifications.size > 900) recentSignupNotifications.delete(uid);
+    }
+  }
+
+  const displayName = String(user.displayName || user.email.split("@")[0])
+    .trim().replace(/\s+/g, " ").slice(0, 80);
+  const registeredAt = new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Mendoza",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  }).format(new Date(createdAt));
+  const message = [
+    "🎉 NUEVO BARBER REGISTRADO",
+    "",
+    "Nombre: " + displayName,
+    "Correo: " + String(user.email).slice(0, 254),
+    "Fecha: " + registeredAt,
+    "Plan: Prueba gratuita · 7 días",
+    "",
+    "¡Una nueva persona se sumó a Barber VIP!"
+  ].join("\n");
+
+  try {
+    const response = await fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: message, disable_web_page_preview: true }),
+      signal: AbortSignal.timeout(8_000)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok !== true) {
+      throw new Error("Telegram rechazó el mensaje.");
+    }
+  } catch (error) {
+    recentSignupNotifications.delete(user.uid);
+    throw Object.assign(new Error("No se pudo enviar el aviso privado a Telegram."), {
+      status: 502, cause: error
+    });
+  }
+
+  return json({ ok: true, sent: true }, 200, corsHeaders(request, env));
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -1303,8 +1381,12 @@ async function route(request, env) {
       configured: {
         firebase: Boolean(env.FIREBASE_SERVICE_ACCOUNT_JSON && env.FIREBASE_WEB_API_KEY),
         mercadoPago: Boolean(env.MP_ACCESS_TOKEN && env.MP_WEBHOOK_SECRET),
+        telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
       }
     }, 200, corsHeaders(request, env));
+  }
+  if (path === "/api/new-barber-notification" && request.method === "POST") {
+    return notifyNewBarberRegistration(request, env);
   }
   if (path === "/api/mercadopago-webhook" && ["POST", "GET"].includes(request.method)) return handleMercadoPagoWebhook(request, env);
   if (path === "/api/create-preference" && request.method === "POST") {

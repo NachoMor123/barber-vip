@@ -1007,6 +1007,9 @@ export function createSparkApi({ firebaseConfig, state }) {
     const method = String(options.method || 'GET').toUpperCase();
     const data = bodyOf(options);
     try {
+      if (path === '/api/new-barber-notification' && method === 'POST') {
+        return await workerRequest('/api/new-barber-notification', { method: 'POST', body: data });
+      }
       if (path === '/api/me' && method === 'GET') return await getMe();
       if (path === '/api/profile' && method === 'POST') return await ensureBarberProfile(data);
       if (path === '/api/profile' && method === 'PUT') return await saveProfile(data);

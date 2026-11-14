@@ -3036,11 +3036,8 @@
             await api('/api/profile',{method:'POST',body:JSON.stringify({action:'ensure',displayName})});
             const me=await api('/api/me');
             // Private owner notification is best-effort and must never block signup.
-            try {
-              await api('/api/new-barber-notification',{method:'POST',body:JSON.stringify({})});
-            } catch(notificationError) {
-              console.warn('[Barber VIP] No se pudo enviar el aviso privado de nuevo registro:',notificationError?.message||notificationError);
-            }
+            void api('/api/new-barber-notification',{method:'POST',body:JSON.stringify({})})
+              .catch(notificationError=>console.warn('[Barber VIP] No se pudo enviar el aviso privado de nuevo registro:',notificationError?.message||notificationError));
             state.pendingSignup=null;
             await loadContext(me);
             state.manualLogin=false;

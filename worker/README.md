@@ -22,7 +22,11 @@ Desde `worker/`, cargar los secretos privados:
 npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 npx wrangler secret put MP_ACCESS_TOKEN
 npx wrangler secret put MP_WEBHOOK_SECRET
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_CHAT_ID
 ```
+
+Telegram se usa únicamente para avisarte cuando termina correctamente el alta de un barbero. El Worker verifica el ID token y la fecha de creación de Firebase Authentication y envía el mensaje directamente a Telegram; este aviso no consulta ni escribe Firestore. Las altas de clientes quedan excluidas. El token del bot y el ID del chat se guardan como secretos de Cloudflare, nunca en GitHub.
 
 `FIREBASE_SERVICE_ACCOUNT_JSON` es el contenido completo del JSON de la cuenta de servicio, no una ruta. `FIREBASE_WEB_API_KEY` es la clave pública de configuración web de Firebase y está declarada en `wrangler.jsonc`.
 
@@ -46,7 +50,7 @@ npm test
 npx wrangler deploy --dry-run
 ```
 
-El Worker expone `GET /health`; la respuesta informa si Firebase y Mercado Pago están configurados. El despliegue real se realiza sólo después de que las pruebas pasen:
+El Worker expone `GET /health`; la respuesta informa si Firebase, Mercado Pago y Telegram están configurados. El despliegue real se realiza sólo después de que las pruebas pasen:
 
 ```bash
 npx wrangler deploy

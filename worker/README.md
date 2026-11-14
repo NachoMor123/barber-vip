@@ -72,7 +72,8 @@ Webhook de Mercado Pago: `https://barber-vip.barbervip.workers.dev/api/mercadopa
 8. Reenviar el mismo webhook y comprobar que no extiende el período por segunda vez.
 9. Cambiar la contraseña de un cliente y comprobar que puede ingresar con la nueva.
 10. Verificar que un profesional no pueda cambiar la contraseña de un cliente de otro profesional.
-11. Revisar Cloudflare Workers Analytics y Firebase Usage.
+11. Registrar un barbero nuevo y comprobar que llega el aviso privado a Telegram; verificar que el alta de un cliente no envíe avisos.
+12. Revisar Cloudflare Workers Analytics y Firebase Usage.
 
 ## Migración de alarmas retiradas
 

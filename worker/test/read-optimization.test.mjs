@@ -311,7 +311,7 @@ test("stale cycle flags cannot pin the barber or customer card at the final mile
 });
 
 test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v90-customer-document-id-authority/);
+  assert.match(serviceWorker, /barber-vip-shell-v92-avoid-repeat-visit-search/);
   assert.match(serviceWorker, /loyalty-core\.mjs/);
   assert.match(packageWorkflow, /loyalty-core\.mjs/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
@@ -403,7 +403,7 @@ test("phone uniqueness indexes are private to the owning barber", () => {
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {
   const update = functionBody(api, "async function updateCustomer(data)", "async function deleteCustomer(data)");
-  assert.match(update, /const fresh = \\{ \\.\\.\\.customerSnap\\.data\\(\\), uid: id \\}/);
+  assert.ok(update.includes("const fresh = { ...customerSnap.data(), uid: id }"));
   assert.match(update, /transaction\.update\(customerRef, updates\)/);
   assert.doesNotMatch(update, /totalCuts\s*[:,=]|cycleCuts\s*[:,=]|actualCutsRegistered\s*[:,=]/);
 });

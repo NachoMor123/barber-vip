@@ -408,6 +408,12 @@ test("customer identity changes cannot overwrite visit counters or cycle history
   assert.doesNotMatch(update, /totalCuts\s*[:,=]|cycleCuts\s*[:,=]|actualCutsRegistered\s*[:,=]/);
 });
 
+test("late Mercado Pago approvals cannot override a recorded refund or chargeback", () => {
+  const webhook = functionBody(worker, "async function handleMercadoPagoWebhook", "async function resetCustomerPassword");
+  assert.ok(webhook.includes("isFinalPaymentReversal(paymentDoc.data.status)"));
+  assert.ok(webhook.includes("reason: \"payment-already-reversed\""));
+});
+
 test("suspended accounts show the subscription reason instead of asking users to sign in again", () => {
   const requestHandler = functionBody(api, "const apiRequest = async function api", "async function saveBarberPreferences");
   assert.ok(requestHandler.includes("subscription(state.barber || {})"));

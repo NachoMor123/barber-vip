@@ -809,6 +809,10 @@ async function previousValidSubscriptionSnapshot(env, barberUid, snapshot, depth
   return previousValidSubscriptionSnapshot(env, barberUid, priorPayment.data.previousSubscription, depth + 1);
 }
 
+function isFinalPaymentReversal(status) {
+  return ["refunded", "charged_back"].includes(String(status || ""));
+}
+
 function paymentStatusFields(payment, preference, now = new Date()) {
   return {
     paymentId: String(payment.id),
@@ -883,6 +887,13 @@ async function handleMercadoPagoWebhook(request, env) {
   const statusDetail = String(payment.status_detail || "");
   const now = new Date();
   const basePaymentFields = paymentStatusFields(payment, preference, now);
+
+  // Webhook deliveries can be retried or arrive out of order. Once a refund or
+  // chargeback has been recorded, a late "approved" event must never reactivate
+  // the entitlement that the reversal removed.
+  if (paymentDoc && isFinalPaymentReversal(paymentDoc.data.status) && !isFinalPaymentReversal(status)) {
+    return json({ ok: true, received: true, ignored: true, reason: "payment-already-reversed" });
+  }
 
   if (["refunded", "charged_back"].includes(status)) {
     if (!paymentDoc) {
@@ -1418,7 +1429,7 @@ export default {
 
 export {
   renewalExpiry, planCanOperate, subscriptionStatus, safeEqual,
-  validMercadoPagoSignature, encodeValue, decodeValue,
+  validMercadoPagoSignature, isFinalPaymentReversal, encodeValue, decodeValue,
   originAllowed, frontendReturnOrigin,
   normalizeCustomerSignupName, normalizeCustomerWhatsapp, customerDirectoryUpsertFields
 };

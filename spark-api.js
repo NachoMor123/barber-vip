@@ -1026,9 +1026,25 @@ export function createSparkApi({ firebaseConfig, state }) {
       if (path === '/api/create-preference' && method === 'POST') return await workerRequest('/api/create-preference', { method: 'POST', body: data });
       throw fail('La operación solicitada no está disponible en el plan gratuito.', 404);
     } catch (error) {
+      if (error?.code === 'unauthenticated' || error?.code === 'auth/id-token-expired' || error?.code === 'auth/user-token-expired') {
+        throw fail('Tu sesión venció. Volvé a ingresar para continuar.', 401);
+      }
       if (error?.code === 'permission-denied') {
         console.error('[Barber VIP] Firestore permission-denied', { path, method, message: error.message });
-        throw fail('No se pudo completar la acción. Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte.', 403);
+        const authenticatedUid = String(state.auth?.currentUser?.uid || '');
+        if (state.role === 'barber' && authenticatedUid && String(state.barberUid || '') === authenticatedUid) {
+          const access = subscription(state.barber || {});
+          if (access.status === 'suspended') {
+            if (!access.expiresAt) {
+              throw fail('No pudimos verificar el estado de tu cuenta. Actualizá Barber VIP y volvé a revisar antes de guardar cambios.', 409);
+            }
+            if (access.trialEnded) {
+              throw fail('Tu prueba gratuita terminó y tu cuenta está suspendida. Para continuar, activá el plan desde Configuración.', 402);
+            }
+            throw fail('Tu plan está vencido y terminó el período de gracia. Tu cuenta está suspendida. Renovalo desde Configuración para continuar.', 402);
+          }
+        }
+        throw fail('La sesión sigue activa, pero no tenés permisos para realizar esta acción. No hace falta cerrar sesión. Revisá el acceso de la cuenta o contactá al soporte si el problema continúa.', 403);
       }
       if (error?.code === 'unavailable' || error?.code === 'deadline-exceeded' || error?.code === 'auth/network-request-failed') {
         throw Object.assign(fail('No se pudo conectar con el servicio. Revisá tu conexión y volvé a intentar.', 503), { retryable: true });

@@ -403,9 +403,17 @@ test("phone uniqueness indexes are private to the owning barber", () => {
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {
   const update = functionBody(api, "async function updateCustomer(data)", "async function deleteCustomer(data)");
-  assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
+  assert.match(update, /const fresh = \\{ \\.\\.\\.customerSnap\\.data\\(\\), uid: id \\}/);
   assert.match(update, /transaction\.update\(customerRef, updates\)/);
   assert.doesNotMatch(update, /totalCuts\s*[:,=]|cycleCuts\s*[:,=]|actualCutsRegistered\s*[:,=]/);
+});
+
+test("suspended accounts show the subscription reason instead of asking users to sign in again", () => {
+  const requestHandler = functionBody(api, "const apiRequest = async function api", "async function saveBarberPreferences");
+  assert.match(requestHandler, /subscription\\(state\\.barber \\|\\| \\{\\}\\)/);
+  assert.match(requestHandler, /Tu prueba gratuita terminó y tu cuenta está suspendida/);
+  assert.match(requestHandler, /Tu plan está vencido y terminó el período de gracia/);
+  assert.doesNotMatch(requestHandler, /Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte/);
 });
 
 test("customer card listener remains scoped to the signed-in customer's UID and barber", () => {

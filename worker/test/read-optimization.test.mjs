@@ -311,7 +311,7 @@ test("stale cycle flags cannot pin the barber or customer card at the final mile
 });
 
 test("PWA shell and production package cache the shared loyalty rules without shipping roster code or stale indexes", async () => {
-  assert.match(serviceWorker, /v90-customer-document-id-authority/);
+  assert.match(serviceWorker, /barber-vip-shell-v93-suspended-account-messaging/);
   assert.match(serviceWorker, /loyalty-core\.mjs/);
   assert.match(packageWorkflow, /loyalty-core\.mjs/);
   assert.doesNotMatch(serviceWorker, /customer-roster\.js|customerRoster/);
@@ -403,9 +403,23 @@ test("phone uniqueness indexes are private to the owning barber", () => {
 
 test("customer identity changes cannot overwrite visit counters or cycle history", () => {
   const update = functionBody(api, "async function updateCustomer(data)", "async function deleteCustomer(data)");
-  assert.match(update, /const fresh = \{ uid: id, \.\.\.customerSnap\.data\(\) \}/);
+  assert.ok(update.includes("const fresh = { ...customerSnap.data(), uid: id }"));
   assert.match(update, /transaction\.update\(customerRef, updates\)/);
   assert.doesNotMatch(update, /totalCuts\s*[:,=]|cycleCuts\s*[:,=]|actualCutsRegistered\s*[:,=]/);
+});
+
+test("late Mercado Pago approvals cannot override a recorded refund or chargeback", () => {
+  const webhook = functionBody(worker, "async function handleMercadoPagoWebhook", "async function resetCustomerPassword");
+  assert.ok(webhook.includes("isFinalPaymentReversal(paymentDoc.data.status)"));
+  assert.ok(webhook.includes("reason: \"payment-already-reversed\""));
+});
+
+test("suspended accounts show the subscription reason instead of asking users to sign in again", () => {
+  const requestHandler = functionBody(api, "const apiRequest = async function api", "async function saveBarberPreferences");
+  assert.ok(requestHandler.includes("subscription(state.barber || {})"));
+  assert.match(requestHandler, /Tu prueba gratuita terminó y tu cuenta está suspendida/);
+  assert.match(requestHandler, /Tu plan está vencido y terminó el período de gracia/);
+  assert.doesNotMatch(requestHandler, /Cerrá sesión y volvé a ingresar; si continúa, contactá al soporte/);
 });
 
 test("customer card listener remains scoped to the signed-in customer's UID and barber", () => {

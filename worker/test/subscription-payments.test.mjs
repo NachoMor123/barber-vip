@@ -5,7 +5,8 @@ import {
   renewalExpiry,
   planCanOperate,
   subscriptionStatus,
-  validMercadoPagoSignature
+  validMercadoPagoSignature,
+  isFinalPaymentReversal
 } from "../src/index.js";
 
 const DAY = 86_400_000;
@@ -71,6 +72,13 @@ test("renewal after expiry starts at approval and a trial activation starts at a
   assert.equal(renewalExpiry(expired, approval, "renew").getTime(), approval.getTime() + 30 * DAY);
   const futureTrialExpiry = new Date(base.getTime() + 2 * DAY);
   assert.equal(renewalExpiry(futureTrialExpiry, approval, "skip-trial").getTime(), approval.getTime() + 30 * DAY);
+});
+
+test("a recorded refund or chargeback is terminal and cannot be reactivated by a late approval", () => {
+  assert.equal(isFinalPaymentReversal("refunded"), true);
+  assert.equal(isFinalPaymentReversal("charged_back"), true);
+  assert.equal(isFinalPaymentReversal("approved"), false);
+  assert.equal(isFinalPaymentReversal("pending"), false);
 });
 
 test("Mercado Pago signature uses data.id, x-request-id and the signed manifest", async () => {

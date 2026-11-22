@@ -11,34 +11,23 @@ Barber VIP es una PWA de fidelización para profesionales independientes. La pla
 
 No crear otro proyecto Firebase ni otra base de datos. Las cuentas, perfiles, clientes, visitas y pagos existentes se conservan.
 
-## Hosting separado
+## Hosting separado y única fuente comercial
 
 El proyecto usa dos sitios de Firebase Hosting dentro del mismo proyecto Firebase:
 
 - `app`: sirve la PWA desde la raíz del repositorio.
-- `comercial`: sirve únicamente `web-comercial/`.
+- `comercial`: sirve exclusivamente `web-comercial/`. **Esta carpeta es la única fuente de producción de la web comercial.** Mantiene el diseño azul aprobado, las dos capturas locales `vista-barbero.webp` y `vista-cliente.webp`, y el acceso desde Instagram a la PWA.
 
-Cada destino se despliega por separado. Publicar la página comercial no reemplaza ni modifica la app ni Firestore.
+El repositorio independiente `barber-vip-web` queda como copia histórica de diseño y recursos; **no se debe desplegar Firebase desde ese repositorio**. Ambos proyectos apuntaban al mismo Hosting Site y un deploy desde el repositorio equivocado podía reemplazar la landing publicada.
 
-Si el sitio comercial todavía no existe en Firebase, crealo una sola vez desde la raíz del repositorio:
-
-```bash
-firebase hosting:sites:create barber-vip-comercial-309dc --project barbervip-309dc
-```
-
-Los destinos `app` y `comercial` ya están declarados en `.firebaserc`. Para publicar exclusivamente la página comercial:
+Despliegue desde la raíz de este repositorio:
 
 ```bash
-firebase deploy --only hosting:comercial --project barbervip-309dc
+npx --yes firebase-tools@15.37.0 deploy --only hosting:app,hosting:comercial --project barbervip-309dc
 ```
 
-Para publicar exclusivamente la aplicación:
+Ese comando publica la PWA desde la raíz y la web comercial desde `web-comercial/`. Para publicar únicamente uno, usar `--only hosting:app` o `--only hosting:comercial`. No usar `firebase deploy --only hosting` sin targets porque publica todos los sitios configurados.
 
-```bash
-firebase deploy --only hosting:app --project barbervip-309dc
-```
-
-No uses `firebase deploy --only hosting` si solo querés actualizar uno de los sitios: ese comando publica todos los sitios configurados.
 
 ## Responsabilidades
 
@@ -66,17 +55,45 @@ El Worker no aloja la PWA ni reemplaza Firestore. Las claves privadas permanecen
 
 La aplicación no incluye promociones comerciales ni notificaciones Push. El service worker se mantiene para instalación PWA y caché/offline.
 
-## Validación y despliegue
+## Publicación de producción
 
-Desde la carpeta `worker/`:
+No alcanza con desplegar Firebase: el backend también se publica en Cloudflare. El orden de release es:
+
+**1. Validar la aplicación y el Worker.** Desde la raíz del repositorio:
 
 ```bash
-npm install
+npm install --no-save --no-package-lock
+npm test
+npm run test:rules
+cd worker
+npm install --no-save --no-package-lock
 npm test
 npx wrangler deploy --dry-run
+npx wrangler whoami
 ```
 
-Antes de difundir los enlaces, verificar ambos sitios, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. El sitio comercial no debe usar dependencias ni endpoints de Vercel.
+`wrangler whoami` debe mostrar la cuenta Cloudflare donde existe el Worker `barber-vip`. Si Wrangler pide iniciar sesión, ejecutar `npx wrangler login` y repetirlo. No pegar secretos en GitHub, el repositorio ni un chat.
+
+**2. Publicar el Worker.** Con las pruebas en verde y la cuenta correcta:
+
+```bash
+npx wrangler deploy
+```
+
+El despliegue conserva los Cloudflare Secrets existentes. Comprobar después `https://barber-vip.barbervip.workers.dev/health`: Firebase, Mercado Pago y Telegram deben informar `true` en `configured`. Si alguno figura `false`, cargar ese secreto desde la terminal con `npx wrangler secret put NOMBRE_DEL_SECRETO`; nunca compartir su valor.
+
+**3. Publicar los dos sitios Firebase.** Volver a la raíz del repositorio:
+
+```bash
+cd ..
+npx --yes firebase-tools@15.37.0 deploy --only hosting:app,hosting:comercial --project barbervip-309dc
+```
+
+La app se publica desde la raíz y el sitio comercial desde `web-comercial/`, incluyendo sus dos imágenes WebP.
+
+**4. Comprobación funcional antes de difundir el enlace.** Abrir ambos dominios en una ventana privada y probar inicio de sesión de barbero y cliente, alta de cliente, suma de visitas, hitos 2/4/6, cierre y nueva apertura de sesión, y dos cuentas de cliente diferentes en un mismo teléfono. Desde un enlace de Instagram, probar Android y iPhone: Android debe abrir la PWA si está instalada o caer al sitio web; iPhone debe indicar abrir en Safari. Hacer también una prueba controlada de Checkout y webhook de Mercado Pago antes de aceptar pagos reales.
+
+GitHub Actions valida los cambios y empaqueta el sitio comercial, pero no publica por sí solo el Worker ni Firebase Hosting. El sitio comercial no debe usar dependencias ni endpoints de Vercel.
 
 ## Cuotas gratuitas
 

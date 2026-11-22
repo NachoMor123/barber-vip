@@ -1,262 +1,393 @@
 <!doctype html>
 <html lang="es-AR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#080b14">
-  <meta name="description" content="Barber VIP: registrá las visitas de tus clientes y ayudalos a seguir su progreso con una tarjeta digital de fidelización.">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Barber VIP — Fidelización simple para barberos">
-  <meta property="og:description" content="Registrá visitas, seguí el progreso de tus clientes y definí tus propios descuentos.">
-  <meta property="og:url" content="https://barber-vip-comercial-309dc.web.app/">
-  <link rel="canonical" href="https://barber-vip-comercial-309dc.web.app/">
-  <link rel="icon" href="https://barbervip-309dc.web.app/icon.svg" type="image/svg+xml">
-  <title>Barber VIP — Fidelización para barberos independientes</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #080b14;
-      --panel: #11182a;
-      --panel2: #0d1322;
-      --line: #27334d;
-      --text: #f4f6ff;
-      --muted: #a6b2ca;
-      --blue: #5597ff;
-      --blue2: #2878ff;
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      background:
-        radial-gradient(ellipse at 18% 0, rgba(79,120,255,.16), transparent 35%),
-        radial-gradient(ellipse at 100% 34%, rgba(111,91,220,.10), transparent 30%),
-        var(--bg);
-      color: var(--text);
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.55;
-    }
-    a { color: inherit; text-decoration: none; }
-    .wrap { width: min(1080px, calc(100% - 40px)); margin: auto; }
-    .nav { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 0; }
-    .brand { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 850; letter-spacing: -.045em; }
-    .mark {
-      width: 35px; height: 35px; border: 2px solid var(--blue); border-radius: 11px;
-      display: grid; place-items: center; color: #dceaff; font-size: 19px;
-      box-shadow: inset 0 0 18px rgba(85,151,255,.18), 0 0 22px rgba(85,151,255,.14);
-    }
-    .nav-action { color: #c8d9f5; font-size: 13px; font-weight: 750; }
-    .nav-action:hover { color: white; }
-    .btn {
-      display: inline-flex; justify-content: center; align-items: center; gap: 8px;
-      min-height: 46px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 13px;
-      font-weight: 780; font-size: 13px; transition: transform .18s, filter .18s;
-    }
-    .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
-    .primary {
-      color: #fff; border-color: #6ca7ff;
-      background: linear-gradient(115deg, #347fff, #665ce8);
-      box-shadow: 0 9px 28px rgba(54,111,255,.2);
-    }
-    .quiet { background: rgba(255,255,255,.035); }
-    .hero {
-      padding: 62px 0 76px; display: grid; grid-template-columns: 1.12fr .88fr;
-      gap: 48px; align-items: center;
-    }
-    .eyebrow { text-transform: uppercase; letter-spacing: .16em; color: #83b5ff; font-weight: 850; font-size: 10px; }
-    h1 { font-size: clamp(40px, 5.7vw, 64px); line-height: 1.04; letter-spacing: -.065em; margin: 15px 0 18px; }
-    .gradient {
-      background: linear-gradient(100deg, #e8f0ff, #7eaeff 48%, #b7a5ff);
-      -webkit-background-clip: text; background-clip: text; color: transparent;
-    }
-    .lead { color: var(--muted); font-size: 17px; max-width: 570px; }
-    .actions { display: flex; gap: 11px; flex-wrap: wrap; margin-top: 25px; }
-    .note { color: #8794ad; font-size: 12px; margin-top: 13px; }
-    .mock {
-      border: 1px solid rgba(111,153,255,.30); border-radius: 25px; padding: 21px;
-      background: linear-gradient(145deg, rgba(23,32,55,.96), rgba(11,17,31,.98));
-      box-shadow: 0 25px 75px rgba(0,0,0,.45), 0 0 50px rgba(53,107,240,.07);
-    }
-    .mocktop { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 16px; color: var(--muted); font-size: 12px; }
-    .pill { color: #a9caff; border: 1px solid rgba(99,157,255,.38); border-radius: 99px; padding: 5px 9px; font-size: 10px; }
-    .metric { border: 1px solid var(--line); border-radius: 16px; padding: 17px; background: #090f1c; margin-bottom: 11px; }
-    .metric small { color: var(--muted); }
-    .metric strong { display: block; font-size: 31px; letter-spacing: -.04em; margin: 5px 0; }
-    .milestones { display: flex; gap: 8px; margin-top: 14px; }
-    .milestones span {
-      flex: 1; text-align: center; padding: 8px 4px; border: 1px solid #34476a;
-      border-radius: 10px; color: #b9c9e5; font-size: 11px;
-    }
-    .milestones span.done { border-color: #548eff; background: rgba(64,128,255,.18); color: #d9e7ff; }
-    .reward {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 14px; background: rgba(65,125,255,.09); border: 1px solid rgba(85,151,255,.28); border-radius: 15px;
-    }
-    .reward strong { font-size: 13px; }
-    .reward em { font-style: normal; color: #a9caff; font-weight: 850; font-size: 12px; }
-    .section { padding: 58px 0; border-top: 1px solid rgba(255,255,255,.07); }
-    .section h2 { font-size: clamp(27px, 3.8vw, 40px); line-height: 1.12; letter-spacing: -.05em; margin: 11px 0; }
-    .sub { color: var(--muted); max-width: 690px; }
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
-    .card {
-      border: 1px solid var(--line); border-radius: 18px; padding: 21px;
-      background: linear-gradient(145deg, var(--panel), var(--panel2));
-    }
-    .number { color: #86b7ff; font-size: 12px; font-weight: 900; letter-spacing: .12em; }
-    .card h3 { font-size: 17px; margin: 12px 0 7px; }
-    .card p { margin: 0; color: var(--muted); font-size: 13px; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
-    .step { border: 1px solid var(--line); border-radius: 17px; padding: 20px; color: var(--muted); background: rgba(14,20,35,.7); font-size: 13px; }
-    .step b { display: block; color: var(--text); margin: 9px 0 6px; font-size: 15px; }
-    .step-num { color: #8dbaff; font-size: 10px; font-weight: 900; letter-spacing: .14em; }
-    .price {
-      margin-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 25px;
-      padding: 27px; border-radius: 21px; border: 1px solid rgba(106,153,255,.36);
-      background: radial-gradient(ellipse at 90% 0, rgba(81,120,255,.18), transparent 52%), linear-gradient(135deg,#171d32,#0e1422);
-    }
-    .price h3 { margin: 0 0 5px; font-size: 22px; }
-    .price p { margin: 0; color: var(--muted); font-size: 13px; }
-    .price strong { display: block; font-size: 27px; letter-spacing: -.04em; white-space: nowrap; }
-    .price strong small { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
-    .faq-list { display: grid; gap: 10px; margin-top: 23px; max-width: 860px; }
-    .faq-item { border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, var(--panel), var(--panel2)); overflow: hidden; }
-    .faq-item summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 19px; color: var(--text); font-size: 14px; font-weight: 800; }
-    .faq-item summary::-webkit-details-marker { display: none; }
-    .faq-item summary::after { content: '+'; color: #8dbaff; font-size: 20px; line-height: 1; }
-    .faq-item[open] summary::after { content: '−'; }
-    .faq-item p { margin: 0; padding: 0 19px 18px; color: var(--muted); font-size: 13px; max-width: 790px; }
-    footer { padding: 25px 0; color: #8794ad; font-size: 11px; display: flex; justify-content: space-between; gap: 14px; }
-    @media (max-width: 800px) {
-      .hero { grid-template-columns: 1fr; padding: 42px 0 55px; gap: 30px; }
-      h1 { font-size: clamp(40px, 10vw, 57px); }
-      .cards, .steps { grid-template-columns: 1fr; }
-      .price { align-items: flex-start; flex-direction: column; }
-      .section { padding: 47px 0; }
-    }
-    @media (max-width: 430px) {
-      .wrap { width: calc(100% - 28px); }
-      .brand { font-size: 19px; }
-      .actions { display: grid; }
-      .btn { width: 100%; }
-      .mock { padding: 16px; }
-      footer { flex-direction: column; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { transition: none !important; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#02050f">
+<title>Barber VIP — Fidelización para barberos independientes</title>
+<meta name="description" content="Barber VIP: registrá las visitas de tus clientes, definí tus descuentos y hacé que vuelvan al sillón. Probalo 7 días gratis.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Barber VIP — Que el cliente de hoy sea el cliente de siempre">
+<meta property="og:description" content="Tarjeta digital de visitas con descuentos que definís vos. 7 días gratis.">
+<meta property="og:url" content="https://barber-vip-comercial-309dc.web.app/">
+<meta property="og:image" content="https://barber-vip-comercial-309dc.web.app/vista-cliente.webp">
+<link rel="canonical" href="https://barber-vip-comercial-309dc.web.app/">
+<link rel="icon" href="https://barbervip-309dc.web.app/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,800;1,900&family=DM+Sans:wght@400;500;700&display=swap">
+<link rel="preload" as="image" href="/vista-barbero.webp" type="image/webp">
+<link rel="preload" as="image" href="/vista-cliente.webp" type="image/webp">
+<script>document.documentElement.className="js"</script>
+<style>
+:root{
+  --bg:#02050f;--bg2:#06102b;--line:#16337a;--text:#f0f5ff;--muted:#9fb2dc;
+  --neon:#2e7bff;--cyan:#22e4ff;--white:#f4f8ff;
+  --d:"Barlow Condensed","Arial Narrow",Impact,sans-serif;
+  --b:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --pole:repeating-linear-gradient(-45deg,var(--neon) 0 14px,var(--white) 14px 28px,var(--cyan) 28px 42px,var(--white) 42px 56px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(ellipse at 50% -10%,#0a1e55,transparent 55%),var(--bg);color:var(--text);font:400 17px/1.6 var(--b);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::after{content:"";position:fixed;inset:0;z-index:50;pointer-events:none;opacity:.07;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;height:auto;display:block}
+p{margin:0}
+:focus-visible{outline:3px solid var(--cyan);outline-offset:3px;border-radius:8px}
+section,header{scroll-margin-top:70px}
+.wrap{width:min(1140px,calc(100% - 40px));margin-inline:auto}
+h1,h2,h3,.btn{font-family:var(--d);font-style:italic;text-transform:uppercase;margin:0}
+h1{font-weight:900;font-size:clamp(58px,9.4vw,128px);line-height:.9;letter-spacing:-.01em}
+h2{font-weight:900;font-size:clamp(42px,6.4vw,82px);line-height:.94}
+h3{font-weight:800;font-size:28px;line-height:1}
+.glow{color:#fff;text-shadow:0 0 18px rgba(46,123,255,.9),0 0 52px rgba(34,228,255,.55)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:12px 34px;border-radius:6px;font-weight:800;font-size:21px;letter-spacing:.03em;border:2px solid var(--neon);transform:skewX(-8deg);transition:.25s}
+.btn:hover{transform:skewX(-8deg) translateY(-3px)}
+.btn.p{background:linear-gradient(100deg,#1e62ff,#22b8ff);border-color:#6fd3ff;color:#fff;box-shadow:0 0 34px rgba(46,123,255,.65),inset 0 0 14px rgba(255,255,255,.25)}
+.btn.p:hover{box-shadow:0 0 60px rgba(34,228,255,.85),inset 0 0 14px rgba(255,255,255,.3)}
+.btn.g{background:rgba(46,123,255,.08);color:#cfe0ff}
+.btn.g:hover{background:rgba(46,123,255,.2)}
+
+.nav{position:sticky;top:0;z-index:40;background:rgba(2,5,15,.72);backdrop-filter:blur(16px);border-bottom:1px solid rgba(46,123,255,.25)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font:900 28px var(--d);font-style:italic;text-transform:uppercase}
+.brand i{width:12px;height:34px;border-radius:7px;background:var(--pole);background-size:100% 56px;animation:spin 2s linear infinite;box-shadow:0 0 18px var(--neon)}
+.nav nav{display:flex;align-items:center;gap:26px;font-size:15px;color:var(--muted)}
+.nav nav a:hover{color:#fff}
+.nav .btn{min-height:42px;padding:6px 22px;font-size:17px;color:#fff}
+@keyframes spin{to{background-position:0 56px}}
+
+.hero{position:relative;padding:64px 0 90px;overflow:hidden;isolation:isolate}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;z-index:-1}
+.orb{position:absolute;border-radius:50%;filter:blur(100px);z-index:-2;animation:drift 14s ease-in-out infinite alternate}
+.o1{width:560px;height:560px;background:rgba(30,98,255,.55);top:-180px;left:-140px}
+.o2{width:460px;height:460px;background:rgba(34,228,255,.28);bottom:-160px;right:4%;animation-duration:18s;animation-direction:alternate-reverse}
+.beam{position:absolute;top:-30%;left:58%;width:240px;height:160%;z-index:-2;background:linear-gradient(180deg,rgba(80,170,255,.4),transparent 75%);filter:blur(34px);transform-origin:50% 0;animation:sweep 9s ease-in-out infinite alternate}
+.beam.b2{left:72%;width:130px;animation-delay:-4s;opacity:.7}
+@keyframes drift{to{transform:translate(80px,60px) scale(1.15)}}
+@keyframes sweep{from{transform:rotate(-16deg)}to{transform:rotate(18deg)}}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:center}
+.line{display:block;overflow:hidden;padding-bottom:.06em}
+.line>span{display:inline-block;transform:translateY(110%);animation:rise 1.1s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes rise{to{transform:none}}
+.lead{font-size:19px;color:var(--muted);max-width:520px;margin:24px 0 32px;opacity:0;animation:fade 1s 1s forwards}
+.actions{display:flex;gap:16px;flex-wrap:wrap;opacity:0;animation:fade 1s 1.2s forwards}
+.hero small{display:block;margin-top:18px;color:#7f93c4;font-size:14px;opacity:0;animation:fade 1s 1.4s forwards}
+@keyframes fade{to{opacity:1}}
+.stage{position:relative;height:640px}
+.pole-band{position:absolute;left:50%;top:0;bottom:0;width:140px;transform:translateX(-50%) rotate(9deg);border-radius:80px;background:var(--pole);background-size:100% 56px;opacity:.5;animation:spin 4s linear infinite;box-shadow:0 0 90px rgba(46,123,255,.6)}
+.par{position:absolute;will-change:transform}
+.par.a{left:3%;top:56px}.par.b{right:1%;top:0}
+.phone{border:7px solid #0f1d45;border-radius:38px;overflow:hidden;background:#02050f;box-shadow:0 0 0 1px rgba(80,170,255,.5),0 30px 80px rgba(0,0,0,.65),0 0 90px rgba(46,123,255,.45)}
+.par.a .phone{width:262px;rotate:-5deg;animation:float 7s ease-in-out infinite}
+.par.b .phone{width:236px;rotate:4deg;animation:float 8s ease-in-out -3s infinite}
+@keyframes float{50%{translate:0 -16px}}
+
+.strip{overflow:hidden;border-block:1px solid rgba(46,123,255,.35);background:linear-gradient(90deg,#06102b,#0a2166,#06102b);padding:14px 0}
+.strip div{display:flex;width:max-content;animation:slide 28s linear infinite}
+.strip span{font:800 30px var(--d);font-style:italic;text-transform:uppercase;white-space:nowrap;padding-right:40px;color:#cfe0ff}
+.strip span b{color:var(--cyan);text-shadow:0 0 14px var(--cyan)}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+section.s{padding:104px 0;position:relative}
+.band{background:linear-gradient(180deg,var(--bg2),#040a1f)}
+.head{max-width:760px;margin-bottom:52px}
+.head p{margin-top:18px;color:var(--muted);font-size:19px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.cell{padding:26px 0 0;border-top:3px solid var(--neon);box-shadow:0 -14px 30px -18px var(--neon)}
+.cell:nth-child(2){border-color:var(--white)}.cell:nth-child(3){border-color:var(--cyan)}
+.cell p{margin-top:12px;color:var(--muted)}
+
+.card{border:1px solid var(--line);border-radius:26px;padding:44px;background:linear-gradient(150deg,#0c1d52,#050c24);box-shadow:0 0 80px rgba(46,123,255,.18)}
+.track{height:24px;border-radius:99px;background:#02050f;border:1px solid var(--line);overflow:hidden;margin:34px 0 20px}
+.track b{display:block;height:100%;background:var(--pole);background-size:100% 56px;transform:scaleX(0);transform-origin:left;transition:transform 2.4s .3s cubic-bezier(.2,.8,.2,1);animation:spin 2s linear infinite;box-shadow:0 0 24px var(--cyan)}
+.in .track b{transform:none}
+.stops{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.stop{border:1px solid var(--line);border-radius:18px;padding:22px;background:rgba(46,123,255,.05);opacity:.3;transition:.8s}
+.stop span{color:var(--muted)}
+.stop strong{display:block;font:900 64px/1 var(--d);font-style:italic;color:#fff;text-shadow:0 0 22px rgba(34,228,255,.7)}
+.in .stop{opacity:1;border-color:var(--neon)}
+.in .stop:nth-child(1){transition-delay:.8s}.in .stop:nth-child(2){transition-delay:1.6s}.in .stop:nth-child(3){transition-delay:2.4s;border-color:var(--cyan);box-shadow:0 0 36px rgba(34,228,255,.4)}
+.fine{margin-top:20px;color:#7f93c4;font-size:14px}
+
+.views{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
+.view{text-align:center}
+.view .phone{width:min(290px,100%);margin:0 auto 30px}
+.view p{color:var(--muted);max-width:380px;margin:10px auto 0}
+.chips{display:flex;flex-wrap:wrap;gap:14px}
+.chips span{padding:15px 24px;border:1px solid var(--neon);border-radius:6px;background:rgba(46,123,255,.08);font-weight:500;transform:skewX(-8deg);box-shadow:0 0 22px rgba(46,123,255,.2)}
+
+.faq{max-width:880px;display:grid;gap:12px}
+.faq details{border:1px solid var(--line);border-radius:16px;background:#050c24;transition:.3s}
+.faq details[open]{border-color:var(--neon);box-shadow:0 0 36px rgba(46,123,255,.25)}
+.faq summary{list-style:none;cursor:pointer;padding:22px 26px;font:800 26px var(--d);font-style:italic;text-transform:uppercase;display:flex;justify-content:space-between;gap:20px;align-items:center}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-size:34px;color:var(--cyan);transition:transform .25s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.ans{padding:0 26px 24px;color:var(--muted)}
+.ans p+p,.ans ol{margin-top:10px}.ans ol{padding-left:20px}.ans strong{color:#fff}
+
+.final{text-align:center;overflow:hidden}
+.final::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 100%,rgba(46,123,255,.5),transparent 60%);pointer-events:none}
+.final::after{content:"";position:absolute;left:0;right:0;top:0;height:10px;background:var(--pole);background-size:56px 100%;animation:slide2 3s linear infinite}
+@keyframes slide2{to{background-position:56px 0}}
+.final .wrap{position:relative}
+.final h2{max-width:900px;margin:0 auto 20px}
+.pr{display:inline-flex;align-items:baseline;gap:14px;margin:18px 0 10px}
+.pr strong{font:900 clamp(64px,10vw,110px)/1 var(--d);font-style:italic}
+.final ul{list-style:none;padding:0;margin:0 0 34px;color:var(--muted)}
+.final li{padding:3px 0}.final li::before{content:"✓ ";color:var(--cyan);font-weight:700}
+footer{padding:28px 0;color:#7f93c4;font-size:14px;border-top:1px solid rgba(46,123,255,.25)}
+footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+.js .rv{opacity:0;transform:translateY(40px);transition:opacity .9s,transform .9s cubic-bezier(.2,.8,.2,1)}
+.js .rv.in{opacity:1;transform:none}
+
+@media (max-width:900px){
+  .nav nav a:not(.btn){display:none}
+  .hero{padding:40px 0 60px}
+  .hero .wrap,.views{grid-template-columns:1fr}
+  .stage{height:520px}
+  .par.a{left:calc(50% - 215px)}.par.b{right:auto;left:calc(50% - 4px)}
+  .par.a .phone{width:214px}.par.b .phone{width:196px}
+  section.s{padding:70px 0}
+  .three,.stops{grid-template-columns:1fr}
+  .card{padding:26px}
+  .views{gap:48px}
+  .stop strong{font-size:52px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .line>span,.lead,.actions,.hero small{transform:none;opacity:1}
+  .track b{transform:none}.stop{opacity:1}
+}
+</style>
 </head>
 <body>
-  <header class="wrap nav">
-    <a class="brand" href="#inicio" aria-label="Barber VIP, inicio"><span class="mark">✦</span>Barber VIP</a>
-    <a class="nav-action" href="https://barbervip-309dc.web.app/">Ya tengo cuenta ↗</a>
-  </header>
 
-  <main>
-    <section id="inicio" class="wrap hero">
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#inicio" aria-label="Barber VIP, inicio"><i aria-hidden="true"></i>Barber VIP</a>
+    <nav aria-label="Principal">
+      <a href="#idea">Cómo funciona</a>
+      <a href="#vistas">La app</a>
+      <a href="#preguntas">Preguntas</a>
+      <a href="#precio">Precio</a>
+      <a class="btn p" href="https://barbervip-309dc.web.app/?signup=1">Probar gratis</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="inicio">
+    <div class="orb o1"></div><div class="orb o2"></div><div class="beam"></div><div class="beam b2"></div>
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="wrap">
       <div>
-        <div class="eyebrow">Fidelización para barberos independientes</div>
-        <h1>Hacé que tus clientes vuelvan al sillón, <span class="gradient">sin regalar tu laburo.</span></h1>
-        <p class="lead">Registrá las visitas de cada cliente y permitiles seguir su progreso desde el celular. Vos llevás el control y definís los descuentos de tu programa.</p>
+        <h1>
+          <span class="line"><span style="animation-delay:.1s">Que el cliente de hoy</span></span>
+          <span class="line glow"><span style="animation-delay:.35s">sea el de siempre.</span></span>
+        </h1>
+        <p class="lead">Barber VIP es una tarjeta de visitas digital: vos sumás cada corte, tu cliente ve su progreso desde el celular y los descuentos los definís vos. Más motivos para volver a tu sillón.</p>
         <div class="actions">
-          <a class="btn primary" href="https://barbervip-309dc.web.app/?signup=1">Probar 7 días gratis ↗</a>
-          <a class="btn quiet" href="#como-funciona">Ver cómo funciona ↓</a>
+          <a class="btn p" href="https://barbervip-309dc.web.app/?signup=1">Probar 7 días gratis</a>
+          <a class="btn g" href="#idea">Ver cómo funciona</a>
         </div>
-        <p class="note">Sin turnos, sin cajas y sin señas. Solo seguimiento de visitas y fidelización.</p>
-        <p class="note" id="instagram-browser-help" hidden>¿Abriste esta página desde Instagram? Si no se abre el navegador externo, tocá ⋯ y elegí «Abrir en navegador externo».</p>
+        <small>Sin turnos, sin caja, sin señas. Solo fidelización.</small>
+        <p class="note" id="instagram-browser-help" aria-live="polite" hidden></p>
       </div>
+      <div class="stage" aria-label="Vista del barbero y vista del cliente en la app">
+        <div class="pole-band" aria-hidden="true"></div>
+        <div class="par a" data-s="-.07"><div class="phone"><img src="/vista-barbero.webp" fetchpriority="high" decoding="async" width="600" height="1215" alt="Panel del barbero con la lista de clientes, su progreso y el botón Sumar visita"></div></div>
+        <div class="par b" data-s="-.14"><div class="phone"><img src="/vista-cliente.webp" fetchpriority="high" decoding="async" width="485" height="993" alt="Vista del cliente con sus visitas, su ciclo y el descuento conseguido"></div></div>
+      </div>
+    </div>
+  </section>
 
-      <div class="mock" aria-label="Ejemplo ilustrativo de tarjeta de visitas">
-        <div class="mocktop"><strong>Tarjeta de visitas</strong><span class="pill">Ejemplo</span></div>
-        <div class="metric">
-          <small>Visitas de este ciclo</small>
-          <strong>4 de 6</strong>
-          <small>Te faltan 2 visitas para el próximo beneficio</small>
-          <div class="milestones"><span class="done">2 visitas</span><span class="done">4 visitas</span><span>6 visitas</span></div>
+  <div class="strip" aria-hidden="true"><div>
+    <span>Sumá visitas <b>✦</b> Premiá la fidelidad <b>✦</b> Hacelos volver <b>✦</b> Cada corte cuenta <b>✦</b> </span>
+    <span>Sumá visitas <b>✦</b> Premiá la fidelidad <b>✦</b> Hacelos volver <b>✦</b> Cada corte cuenta <b>✦</b> </span>
+  </div></div>
+
+  <section class="s band" id="idea">
+    <div class="wrap">
+      <div class="head rv">
+        <h2>Un buen corte deja conforme. <span class="glow">Un beneficio hace que vuelva.</span></h2>
+        <p>Barber VIP convierte la primera visita en el primer paso de un programa que el cliente quiere completar.</p>
+      </div>
+      <div class="three rv">
+        <div class="cell"><h3>El cliente nuevo regresa</h3><p>Se va con un motivo concreto para elegirte otra vez: su próximo descuento ya está esperando.</p></div>
+        <div class="cell"><h3>El habitual viene más seguido</h3><p>Ver cuánto le falta para el próximo hito lo anima a acortar el tiempo entre corte y corte.</p></div>
+        <div class="cell"><h3>No perdés clientes</h3><p>Cuando le gustó tu trabajo y tiene un beneficio en curso, tiene menos razones para probar otra barbería.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s" id="hitos">
+    <div class="wrap">
+      <div class="head rv">
+        <h2>Cada visita lo acerca a un descuento.</h2>
+        <p>Configurás los hitos una vez. Después, solo sumás visita cuando el cliente se corta.</p>
+      </div>
+      <div class="card rv">
+        <h3>Ejemplo de programa</h3>
+        <div class="track" role="img" aria-label="Barra de progreso hasta la sexta visita"><b></b></div>
+        <div class="stops">
+          <div class="stop"><span>2.ª visita</span><strong>10% OFF</strong></div>
+          <div class="stop"><span>4.ª visita</span><strong>20% OFF</strong></div>
+          <div class="stop"><span>6.ª visita</span><strong>30% OFF</strong></div>
         </div>
-        <div class="reward">
-          <div><strong>Beneficio definido por vos</strong><br><small>El descuento lo elegís en cada hito</small></div>
-          <em>VIP ✦</em>
+        <p class="fine">Valores de ejemplo. Vos elegís el descuento de cada hito y podés personalizarlo para clientes nuevos.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="s band" id="vistas">
+    <div class="wrap">
+      <div class="head rv">
+        <h2>Dos vistas, <span class="glow">un solo programa.</span></h2>
+        <p>Vos controlás desde tu panel. Tu cliente sigue su avance desde su propio espacio.</p>
+      </div>
+      <div class="views">
+        <div class="view rv">
+          <div class="phone"><img loading="lazy" decoding="async" src="/vista-barbero.webp" width="600" height="1215" alt="Panel del barbero: buscador, clientes y botón Sumar visita"></div>
+          <h3>Tu panel</h3>
+          <p>Buscás al cliente, tocás Sumar visita y listo. Ves quién está cerca de su próximo beneficio y le escribís por WhatsApp.</p>
+        </div>
+        <div class="view rv">
+          <div class="phone"><img loading="lazy" decoding="async" src="/vista-cliente.webp" width="485" height="993" alt="Vista del cliente: visitas totales, última visita y progreso del ciclo"></div>
+          <h3>El espacio de tu cliente</h3>
+          <p>Ve sus visitas, cuánto le falta y qué descuento ya ganó. Además, puede agendar con vos por WhatsApp.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="beneficios" class="section">
-      <div class="wrap">
-        <div class="eyebrow">Simple y al punto</div>
-        <h2>Todo gira alrededor de <span class="gradient">cada visita.</span></h2>
-        <p class="sub">Una tarjeta digital para que vos registres los cortes y tus clientes puedan consultar cuánto avanzaron.</p>
-        <div class="cards">
-          <article class="card"><div class="number">01</div><h3>Registrá cada visita</h3><p>Desde tu panel, buscás al cliente y sumás una visita cuando viene a cortarse.</p></article>
-          <article class="card"><div class="number">02</div><h3>Tu cliente ve su avance</h3><p>Consulta sus visitas, el progreso de su ciclo y los descuentos que tiene disponibles.</p></article>
-          <article class="card"><div class="number">03</div><h3>Vos definís los descuentos</h3><p>Configurás los beneficios para los hitos de 2, 4 y 6 visitas. Las reglas las ponés vos.</p></article>
-        </div>
+  <section class="s" id="extras">
+    <div class="wrap">
+      <div class="head rv">
+        <h2>Además, tu perfil profesional.</h2>
+        <p>Todo lo que tu cliente necesita para encontrarte, en un solo panel VIP.</p>
       </div>
-    </section>
+      <div class="chips rv"><span>Tus servicios detallados</span><span>Estado de atención según tus horarios</span><span>Instagram</span><span>Ubicación</span><span>WhatsApp</span></div>
+    </div>
+  </section>
 
-    <section id="como-funciona" class="section">
-      <div class="wrap">
-        <div class="eyebrow">Cómo funciona</div>
-        <h2>Empezás en tres pasos.</h2>
-        <div class="steps">
-          <article class="step"><span class="step-num">PASO 01</span><b>Creá tu cuenta</b>Configurá tu espacio y tus datos profesionales.</article>
-          <article class="step"><span class="step-num">PASO 02</span><b>Sumá a tus clientes</b>Crealos desde la app o compartí tu enlace y código de acceso para que se registren.</article>
-          <article class="step"><span class="step-num">PASO 03</span><b>Registrá los cortes</b>Después de cada visita, sumás el registro y se actualiza el progreso del cliente.</article>
-        </div>
-
-        <div class="price">
-          <div><h3>Probá Barber VIP durante 7 días.</h3><p>Después, si decidís continuar, la suscripción cuesta $8.000 cada 30 días. No hay débitos automáticos.</p></div>
-          <div><strong>$8.000 <small>/ 30 días</small></strong><a class="btn primary" style="margin-top:10px" href="https://barbervip-309dc.web.app/?signup=1">Crear cuenta gratis ↗</a></div>
-        </div>
+  <section class="s band" id="preguntas">
+    <div class="wrap">
+      <div class="head rv"><h2>Preguntas frecuentes</h2></div>
+      <div class="faq rv">
+        <details open>
+          <summary>¿Por qué usar Barber VIP?</summary>
+          <div class="ans">
+            <p>Porque un buen corte puede hacer que un cliente quede satisfecho, pero darle un motivo para volver puede convertirlo en un cliente habitual.</p>
+            <p>Con Barber VIP llevás un control sencillo de las visitas, ofrecés beneficios y permitís que cada cliente vea su propio progreso desde el celular. Vos decidís los descuentos y cómo premiar su fidelidad, sin complicar tu trabajo diario.</p>
+            <p><strong>Más seguimiento, mejores incentivos y más motivos para que tus clientes vuelvan a elegirte.</strong></p>
+          </div>
+        </details>
+        <details>
+          <summary>¿Tengo que cambiar mi forma de trabajar?</summary>
+          <div class="ans"><p><strong>No.</strong> La app se adapta a vos. No es una app de turnos ni de caja diaria: es solo para fidelización. Usala con tus clientes actuales y nuevos. Funciona de inmediato.</p></div>
+        </details>
+        <details>
+          <summary>¿Sirve sin descuento?</summary>
+          <div class="ans"><p><strong>No.</strong> La base de Barber VIP es dar un incentivo real para que el cliente vuelva. Cuanto más atractivo sea el descuento, más ganas tiene de elegirte de nuevo.</p></div>
+        </details>
+        <details>
+          <summary>¿Cómo se registran los clientes?</summary>
+          <div class="ans">
+            <p>De dos formas fáciles:</p>
+            <ol>
+              <li>Vos creás su usuario y contraseña desde la app.</li>
+              <li>Tus clientes escanean tu código QR o link y se registran solos, con tu afiliación.</li>
+            </ol>
+          </div>
+        </details>
+        <details>
+          <summary>¿Tiene algo más la aplicación?</summary>
+          <div class="ans"><p><strong>Sí.</strong> Suma tus servicios detallados, el estado de atención (según tus horarios), links a Instagram, ubicación y WhatsApp. Todo en un panel VIP.</p></div>
+        </details>
+        <details>
+          <summary>¿Cómo es el sistema de pago?</summary>
+          <div class="ans"><p><strong>7 días de prueba gratis.</strong> Al pagar la suscripción, se suman automáticamente 30 días a tu cuenta. Incluye período de gracia en caso de suspensión.</p></div>
+        </details>
       </div>
-    </section>
-    <section id="preguntas" class="section">
-      <div class="wrap">
-        <div class="eyebrow">Preguntas frecuentes</div>
-        <h2>Vos elegís cómo <span class="gradient">fidelizar.</span></h2>
-        <p class="sub">El programa se adapta a los beneficios que quieras ofrecer y al tipo de cliente que tengas.</p>
-        <div class="faq-list">
-          <details class="faq-item">
-            <summary>¿Qué poder tiene Barber VIP para hacer que un cliente vuelva?</summary>
-            <p>Depende totalmente de vos y del descuento que definas en cada hito de 2, 4 y 6 visitas. Un beneficio que realmente le sirva puede darle a alguien que vino por primera vez un motivo concreto para volver a elegirte, sin tener que pensarlo demasiado. No existe un porcentaje mágico: cuanto más atractivo sea para tu cliente, más puede influir, pero siempre tiene que ser un descuento que puedas sostener en tu trabajo.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿Puedo ofrecer descuentos distintos a clientes nuevos y habituales?</summary>
-            <p>Sí. Podés mantener la configuración estándar para los clientes que ya vienen habitualmente y, cuando quieras incentivar a alguien nuevo, personalizar sus beneficios con un descuento más atractivo. Así adaptás la propuesta a cada cliente sin cambiar el programa de todos.</p>
-          </details>
-        </div>
-      </div>
-    </section>
-  </main>
+    </div>
+  </section>
 
-  <footer class="wrap">
+  <section class="s final" id="precio">
+    <div class="wrap rv">
+      <h2>Dale a tu próximo cliente <span class="glow">un motivo para volver.</span></h2>
+      <div class="pr"><strong class="glow">$8.000</strong><span class="muted" style="color:var(--muted)">cada 30 días, después de la prueba</span></div>
+      <ul>
+        <li>7 días de prueba gratis</li>
+        <li>Sin débito automático</li>
+        <li>Período de gracia en caso de suspensión</li>
+      </ul>
+      <a class="btn p" href="https://barbervip-309dc.web.app/?signup=1">Crear cuenta gratis</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
     <span>© 2026 Barber VIP · Fidelización digital para barberos independientes.</span>
-    <span><a href="https://barbervip-309dc.web.app/">Abrir aplicación</a></span>
-  </footer>
+    <a href="https://barbervip-309dc.web.app/">Abrir aplicación</a>
+  </div>
+</footer>
+
+<script>
+var rm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+// Aparición al hacer scroll
+var io=new IntersectionObserver(function(e){e.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}})},{threshold:.18});
+document.querySelectorAll('.rv').forEach(function(n){io.observe(n)});
+if(!rm){
+  // Parallax de los celulares
+  var pr=document.querySelectorAll('.par');
+  addEventListener('scroll',function(){var y=scrollY;if(y>900)return;pr.forEach(function(p){p.style.transform='translateY('+y*p.dataset.s+'px)'})},{passive:true});
+  // Partículas de luz
+  var c=document.getElementById('fx'),x=c.getContext('2d'),P=[],W,H;
+  function rs(){W=c.width=c.offsetWidth;H=c.height=c.offsetHeight}
+  rs();addEventListener('resize',rs);
+  for(var k=0;k<46;k++)P.push({x:Math.random(),y:Math.random(),r:Math.random()*2+.6,v:Math.random()*.0004+.00015,a:Math.random()*.6+.2});
+  (function t(){x.clearRect(0,0,W,H);P.forEach(function(p){p.y-=p.v;if(p.y<0){p.y=1;p.x=Math.random()}
+    x.beginPath();x.arc(p.x*W,p.y*H,p.r,0,7);x.fillStyle='rgba(120,210,255,'+p.a+')';x.shadowColor='#22e4ff';x.shadowBlur=12;x.fill()});requestAnimationFrame(t)})();
+}
+</script>
 
   <script>
-    // Instagram's Android in-app browser does not expose Chrome's PWA install prompt.
-    // Let Android resolve the app-scope URL: an installed Chrome WebAPK may handle it; otherwise use the web fallback.
+    // Instagram abre enlaces dentro de su navegador integrado. En Android,
+    // permitir que el sistema resuelva el enlace de la PWA; el fallback conserva
+    // el destino web y el parámetro ?signup=1 si la app no está instalada.
     (() => {
       const ua = navigator.userAgent || '';
       if (!/instagram/i.test(ua)) return;
+
       const help = document.getElementById('instagram-browser-help');
+      const isAndroid = /android/i.test(ua);
+      const isIOS = /iphone|ipad|ipod/i.test(ua);
       if (help) {
         help.hidden = false;
-        help.textContent = /android/i.test(ua)
-          ? '¿No se abrió Chrome? Tocá ⋯ en Instagram y elegí «Abrir en navegador externo».'
-          : 'Para instalar Barber VIP, tocá ⋯ en Instagram y elegí «Abrir en Safari» o «Abrir en navegador externo».';
+        help.textContent = isAndroid
+          ? 'Abriste Barber VIP desde Instagram. Si no se abre automáticamente, tocá ⋯ y elegí «Abrir en navegador externo».'
+          : isIOS
+            ? 'Para instalar Barber VIP en iPhone, tocá ⋯ en Instagram y elegí «Abrir en Safari».'
+            : 'Para instalar Barber VIP, abrí esta página en tu navegador externo.';
       }
-      if (!/android/i.test(ua)) return;
+
+      if (!isAndroid) return;
       document.querySelectorAll('a[href^="https://barbervip-309dc.web.app/"]').forEach(link => {
         link.addEventListener('click', event => {
           const target = new URL(link.href, location.href);
           const fallback = encodeURIComponent(target.href);
           const intent = 'intent://' + target.host + target.pathname + target.search
-            + '#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url=' + fallback + ';end';
+            + '#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url='
+            + fallback + ';end';
           event.preventDefault();
-          location.href = intent;
+          window.location.href = intent;
         });
       });
     })();

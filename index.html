@@ -2813,10 +2813,10 @@
         kicker='NAVEGADOR DE INSTAGRAM';
         if(isAndroid){
           const target=new URL(location.href);
-          const chromeUrl='intent://'+target.host+target.pathname+target.search+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(target.href)+';end';
-          title='Abrí Barber VIP en Chrome';
-          copy='Instagram abre este enlace dentro de su propio navegador. Para instalar Barber VIP, necesitás abrirlo en Chrome.';
-          content=`<a class="btn btn-primary btn-block" href="${chromeUrl}">Abrir en Chrome ↗</a><div class="install-help-copy"><strong>¿No se abrió Chrome?</strong><br>Tocá el menú ⋯ de Instagram y elegí «Abrir en navegador externo». Después volvé a tocar «Instalar aplicación» desde Chrome.</div>`;
+          const appIntent='intent://'+target.host+target.pathname+target.search+'#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url='+encodeURIComponent(target.href)+';end';
+          title='Abrí Barber VIP como aplicación';
+          copy='Instagram abrió este enlace dentro de su navegador. Android puede abrir la app instalada; si no está instalada, seguirá con la versión web.';
+          content=`<a class="btn btn-primary btn-block" href="${appIntent}">Abrir Barber VIP ↗</a><div class="install-help-copy"><strong>¿No se abrió?</strong><br>Tocá el menú ⋯ de Instagram y elegí «Abrir en navegador externo». Si ya tenés Barber VIP instalada, Android puede abrirla desde ese enlace.</div>`;
         }else if(isIOS){
           title='Abrí Barber VIP en Safari';
           copy='Instagram usa un navegador interno que no permite completar la instalación de Barber VIP como aplicación.';

@@ -2813,7 +2813,7 @@
         kicker='NAVEGADOR DE INSTAGRAM';
         if(isAndroid){
           const target=new URL(location.href);
-          const chromeUrl='intent://'+target.host+target.pathname+target.search+target.hash+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(target.href)+';end';
+          const chromeUrl='intent://'+target.host+target.pathname+target.search+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(target.href)+';end';
           title='Abrí Barber VIP en Chrome';
           copy='Instagram abre este enlace dentro de su propio navegador. Para instalar Barber VIP, necesitás abrirlo en Chrome.';
           content=`<a class="btn btn-primary btn-block" href="${chromeUrl}">Abrir en Chrome ↗</a><div class="install-help-copy"><strong>¿No se abrió Chrome?</strong><br>Tocá el menú ⋯ de Instagram y elegí «Abrir en navegador externo». Después volvé a tocar «Instalar aplicación» desde Chrome.</div>`;

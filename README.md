@@ -62,11 +62,11 @@ No alcanza con desplegar Firebase: el backend también se publica en Cloudflare.
 **1. Validar la aplicación y el Worker.** Desde la raíz del repositorio:
 
 ```bash
-npm install
+npm install --no-save --no-package-lock
 npm test
 npm run test:rules
 cd worker
-npm install
+npm install --no-save --no-package-lock
 npm test
 npx wrangler deploy --dry-run
 npx wrangler whoami

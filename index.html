@@ -1159,7 +1159,9 @@
       // Ignore stale flags left by older versions; only an explicit signup link should bypass the role menu.
       try { localStorage.removeItem('barberVipStartSignup'); } catch (_) {}
       const pendingSignup = fromSignupLink;
-      if(fromSignupLink){query.delete('signup');history.replaceState({},'',location.pathname+(query.toString()?'?'+query.toString():'')+location.hash);}
+      const inInstagramBrowser=/instagram/i.test(navigator.userAgent||'');
+      // Keep the original entry URL inside Instagram so opening it in Chrome/Safari preserves ?signup=1.
+      if(fromSignupLink&&!inInstagramBrowser){query.delete('signup');history.replaceState({},'',location.pathname+(query.toString()?'?'+query.toString():'')+location.hash);}
       if (pendingSignup) {
         renderLogin('barber-signup');
         void maybeShowInstallPrompt();
@@ -2805,9 +2807,26 @@
         return;
       }
       setInstallGateLock(true);
-      const canPrompt=!!deferredInstallPrompt;const ua=navigator.userAgent||'';const isIOS=/iphone|ipad|ipod/i.test(ua);const isAndroid=/android/i.test(ua);const isChromium=/chrome|chromium|edg\//i.test(ua);
+      const canPrompt=!!deferredInstallPrompt;const ua=navigator.userAgent||'';const isInstagram=/instagram/i.test(ua);const isIOS=/iphone|ipad|ipod/i.test(ua);const isAndroid=/android/i.test(ua);const isChromium=/chrome|chromium|edg\//i.test(ua);
       let title='Usá Barber VIP como aplicación',kicker='EXPERIENCIA APP',copy='Para continuar, instalá Barber VIP y luego abrila desde el ícono que aparecerá en tu pantalla de inicio.';let content='';
-      if(installPhase==='already-installed'){
+      if(isInstagram){
+        kicker='NAVEGADOR DE INSTAGRAM';
+        if(isAndroid){
+          const target=new URL(location.href);
+          const chromeUrl='intent://'+target.host+target.pathname+target.search+target.hash+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(target.href)+';end';
+          title='Abrí Barber VIP en Chrome';
+          copy='Instagram abre este enlace dentro de su propio navegador. Para instalar Barber VIP, necesitás abrirlo en Chrome.';
+          content=`<a class="btn btn-primary btn-block" href="${chromeUrl}">Abrir en Chrome ↗</a><div class="install-help-copy"><strong>¿No se abrió Chrome?</strong><br>Tocá el menú ⋯ de Instagram y elegí «Abrir en navegador externo». Después volvé a tocar «Instalar aplicación» desde Chrome.</div>`;
+        }else if(isIOS){
+          title='Abrí Barber VIP en Safari';
+          copy='Instagram usa un navegador interno que no permite completar la instalación de Barber VIP como aplicación.';
+          content=`<div class="install-help-copy"><strong>Para continuar:</strong><br>1. Tocá el menú ⋯ de Instagram.<br>2. Elegí «Abrir en navegador externo» o «Abrir en Safari».<br>3. En Safari, tocá Compartir y elegí «Añadir a pantalla de inicio».</div>`;
+        }else{
+          title='Abrí Barber VIP en tu navegador';
+          copy='Instagram abrió este enlace dentro de su propio navegador. Abrí la página en Chrome, Safari o Edge para instalar Barber VIP.';
+          content=`<div class="install-help-copy">Tocá el menú ⋯ de Instagram y elegí «Abrir en navegador externo». Después seguí las instrucciones de instalación del navegador.</div>`;
+        }
+      }else if(installPhase==='already-installed'){
         kicker='APLICACIÓN INSTALADA';title='Barber VIP ya está instalada';copy='No hace falta instalarla de nuevo. En algunos navegadores, un enlace abre primero una pestaña web en lugar de lanzar la aplicación.';
         content=`<div class="install-help-copy"><strong>📲 Para abrirla como aplicación:</strong><br>1. Volvé a la pantalla de inicio del teléfono.<br>2. Tocá el ícono Barber VIP que ya instalaste.<br>3. Vas a entrar directamente, sin esta pantalla de instalación.</div><p class="tiny muted">Si el navegador ya abrió Barber VIP como aplicación, esta pantalla no aparecerá.</p><button class="btn btn-primary btn-block" data-action="continue-installed-browser">Continuar en esta pestaña</button>`;
       } else if(installPhase==='waiting'){

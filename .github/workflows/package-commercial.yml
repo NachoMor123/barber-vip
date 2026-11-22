@@ -6,6 +6,11 @@ on:
     paths:
       - "web-comercial/**"
       - ".github/workflows/package-commercial.yml"
+  pull_request:
+    branches: [main, hybrid-cloudflare]
+    paths:
+      - "web-comercial/**"
+      - ".github/workflows/package-commercial.yml"
   workflow_dispatch:
 
 permissions:
@@ -25,10 +30,14 @@ jobs:
           out="$RUNNER_TEMP/barber-vip-commercial"
           mkdir -p "$out"
           cp web-comercial/index.html "$out/index.html"
+          cp web-comercial/vista-barbero.webp "$out/vista-barbero.webp"
+          cp web-comercial/vista-cliente.webp "$out/vista-cliente.webp"
+          test -s "$out/vista-barbero.webp"
+          test -s "$out/vista-cliente.webp"
           cat > "$out/README.md" <<'EOF'
           # Barber VIP — web comercial
 
-          Sitio estático publicado en Firebase Hosting:
+          Sitio estático publicado en Firebase Hosting. Incluye HTML y capturas WebP locales:
           https://barber-vip-comercial-309dc.web.app
 
           Se mantiene dentro del repositorio principal en web-comercial/.
@@ -43,6 +52,9 @@ jobs:
           test -s "$out/index.html"
           grep -q 'https://barber-vip-comercial-309dc.web.app/' "$out/index.html"
           grep -q 'https://barbervip-309dc.web.app/?signup=1' "$out/index.html"
+          grep -q '/vista-barbero.webp' "$out/index.html"
+          grep -q '/vista-cliente.webp' "$out/index.html"
+          grep -q 'S.browser_fallback_url=' "$out/index.html"
           if grep -Eqi 'vercel\.app|vercel\.com|promociones?|notificaciones?' "$out/index.html"; then
             echo "La web comercial contiene referencias a Vercel o funciones retiradas."
             exit 1

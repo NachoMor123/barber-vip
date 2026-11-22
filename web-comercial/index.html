@@ -237,7 +237,7 @@
 
   <script>
     // Instagram's Android in-app browser does not expose Chrome's PWA install prompt.
-    // Use an explicit Chrome intent from the user's tap; keep the regular URL as fallback.
+    // Let Android resolve the app-scope URL: an installed Chrome WebAPK may handle it; otherwise use the web fallback.
     (() => {
       const ua = navigator.userAgent || '';
       if (!/instagram/i.test(ua)) return;
@@ -254,7 +254,7 @@
           const target = new URL(link.href, location.href);
           const fallback = encodeURIComponent(target.href);
           const intent = 'intent://' + target.host + target.pathname + target.search
-            + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + fallback + ';end';
+            + '#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url=' + fallback + ';end';
           event.preventDefault();
           location.href = intent;
         });

@@ -164,6 +164,7 @@
           <a class="btn quiet" href="#como-funciona">Ver cómo funciona ↓</a>
         </div>
         <p class="note">Sin turnos, sin cajas y sin señas. Solo seguimiento de visitas y fidelización.</p>
+        <p class="note" id="instagram-browser-help" hidden>¿Abriste esta página desde Instagram? Si no se abre el navegador externo, tocá ⋯ y elegí «Abrir en navegador externo».</p>
       </div>
 
       <div class="mock" aria-label="Ejemplo ilustrativo de tarjeta de visitas">
@@ -233,5 +234,32 @@
     <span>© 2026 Barber VIP · Fidelización digital para barberos independientes.</span>
     <span><a href="https://barbervip-309dc.web.app/">Abrir aplicación</a></span>
   </footer>
+
+  <script>
+    // Instagram's Android in-app browser does not expose Chrome's PWA install prompt.
+    // Let Android resolve the app-scope URL: an installed Chrome WebAPK may handle it; otherwise use the web fallback.
+    (() => {
+      const ua = navigator.userAgent || '';
+      if (!/instagram/i.test(ua)) return;
+      const help = document.getElementById('instagram-browser-help');
+      if (help) {
+        help.hidden = false;
+        help.textContent = /android/i.test(ua)
+          ? '¿No se abrió Chrome? Tocá ⋯ en Instagram y elegí «Abrir en navegador externo».'
+          : 'Para instalar Barber VIP, tocá ⋯ en Instagram y elegí «Abrir en Safari» o «Abrir en navegador externo».';
+      }
+      if (!/android/i.test(ua)) return;
+      document.querySelectorAll('a[href^="https://barbervip-309dc.web.app/"]').forEach(link => {
+        link.addEventListener('click', event => {
+          const target = new URL(link.href, location.href);
+          const fallback = encodeURIComponent(target.href);
+          const intent = 'intent://' + target.host + target.pathname + target.search
+            + '#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url=' + fallback + ';end';
+          event.preventDefault();
+          location.href = intent;
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

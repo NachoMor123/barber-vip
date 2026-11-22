@@ -55,17 +55,45 @@ El Worker no aloja la PWA ni reemplaza Firestore. Las claves privadas permanecen
 
 La aplicación no incluye promociones comerciales ni notificaciones Push. El service worker se mantiene para instalación PWA y caché/offline.
 
-## Validación y despliegue
+## Publicación de producción
 
-Desde la carpeta `worker/`:
+No alcanza con desplegar Firebase: el backend también se publica en Cloudflare. El orden de release es:
+
+**1. Validar la aplicación y el Worker.** Desde la raíz del repositorio:
 
 ```bash
 npm install
 npm test
+npm run test:rules
+cd worker
+npm install
+npm test
 npx wrangler deploy --dry-run
+npx wrangler whoami
 ```
 
-Antes de difundir los enlaces, verificar ambos sitios, el ingreso de profesionales/clientes, el alta, las visitas, los beneficios y la separación entre dos cuentas de cliente en el mismo teléfono. El sitio comercial no debe usar dependencias ni endpoints de Vercel.
+`wrangler whoami` debe mostrar la cuenta Cloudflare donde existe el Worker `barber-vip`. Si Wrangler pide iniciar sesión, ejecutar `npx wrangler login` y repetirlo. No pegar secretos en GitHub, el repositorio ni un chat.
+
+**2. Publicar el Worker.** Con las pruebas en verde y la cuenta correcta:
+
+```bash
+npx wrangler deploy
+```
+
+El despliegue conserva los Cloudflare Secrets existentes. Comprobar después `https://barber-vip.barbervip.workers.dev/health`: Firebase, Mercado Pago y Telegram deben informar `true` en `configured`. Si alguno figura `false`, cargar ese secreto desde la terminal con `npx wrangler secret put NOMBRE_DEL_SECRETO`; nunca compartir su valor.
+
+**3. Publicar los dos sitios Firebase.** Volver a la raíz del repositorio:
+
+```bash
+cd ..
+npx --yes firebase-tools@15.37.0 deploy --only hosting:app,hosting:comercial --project barbervip-309dc
+```
+
+La app se publica desde la raíz y el sitio comercial desde `web-comercial/`, incluyendo sus dos imágenes WebP.
+
+**4. Comprobación funcional antes de difundir el enlace.** Abrir ambos dominios en una ventana privada y probar inicio de sesión de barbero y cliente, alta de cliente, suma de visitas, hitos 2/4/6, cierre y nueva apertura de sesión, y dos cuentas de cliente diferentes en un mismo teléfono. Desde un enlace de Instagram, probar Android y iPhone: Android debe abrir la PWA si está instalada o caer al sitio web; iPhone debe indicar abrir en Safari. Hacer también una prueba controlada de Checkout y webhook de Mercado Pago antes de aceptar pagos reales.
+
+GitHub Actions valida los cambios y empaqueta el sitio comercial, pero no publica por sí solo el Worker ni Firebase Hosting. El sitio comercial no debe usar dependencias ni endpoints de Vercel.
 
 ## Cuotas gratuitas
 

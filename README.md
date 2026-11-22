@@ -11,34 +11,23 @@ Barber VIP es una PWA de fidelización para profesionales independientes. La pla
 
 No crear otro proyecto Firebase ni otra base de datos. Las cuentas, perfiles, clientes, visitas y pagos existentes se conservan.
 
-## Hosting separado
+## Hosting separado y única fuente comercial
 
 El proyecto usa dos sitios de Firebase Hosting dentro del mismo proyecto Firebase:
 
 - `app`: sirve la PWA desde la raíz del repositorio.
-- `comercial`: sirve únicamente `web-comercial/`.
+- `comercial`: sirve exclusivamente `web-comercial/`. **Esta carpeta es la única fuente de producción de la web comercial.** Mantiene el diseño azul aprobado, las dos capturas locales `vista-barbero.webp` y `vista-cliente.webp`, y el acceso desde Instagram a la PWA.
 
-Cada destino se despliega por separado. Publicar la página comercial no reemplaza ni modifica la app ni Firestore.
+El repositorio independiente `barber-vip-web` queda como copia histórica de diseño y recursos; **no se debe desplegar Firebase desde ese repositorio**. Ambos proyectos apuntaban al mismo Hosting Site y un deploy desde el repositorio equivocado podía reemplazar la landing publicada.
 
-Si el sitio comercial todavía no existe en Firebase, crealo una sola vez desde la raíz del repositorio:
-
-```bash
-firebase hosting:sites:create barber-vip-comercial-309dc --project barbervip-309dc
-```
-
-Los destinos `app` y `comercial` ya están declarados en `.firebaserc`. Para publicar exclusivamente la página comercial:
+Despliegue desde la raíz de este repositorio:
 
 ```bash
-firebase deploy --only hosting:comercial --project barbervip-309dc
+npx --yes firebase-tools@15.37.0 deploy --only hosting:app,hosting:comercial --project barbervip-309dc
 ```
 
-Para publicar exclusivamente la aplicación:
+Ese comando publica la PWA desde la raíz y la web comercial desde `web-comercial/`. Para publicar únicamente uno, usar `--only hosting:app` o `--only hosting:comercial`. No usar `firebase deploy --only hosting` sin targets porque publica todos los sitios configurados.
 
-```bash
-firebase deploy --only hosting:app --project barbervip-309dc
-```
-
-No uses `firebase deploy --only hosting` si solo querés actualizar uno de los sitios: ese comando publica todos los sitios configurados.
 
 ## Responsabilidades
 

@@ -164,6 +164,7 @@
           <a class="btn quiet" href="#como-funciona">Ver cómo funciona ↓</a>
         </div>
         <p class="note">Sin turnos, sin cajas y sin señas. Solo seguimiento de visitas y fidelización.</p>
+        <p class="note" id="instagram-browser-help" hidden>¿Abriste esta página desde Instagram? Si no se abre el navegador externo, tocá ⋯ y elegí «Abrir en navegador externo».</p>
       </div>
 
       <div class="mock" aria-label="Ejemplo ilustrativo de tarjeta de visitas">
@@ -239,12 +240,20 @@
     // Use an explicit Chrome intent from the user's tap; keep the regular URL as fallback.
     (() => {
       const ua = navigator.userAgent || '';
-      if (!/instagram/i.test(ua) || !/android/i.test(ua)) return;
+      if (!/instagram/i.test(ua)) return;
+      const help = document.getElementById('instagram-browser-help');
+      if (help) {
+        help.hidden = false;
+        help.textContent = /android/i.test(ua)
+          ? '¿No se abrió Chrome? Tocá ⋯ en Instagram y elegí «Abrir en navegador externo».'
+          : 'Para instalar Barber VIP, tocá ⋯ en Instagram y elegí «Abrir en Safari» o «Abrir en navegador externo».';
+      }
+      if (!/android/i.test(ua)) return;
       document.querySelectorAll('a[href^="https://barbervip-309dc.web.app/"]').forEach(link => {
         link.addEventListener('click', event => {
           const target = new URL(link.href, location.href);
           const fallback = encodeURIComponent(target.href);
-          const intent = 'intent://' + target.host + target.pathname + target.search + target.hash
+          const intent = 'intent://' + target.host + target.pathname + target.search
             + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + fallback + ';end';
           event.preventDefault();
           location.href = intent;

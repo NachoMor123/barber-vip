@@ -1,0 +1,12 @@
+# Dependencies and local tooling
+node_modules/
+**/node_modules/
+.firebase/
+.wrangler/
+firebase-debug.log
+ui-debug.log
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
